@@ -36,8 +36,27 @@ const streamStats: StreamStats = {
     errors: new Map()
 };
 
+// Enum for session statuses
+enum SessionStatus {
+    Completed = 'completed',
+    Switched = 'switched',
+    Timeout = 'timeout',
+    Error = 'error',
+    InactiveCleanup = 'inactive_cleanup',
+}
+
+// Session progress structure
+interface SessionProgress {
+    totalBytes: number;
+    startTime: [number, number];
+    lastActivityTime: number;
+    chunkCount: number;
+    fileSize: number;
+    trackId: string;
+}
+
 // Track total bytes streamed per session
-const streamProgress = new Map<string, { totalBytes: number; startTime: [number, number]; lastActivityTime: number; chunkCount: number; fileSize: number; trackId: string }>();
+const streamProgress = new Map<string, SessionProgress>();
 
 // Add timeout handling and resource limits
 const STREAM_TIMEOUT = 30000; // 30 seconds
@@ -55,10 +74,9 @@ function formatBytesToKB(bytes: number): string {
 }
 
 // Centralized function for logging session stats and cleaning up
-function logSessionStats(sessionId: string, status: 'completed' | 'switched' | 'timeout' | 'error' | 'inactive_cleanup') {
+function logSessionStats(sessionId: string, status: SessionStatus) {
     const progress = streamProgress.get(sessionId);
     if (!progress) {
-        // Session might have already been cleaned up (e.g., completed then timed out cleanup)
         console.log(`Attempted to log stats for already cleaned session: ${sessionId} (${status})`);
         return;
     }
@@ -68,7 +86,7 @@ function logSessionStats(sessionId: string, status: 'completed' | 'switched' | '
     const sessionDuration = (sessionEndTime[0] * 1e9 + sessionEndTime[1]) / 1e9;
     const sessionSpeed = sessionDuration > 0 ? totalBytes / sessionDuration : 0;
 
-    console.log(`*** Stream Session ${status.toUpperCase()} ***`);
+    console.log(`🚩 *** Stream Session ${status.toUpperCase()} ***`);
     console.log({
         status,
         trackId,
@@ -78,11 +96,11 @@ function logSessionStats(sessionId: string, status: 'completed' | 'switched' | '
         sessionDuration: `${sessionDuration.toFixed(2)}s`,
         sessionAverageSpeed: `${formatBytesToKB(sessionSpeed)}/s`,
         numberOfChunks: chunkCount,
-        activeSessions: streamStats.activeSessions.size - 1, // Decrement as this one is ending
+        activeSessions: streamStats.activeSessions.size - 1 >= 0 ? streamStats.activeSessions.size - 1 : 0,
         totalSessionsStarted: streamStats.streamCount,
         totalBytesAllStreams: formatBytesToKB(streamStats.totalBytes),
         errorsForSession: streamStats.errors.get(sessionId) ?? 0,
-        isComplete: status === 'completed' || totalBytes >= fileSize
+        isComplete: status === SessionStatus.Completed || totalBytes >= fileSize
     });
 
     // Clean up session data
@@ -100,14 +118,13 @@ setInterval(() => {
     for (const [sessionId, progress] of streamProgress.entries()) {
         if (now - progress.lastActivityTime > SESSION_CLEANUP_INTERVAL) {
             console.log(`Cleaning up inactive session via interval: ${sessionId}`);
-            logSessionStats(sessionId, 'inactive_cleanup');
+            logSessionStats(sessionId, SessionStatus.InactiveCleanup);
             // No need to delete here, logSessionStats does it
         }
     }
 }, SESSION_CLEANUP_INTERVAL);
 
-function calculateStreamHeaders(filepath: string, range: string) {
-    const fileSize = fs.statSync(filepath).size;
+function calculateStreamHeaders(fileSize: number, range: string) {
     const CHUNK_SIZE = Math.floor(10 ** 6 / 10); // 100kb chunks for optimal streaming
     const parts = range.replace(/bytes=/, '').split('-');
     const start = parseInt(parts[0]!, 10);
@@ -137,12 +154,13 @@ async function logStreamError(trackId: string, sessionId: string, error: Error) 
     // Increment error count for this specific session
     streamStats.errors.set(sessionId, (streamStats.errors.get(sessionId) ?? 0) + 1);
 
+    // Attempt to log to DB, but don't let it block console logging
     try {
         await prisma.trackError.upsert({
             create: {
                 track_id: trackId,
                 title: trackId,
-                filepath: path.resolve(__dirname, "..", '..', "audio", `${trackId}.mp3`),
+                filepath: `audio/${trackId}.mp3`,
                 reason: error.message,
             },
             update: {
@@ -153,7 +171,7 @@ async function logStreamError(trackId: string, sessionId: string, error: Error) 
             },
         });
     } catch (dbError) {
-        console.error('Failed to log stream error to database:', dbError);
+        console.error(`Failed to log stream error to database for session ${sessionId}:`, dbError);
     }
 }
 
@@ -194,7 +212,7 @@ function setupStreamHandlers(
             console.error(`Stream timeout for track ${trackId}, session ${sessionId}`);
             cleanup(audioStream); // Destroy the chunk stream
             logStreamError(trackId, sessionId, new Error('Stream timeout'));
-            logSessionStats(sessionId, 'timeout'); // Log stats and cleanup session
+            logSessionStats(sessionId, SessionStatus.Timeout);
             if (!res.headersSent) {
                 res.status(408).json({ error: 'Stream timeout' });
             }
@@ -225,7 +243,7 @@ function setupStreamHandlers(
             if (chunkRetries >= MAX_CHUNK_RETRIES) {
                 cleanup(audioStream);
                 logStreamError(trackId, sessionId, error as Error);
-                logSessionStats(sessionId, 'error'); // Log as error due to retries
+                logSessionStats(sessionId, SessionStatus.Error);
                 if (!res.headersSent) {
                     res.status(500).json({ error: 'Maximum retry attempts exceeded' });
                 }
@@ -239,7 +257,7 @@ function setupStreamHandlers(
         clearTimeout(streamTimeout);
         cleanup(audioStream);
         logStreamError(trackId, sessionId, error);
-        logSessionStats(sessionId, 'error'); // Log stats and cleanup session
+        logSessionStats(sessionId, SessionStatus.Error);
         if (!res.headersSent) {
             res.status(500).json({ error: 'Streaming error occurred' });
         }
@@ -262,10 +280,10 @@ function setupStreamHandlers(
             currentProgress.lastActivityTime = Date.now(); // Update last activity time on chunk end
 
             // Check if the *entire file* has been streamed for this session
-            const isFullFile = currentProgress.totalBytes >= fileSize;
+            const isFullFile = currentProgress.totalBytes >= currentProgress.fileSize;
 
             if (isFullFile) {
-                logSessionStats(sessionId, 'completed');
+                logSessionStats(sessionId, SessionStatus.Completed);
             } else {
                 // Optional: Log chunk completion if needed for debugging
                 // console.log(`Chunk ended for session ${sessionId}. Bytes in chunk: ${bytesTransferredInChunk}. Total for session: ${formatBytesToKB(currentProgress.totalBytes)}/${formatBytesToKB(fileSize)}`);
@@ -275,7 +293,7 @@ function setupStreamHandlers(
             // Log error in the handler itself, but attempt to log session state too
             console.error('Error in stream end handler:', error);
             logStreamError(trackId, sessionId, error as Error);
-            logSessionStats(sessionId, 'error'); // Log session as error
+            logSessionStats(sessionId, SessionStatus.Error);
         } finally {
             // No cleanup needed here, handled by logSessionStats or res.on('close') for the chunk stream
         }
@@ -294,7 +312,7 @@ function setupStreamHandlers(
 }
 
 // Main streaming endpoint
-router.get('/stream/:trackId', (req, res) => {
+router.get('/stream/:trackId', async (req, res) => {
     const requestedTrackId = req.params.trackId;
     // Generate session ID based on client IP and track ID
     const clientIp = req.socket.remoteAddress || req.ip || 'unknown';
@@ -321,7 +339,7 @@ router.get('/stream/:trackId', (req, res) => {
         if (previousSessionId && previousSessionId !== currentSessionId) {
             // User likely switched tracks
             console.log(`Track switch detected for IP ${clientIp}: ${previousSessionId} -> ${currentSessionId}`);
-            logSessionStats(previousSessionId, 'switched');
+            logSessionStats(previousSessionId, SessionStatus.Switched);
             // Note: logSessionStats handles cleanup of previousSessionId
         }
         // Update the current session for this IP
@@ -331,15 +349,46 @@ router.get('/stream/:trackId', (req, res) => {
         // Add to active sessions *set* (used for global count)
         streamStats.activeSessions.add(currentSessionId);
 
-        // Get file size early for progress tracking
-        if (!fs.existsSync(trackPath)) {
-            // No need to log error here, just return 404
-            streamStats.activeSessions.delete(currentSessionId);
-            ipToCurrentSessionId.delete(clientIp); // Clean up IP map if file not found on first try
-            return res.status(404).json({ error: 'Track not found' });
+        // Get file size and initialize/update session progress
+        let progress = streamProgress.get(currentSessionId);
+        let fileSize: number;
+
+        if (!progress) {
+            // New session: get file stats asynchronously
+            try {
+                const stats = await fs.promises.stat(trackPath);
+                if (!stats.isFile()) {
+                    throw new Error('Path is not a file');
+                }
+                fileSize = stats.size;
+            } catch (statError: any) {
+                console.error(`Error getting file stats for ${trackPath}:`, statError.message);
+                streamStats.activeSessions.delete(currentSessionId);
+                ipToCurrentSessionId.delete(clientIp);
+                // Determine appropriate status code (404 if not found, 500 otherwise)
+                const statusCode = statError.code === 'ENOENT' ? 404 : 500;
+                const errorMessage = statusCode === 404 ? 'Track not found' : 'Error accessing track';
+                return res.status(statusCode).json({ error: errorMessage });
+            }
+
+            // Initialize progress only after successful stat
+            progress = {
+                totalBytes: 0,
+                startTime: process.hrtime(),
+                lastActivityTime: Date.now(),
+                chunkCount: 1, // First chunk for this session
+                fileSize: fileSize, // Store fileSize
+                trackId: requestedTrackId // Store trackId
+            };
+            streamProgress.set(currentSessionId, progress);
+            console.log(`Starting new stream session: ${currentSessionId}, File size: ${formatBytesToKB(fileSize)}`);
+            streamStats.streamCount++; // Increment global counter only for new sessions
+        } else {
+            // Existing session: retrieve fileSize and update activity
+            fileSize = progress.fileSize;
+            progress.chunkCount++;
+            progress.lastActivityTime = Date.now();
         }
-        const stats = fs.statSync(trackPath);
-        const fileSize = stats.size;
 
         // Check for range header *after* confirming file exists and getting size
         if (!range) {
@@ -349,29 +398,8 @@ router.get('/stream/:trackId', (req, res) => {
             return res.status(400).json({ error: 'Range header is required' });
         }
 
-        // Initialize or update session progress in the map
-        let progress = streamProgress.get(currentSessionId);
-        if (!progress) {
-            progress = {
-                totalBytes: 0,
-                startTime: process.hrtime(),
-                lastActivityTime: Date.now(),
-                chunkCount: 1, // First chunk for this session
-                fileSize: fileSize, // Store fileSize with progress
-                trackId: requestedTrackId // Store trackId with progress
-            };
-            streamProgress.set(currentSessionId, progress);
-            console.log(`Starting new stream session: ${currentSessionId}`);
-            streamStats.streamCount++; // Increment global counter only for new sessions
-        } else {
-            progress.chunkCount++;
-            progress.lastActivityTime = Date.now();
-            // Ensure fileSize is up-to-date in case it changed? Unlikely for static audio.
-            // progress.fileSize = fileSize; 
-        }
-
         // Now safe to use range here
-        const { headers, start, end, contentLength } = calculateStreamHeaders(trackPath, range);
+        const { headers, start, end, contentLength } = calculateStreamHeaders(fileSize, range);
         res.writeHead(206, headers);
 
         const audioStream = fs.createReadStream(trackPath, { start, end });
@@ -386,7 +414,7 @@ router.get('/stream/:trackId', (req, res) => {
         // Attempt to log stats if session exists, otherwise just log the setup error
         if (streamProgress.has(currentSessionId)) {
             logStreamError(requestedTrackId, currentSessionId, error as Error);
-            logSessionStats(currentSessionId, 'error');
+            logSessionStats(currentSessionId, SessionStatus.Error);
         } else {
             console.error(`Error during initial setup for track ${requestedTrackId} (IP: ${clientIp}):`, error);
             streamStats.activeSessions.delete(currentSessionId); // Ensure cleanup if session wasn't fully created
