@@ -7,7 +7,7 @@ import bodyParser from 'body-parser';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/user';
 import indexRoutes from './routes/index';
-import trackRoutes from './routes/tracks';
+import streamRoutes from './routes/stream';
 
 
 const limiter = rateLimit({
@@ -56,7 +56,7 @@ app.use(bodyParser.json());
 
 
 // Auth routes for desktop app
-app.use('/tracks', trackRoutes);
+app.use('/tracks', streamRoutes);
 app.use(limiter);
 app.use('/', indexRoutes);
 app.use('/auth', authRoutes);

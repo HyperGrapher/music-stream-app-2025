@@ -2,7 +2,7 @@ import express, { Router, Request, Response } from 'express';
 import { verifyToken } from '../middlewares/auth';
 import { unauthorizedResponse, successResponse } from '../helpers/responses';
 import { prisma } from '../lib/prisma';
-import { AuthUser } from '../types/express';
+import { AuthUser, PlaybackData } from '../types/express';
 import { checkReferrer } from '../middlewares/check-referer';
 import { query, validationResult, param } from 'express-validator';
 import jwt from 'jsonwebtoken';
@@ -24,6 +24,7 @@ import {
     MAX_CHUNK_RETRIES,
     SESSION_CLEANUP_INTERVAL
 } from '../helpers/stream-utils';
+import { validatePlaybackToken } from '../middlewares/validate-playback-token';
 
 const router: Router = express.Router();
 
@@ -169,8 +170,9 @@ function setupStreamHandlers(
 }
 
 // Main streaming endpoint
-router.get('/stream/:trackId', async (req, res) => {
-    const requestedTrackId = req.params.trackId;
+router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
+    const { trackId: jwtTrackId, userId: jwtUserId } = req.playbackData as PlaybackData;
+    const requestedTrackId = req.params.trackId ?? '';
     // Generate session ID based on client IP and track ID
     const clientIp = req.socket.remoteAddress || req.ip || 'unknown';
     const currentSessionId = `${clientIp}-${requestedTrackId}`;

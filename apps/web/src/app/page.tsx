@@ -17,6 +17,8 @@ export default async function Home() {
             Streaming app
           </h1>
 
+          <Link href="/stream">Go to Stream</Link>
+
           <div className="flex flex-col items-center gap-2">
             <Authanticate />
           </div>

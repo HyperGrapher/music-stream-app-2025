@@ -57,7 +57,7 @@ export const streamRouter = createTRPCRouter({
             };
 
             const secret = env.JWT_PLAYBACK_SECRET;
-            const token = jwt.sign(payload, secret, { expiresIn: "1m" });
+            const token = jwt.sign(payload, secret, { expiresIn: "30m" });
 
             return { token };
         }),

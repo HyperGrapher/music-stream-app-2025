@@ -4,8 +4,9 @@ import jwt from 'jsonwebtoken';
 import { PlaybackData } from '../types/express';
 dotenv.config();
 
+const MINUTES_TO_EXPIRE = 1;
 // Playback token validation middleware
-const validatePlaybackToken = (req: Request, res: Response, next: NextFunction) => {
+export const validatePlaybackToken = (req: Request, res: Response, next: NextFunction) => {
     const playbackToken = req.query.token as string;
 
     if (!playbackToken) {
@@ -23,9 +24,10 @@ const validatePlaybackToken = (req: Request, res: Response, next: NextFunction) 
 
         // Check if token is too old (optional additional security)
         const tokenAge = Date.now() - decoded.timestamp;
-        const maxAge = 5 * 60 * 1000; // 5 minutes in milliseconds
+        const maxAge = MINUTES_TO_EXPIRE * 60 * 1000; //  minutes in milliseconds
 
         if (tokenAge > maxAge) {
+            console.error('Playback token has expired ⛔');
             // TODO: refresh token on the client
             return res.status(401).send('Playback token has expired');
         }

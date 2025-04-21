@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { api, HydrateClient } from "@/trpc/server";
 import TestPlayer from "../_components/test-player";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
 
 export default async function StreamPage() {
   const hello = await api.post.hello({ text: "from tRPC" });
+
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
 
   void api.post.getLatest.prefetch();
 
@@ -16,11 +22,12 @@ export default async function StreamPage() {
           </h1>
 
           <div className="flex flex-col gap-2 mt-16 text-blue-400">
+            <Link href="/">Go to Home</Link>
             <Link href={`/burak`}>Burak Artist Profile</Link>
             <Link href={`/man-i-trust/${"hope"}`}>Man I Trust - Hope</Link>
           </div>
 
-          <TestPlayer />
+          <TestPlayer userId={session?.session?.userId} />
 
         </div>
       </main>
