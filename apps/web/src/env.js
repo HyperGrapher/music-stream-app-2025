@@ -11,6 +11,7 @@ export const env = createEnv({
     BETTER_AUTH_SECRET: z.string(),
     BETTER_AUTH_URL: z.string(),
     GOOGLE_GENERATIVE_AI_API_KEY: z.string(),
+    JWT_PLAYBACK_SECRET: z.string(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -34,6 +35,7 @@ export const env = createEnv({
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
     GOOGLE_GENERATIVE_AI_API_KEY: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    JWT_PLAYBACK_SECRET: process.env.JWT_PLAYBACK_SECRET,
     NODE_ENV: process.env.NODE_ENV,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },

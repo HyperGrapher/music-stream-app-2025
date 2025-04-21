@@ -6,10 +6,11 @@
  * TL;DR - This is where all the tRPC server stuff is created and plugged in. The pieces you will
  * need to use are documented accordingly near the end.
  */
-import { initTRPC } from "@trpc/server";
+import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
 
+import { auth } from "@/lib/auth";
 import { db } from "@/server/db";
 
 /**
@@ -25,8 +26,13 @@ import { db } from "@/server/db";
  * @see https://trpc.io/docs/server/context
  */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
+  const session = await auth.api.getSession({
+    headers: opts.headers,
+  });
+
   return {
     db,
+    session,
     ...opts,
   };
 };
@@ -79,7 +85,7 @@ export const createTRPCRouter = t.router;
  * You can remove this if you don't like it, but it can help catch unwanted waterfalls by simulating
  * network latency that would occur in production but not in local development.
  */
-const timingMiddleware = t.middleware(async ({ next, path }) => {
+const timingMiddleware = t.middleware(async ({ next, path, ctx }) => {
   const start = Date.now();
 
   if (t._config.isDev) {
@@ -88,12 +94,30 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 
-  const result = await next();
+  const result = await next({
+    ctx: {
+      // Ensure session is correctly passed down
+      session: ctx.session,
+    },
+  });
 
   const end = Date.now();
-  console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
+  console.log(`🚩 [TRPC] ${path} took ${end - start}ms to execute`);
 
   return result;
+});
+
+/** Reusable middleware that enforces users are logged in before running the procedure. */
+const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
+  if (!ctx.session?.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({
+    ctx: {
+      // infers the `session` as non-nullable
+      session: { ...ctx.session, user: ctx.session.user },
+    },
+  });
 });
 
 /**
@@ -104,3 +128,24 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
  * are logged in.
  */
 export const publicProcedure = t.procedure.use(timingMiddleware);
+
+/**
+ * Optional procedure
+ *
+ * Like the public procedure, but ensures that the session object is available in the context,
+ * even if it's null (for unauthenticated users). Useful for procedures that behave differently
+ * depending on the user's authentication status. Includes timing middleware.
+ */
+export const optionalProcedure = t.procedure.use(timingMiddleware);
+
+/**
+ * Protected (authenticated) procedure
+ *
+ * If you want a query or mutation to ONLY be accessible to logged in users, use this. It verifies
+ * the session is valid and guarantees `ctx.session.user` is not null.
+ *
+ * @see https://trpc.io/docs/procedures
+ */
+export const protectedProcedure = t.procedure
+  .use(timingMiddleware)
+  .use(enforceUserIsAuthed);

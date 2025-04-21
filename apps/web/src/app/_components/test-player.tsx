@@ -2,6 +2,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { authClient } from "@/lib/auth-client";
 import { cn } from '@/lib/utils';
+import { api } from "@/trpc/react";
+import { toast } from "sonner"
 
 const TRACKS = [
     { id: "dont-panic", label: "Don't Panic" },
@@ -18,24 +20,55 @@ const TestPlayer = () => {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [selectedTrack, setSelectedTrack] = useState(TRACKS[0]!.id);
     const [audioSrc, setAudioSrc] = useState<string | undefined>(undefined); // don't pass empty string, it will break the stream
+    const [playbackToken, setPlaybackToken] = useState<string | null>(null);
 
+    const getPlaybackTokenMutation = api.stream.getPlaybackToken.useMutation({
+        onSuccess: (data) => {
+            console.log('Received playback token:', data.token);
+            setPlaybackToken(data.token);
+            toast.success("Playback token received.");
+            // Update audioSrc with the token
+            setAudioSrc(`http://localhost:4000/tracks/stream/${selectedTrack}?token=${data.token}`);
+        },
+        onError: (error) => {
+            console.error('Failed to get playback token:', error);
+            setPlaybackToken(null); // Clear token on error
+            setAudioSrc(undefined); // Clear audio source on error
+            if (error.data?.code === 'UNAUTHORIZED') {
+                console.log(error.message);
+                toast.error("User is not authorized to get a playback token.");
+                // Handle unauthorized error specifically if needed
+                console.log('User is not authorized to get a playback token.');
+                // Optionally, set an anonymous source or show a message
+                // setAudioSrc(`http://localhost:4000/tracks/stream/${selectedTrack}?id=anonymous`);
+            }
+        },
+    });
+
+    // Effect to fetch playback token when track or session changes
     useEffect(() => {
-        if (session?.user?.id) {
-            setAudioSrc(`http://localhost:4000/tracks/stream/${selectedTrack}?id=${session?.user?.id}`);
-        } else {
-            setTimeout(() => {
-                setAudioSrc(`http://localhost:4000/tracks/stream/${selectedTrack}?id=anonymous`);
-            }, 1500);
-        }
-    }, [session]);
+        setAudioSrc(undefined);
+        setPlaybackToken(null);
 
-    // Express endpoint: /tracks/stream/:trackId
-    // const audioSrc = `http://localhost:4000/tracks/stream/${selectedTrack}?id=${session?.user?.name ?? 'anonymous'}`;
+        if (session?.user?.id && selectedTrack) {
+            console.log(`Fetching token for track: ${selectedTrack}`);
+            getPlaybackTokenMutation.mutate({ trackId: selectedTrack });
+        } else {
+            console.log('User not logged in or no track selected, clearing token/src.');
+            toast.error("User is not logged in or no track selected, clearing token/src.");
+            // Optionally set anonymous src if desired: 
+            // setAudioSrc(`http://localhost:4000/tracks/stream/${selectedTrack}?id=anonymous`);
+        }
+        // Dependency array includes session and selectedTrack to refetch token when either changes.
+    }, [selectedTrack, session, getPlaybackTokenMutation.mutate]); // Ensure mutate is stable or handled correctly
 
     return (
         <div className={cn("p-4 rounded-md w-2xl max-w-md mx-auto mt-8", session?.user?.id ? 'bg-cyan-900 ' : 'bg-cyan-900/50')}>
             <p className="text-white mb-4">
                 Session ID: {session?.user?.id ?? 'anonymous'}
+            </p>
+            <p className="text-white mb-4 text-[9px] break-all">
+              <span className='select-none text-slate-400'> Token: </span>  {playbackToken ?? 'none'} {getPlaybackTokenMutation.isPending ? '(loading...)' : ''}
             </p>
 
             <div className="mb-4">
@@ -57,8 +90,7 @@ const TestPlayer = () => {
                 className="w-full"
                 src={audioSrc}
                 onError={e => {
-                    // Show a simple alert under the top window border
-                    alert("Audio failed to load. Please reload the page.");
+                    toast.error("Audio failed to load. Please reload the page.");
                     console.error("Audio error:", e);
                 }}
             >
