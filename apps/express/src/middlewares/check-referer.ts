@@ -3,11 +3,11 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const APP_URL = process.env.APP_URL; // Frontend url
+const APP_DOMAIN = process.env.APP_DOMAIN; // Frontend url
 
 export const checkReferrer = (req: Request, res: Response, next: NextFunction) => {
 
-    if (!APP_URL) throw new Error('APP_URL is not defined in environment variables');
+    if (!APP_DOMAIN) throw new Error('APP_DOMAIN is not defined in environment variables');
 
 
     const referrer = req.headers.referer || '';
@@ -24,7 +24,7 @@ export const checkReferrer = (req: Request, res: Response, next: NextFunction) =
         return res.status(403).send('Invalid URL');
     }
     // Allow only requests from your app domain
-    if (!referer_url.hostname.includes(APP_URL)) {
+    if (!referer_url.hostname.includes(APP_DOMAIN)) {
         console.error('Invalid referrer:', referrer);
         return res.status(403).send('Invalid referrer');
     }

@@ -71,7 +71,7 @@ export default function Auth() {
                 <SignOutButton />
             </div>
             <p>{!session ? "Not authenticated !!" : session.user.name}</p>
-            <pre>
+            <pre className="text-xs text-slate-400">
                 {JSON.stringify(session, null, 2)}
             </pre>
         </main>

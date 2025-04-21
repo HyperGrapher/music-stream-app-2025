@@ -17,16 +17,6 @@ if (!JWT_PLAYBACK_SECRET) {
     throw new Error('JWT_PLAYBACK_SECRET is not defined');
 }
 
-router.use(function (req, res, next) {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Credentials", "true");
-    res.header("Cross-Origin-Resource-Policy", "cross-origin");
-    res.header("Content-Type", "audio/mp3");
-    res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Origin,X-Requested-With,Content-Type,Accept,content-type,audio/mp3");
-    next();
-});
-
 // Streaming statistics
 interface StreamStats {
     totalBytes: number;
@@ -47,22 +37,71 @@ const streamStats: StreamStats = {
 };
 
 // Track total bytes streamed per session
-const streamProgress = new Map<string, { totalBytes: number; startTime: [number, number]; lastActivityTime: number; chunkCount: number }>();
+const streamProgress = new Map<string, { totalBytes: number; startTime: [number, number]; lastActivityTime: number; chunkCount: number; fileSize: number; trackId: string }>();
 
 // Add timeout handling and resource limits
 const STREAM_TIMEOUT = 30000; // 30 seconds
 const MAX_CHUNK_RETRIES = 3;
 const SESSION_CLEANUP_INTERVAL = STREAM_TIMEOUT * 2; // Check for inactive sessions every 60 seconds
 
+// Map client IP to their latest session ID to detect track changes
+const ipToCurrentSessionId = new Map<string, string>();
+
+// Helper function to format bytes to KB
+function formatBytesToKB(bytes: number): string {
+    if (bytes === 0) return '0 KB';
+    const kb = bytes / 1024;
+    return `${kb.toFixed(2)} KB`;
+}
+
+// Centralized function for logging session stats and cleaning up
+function logSessionStats(sessionId: string, status: 'completed' | 'switched' | 'timeout' | 'error' | 'inactive_cleanup') {
+    const progress = streamProgress.get(sessionId);
+    if (!progress) {
+        // Session might have already been cleaned up (e.g., completed then timed out cleanup)
+        console.log(`Attempted to log stats for already cleaned session: ${sessionId} (${status})`);
+        return;
+    }
+
+    const { totalBytes, startTime, chunkCount, fileSize, trackId, lastActivityTime } = progress;
+    const sessionEndTime = process.hrtime(startTime);
+    const sessionDuration = (sessionEndTime[0] * 1e9 + sessionEndTime[1]) / 1e9;
+    const sessionSpeed = sessionDuration > 0 ? totalBytes / sessionDuration : 0;
+
+    console.log(`*** Stream Session ${status.toUpperCase()} ***`);
+    console.log({
+        status,
+        trackId,
+        sessionId,
+        totalFileSize: formatBytesToKB(fileSize),
+        totalBytesStreamed: formatBytesToKB(totalBytes),
+        sessionDuration: `${sessionDuration.toFixed(2)}s`,
+        sessionAverageSpeed: `${formatBytesToKB(sessionSpeed)}/s`,
+        numberOfChunks: chunkCount,
+        activeSessions: streamStats.activeSessions.size - 1, // Decrement as this one is ending
+        totalSessionsStarted: streamStats.streamCount,
+        totalBytesAllStreams: formatBytesToKB(streamStats.totalBytes),
+        errorsForSession: streamStats.errors.get(sessionId) ?? 0,
+        isComplete: status === 'completed' || totalBytes >= fileSize
+    });
+
+    // Clean up session data
+    streamProgress.delete(sessionId);
+    streamStats.activeSessions.delete(sessionId);
+    streamStats.errors.delete(sessionId); // Clean up errors for this session
+
+    // We might also want to remove from ipToCurrentSessionId if it matches, 
+    // but the next request from that IP will overwrite it anyway.
+}
+
 // Cleanup inactive sessions
 setInterval(() => {
     const now = Date.now();
     for (const [sessionId, progress] of streamProgress.entries()) {
         if (now - progress.lastActivityTime > SESSION_CLEANUP_INTERVAL) {
-            console.log(`Removing inactive session: ${sessionId}`);
-            streamProgress.delete(sessionId);
-            // Also remove from active sessions if it exists there (though it should be removed on close/end/error)
-            streamStats.activeSessions.delete(sessionId);
+            console.log(`Cleaning up inactive session via interval: ${sessionId}`);
+            logSessionStats(sessionId, 'inactive_cleanup');
+            // No need to delete here, logSessionStats does it
         }
     }
 }, SESSION_CLEANUP_INTERVAL);
@@ -84,7 +123,7 @@ function calculateStreamHeaders(filepath: string, range: string) {
             'Content-Disposition': 'inline',
             'Cache-Control': 'no-store, no-cache, must-revalidate, private',
             'Cross-Origin-Resource-Policy': 'cross-origin',
-            'Access-Control-Allow-Origin': process.env.NEXT_URL ?? '*'
+            'Access-Control-Allow-Origin': process.env.NEXT_URL ?? (process.env.APP_DOMAIN ?? '*')
         },
         fileSize,
         start,
@@ -94,7 +133,8 @@ function calculateStreamHeaders(filepath: string, range: string) {
 }
 
 async function logStreamError(trackId: string, sessionId: string, error: Error) {
-    console.error(`Streaming error for track ${trackId}, session ${sessionId}:`, error);
+    console.error(`Streaming error occurred for track ${trackId}, session ${sessionId}:`, error.message);
+    // Increment error count for this specific session
     streamStats.errors.set(sessionId, (streamStats.errors.get(sessionId) ?? 0) + 1);
 
     try {
@@ -132,15 +172,19 @@ function setupStreamHandlers(
     let bytesTransferredInChunk = 0; // Renamed from bytesTransferred for clarity
     let streamTimeout: NodeJS.Timeout;
 
-    // Initialize or retrieve session progress tracking
+    // Retrieve session progress - it MUST exist here as it's created/updated in the route handler
     let progress = streamProgress.get(sessionId);
     if (!progress) {
-        console.warn(`Session progress not found for ${sessionId} in setupStreamHandlers. Initializing.`);
-        progress = { totalBytes: 0, startTime: process.hrtime(), lastActivityTime: Date.now(), chunkCount: 1 };
-        streamProgress.set(sessionId, progress);
-        streamStats.streamCount++;
-    } else {
-        progress.lastActivityTime = Date.now();
+        // This case should be extremely rare now
+        console.error(`CRITICAL: Session progress not found for ${sessionId} in setupStreamHandlers.`);
+        // Avoid crashing, but log the error
+        logStreamError(trackId, sessionId, new Error("Session progress missing in setupStreamHandlers"));
+        cleanup(audioStream);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Internal server error during stream setup' });
+        }
+        res.end();
+        return;
     }
 
     // Reset stream timeout
@@ -148,14 +192,14 @@ function setupStreamHandlers(
         if (streamTimeout) clearTimeout(streamTimeout);
         streamTimeout = setTimeout(() => {
             console.error(`Stream timeout for track ${trackId}, session ${sessionId}`);
-            cleanup(audioStream);
+            cleanup(audioStream); // Destroy the chunk stream
             logStreamError(trackId, sessionId, new Error('Stream timeout'));
+            logSessionStats(sessionId, 'timeout'); // Log stats and cleanup session
             if (!res.headersSent) {
                 res.status(408).json({ error: 'Stream timeout' });
             }
             res.end();
-            streamProgress.delete(sessionId); // Clean up session on timeout
-            streamStats.activeSessions.delete(sessionId);
+            // No need to delete from maps here, logSessionStats handles it
         }, STREAM_TIMEOUT);
     };
 
@@ -181,12 +225,12 @@ function setupStreamHandlers(
             if (chunkRetries >= MAX_CHUNK_RETRIES) {
                 cleanup(audioStream);
                 logStreamError(trackId, sessionId, error as Error);
+                logSessionStats(sessionId, 'error'); // Log as error due to retries
                 if (!res.headersSent) {
                     res.status(500).json({ error: 'Maximum retry attempts exceeded' });
                 }
                 res.end();
-                streamProgress.delete(sessionId); // Clean up session on retry failure
-                streamStats.activeSessions.delete(sessionId);
+                // No need to delete from maps here, logSessionStats handles it
             }
         }
     });
@@ -195,103 +239,74 @@ function setupStreamHandlers(
         clearTimeout(streamTimeout);
         cleanup(audioStream);
         logStreamError(trackId, sessionId, error);
+        logSessionStats(sessionId, 'error'); // Log stats and cleanup session
         if (!res.headersSent) {
             res.status(500).json({ error: 'Streaming error occurred' });
         }
         res.end();
-        streamProgress.delete(sessionId); // Clean up session on error
-        streamStats.activeSessions.delete(sessionId);
+        // No need to delete from maps here, logSessionStats handles it
     });
 
     // Handle stream completion (for the *chunk*)
     audioStream.on('end', () => {
         try {
             clearTimeout(streamTimeout);
-            progress!.lastActivityTime = Date.now(); // Update last activity time on chunk end
+
+            // Check if the progress object still exists, might have been cleaned by timeout/error/switch
+            const currentProgress = streamProgress.get(sessionId);
+            if (!currentProgress) {
+                // console.log(`Chunk ended for already cleaned session: ${sessionId}`);
+                return;
+            }
+
+            currentProgress.lastActivityTime = Date.now(); // Update last activity time on chunk end
 
             // Check if the *entire file* has been streamed for this session
-            const isFullFile = progress!.totalBytes >= fileSize;
+            const isFullFile = currentProgress.totalBytes >= fileSize;
 
             if (isFullFile) {
-                const sessionEndTime = process.hrtime(progress!.startTime);
-                const sessionDuration = (sessionEndTime[0] * 1e9 + sessionEndTime[1]) / 1e9;
-                const sessionSpeed = progress!.totalBytes / sessionDuration; // Use session totals
-
-                // Update global average speed based on completed session speed
-                if (!isNaN(sessionSpeed) && isFinite(sessionSpeed)) {
-                    // Simple moving average might not be best, maybe weighted? For now, simple average.
-                    // Recalculate average based on *all* completed sessions. A bit complex.
-                    // Let's just log the session speed for now.
-                    // streamStats.averageSpeed = ((streamStats.averageSpeed * (completedSessionCount - 1)) + sessionSpeed) / completedSessionCount;
-                }
-
-                console.log('*** Full Stream Completed ***');
-                console.log({
-                    trackId,
-                    sessionId,
-                    totalFileSize: fileSize,
-                    totalBytesStreamedForSession: progress!.totalBytes, // Log session total
-                    sessionDuration: `${sessionDuration.toFixed(2)}s`,
-                    sessionAverageSpeed: `${(sessionSpeed / 1024 / 1024).toFixed(2)} MB/s`,
-                    numberOfChunks: progress!.chunkCount,
-                    activeSessions: streamStats.activeSessions.size, // Current active count
-                    totalSessionsStarted: streamStats.streamCount, // Total sessions ever started
-                    totalBytesAllStreams: streamStats.totalBytes, // Global bytes total
-                    errorsForTrack: streamStats.errors.get(trackId) ?? 0,
-                });
-
-                // Clean up the completed session
-                streamProgress.delete(sessionId);
-                streamStats.activeSessions.delete(sessionId); // Also remove from active sessions set
-
+                logSessionStats(sessionId, 'completed');
             } else {
-                // Optional: Log chunk completion if needed for debugging, but not the full summary
-                // console.log(`Chunk completed for session ${sessionId}, track ${trackId}. Bytes in chunk: ${bytesTransferredInChunk}. Total for session: ${progress.totalBytes}/${fileSize}`);
+                // Optional: Log chunk completion if needed for debugging
+                // console.log(`Chunk ended for session ${sessionId}. Bytes in chunk: ${bytesTransferredInChunk}. Total for session: ${formatBytesToKB(currentProgress.totalBytes)}/${formatBytesToKB(fileSize)}`);
             }
 
         } catch (error) {
+            // Log error in the handler itself, but attempt to log session state too
             console.error('Error in stream end handler:', error);
             logStreamError(trackId, sessionId, error as Error);
-            streamProgress.delete(sessionId); // Clean up session on handler error
-            streamStats.activeSessions.delete(sessionId);
+            logSessionStats(sessionId, 'error'); // Log session as error
         } finally {
-            // Don't call cleanup here for the session unless it's fully complete or errored
-            // Cleanup for the *chunk* stream happens implicitly or via res.on('close')
-            // cleanup(audioStream); <--- Removed from here
+            // No cleanup needed here, handled by logSessionStats or res.on('close') for the chunk stream
         }
     });
-    // Handle client disconnect
+    // Handle client disconnect for the *chunk stream*
     res.on('close', () => {
         clearTimeout(streamTimeout);
         if (!audioStream.destroyed) {
-            // cleanup(audioStream); // This destroys the chunk stream
             audioStream.destroy(); // Destroy the specific chunk stream
         }
-        // If the connection closes before the full file is sent,
-        // the session might still be in streamProgress.
-        // The interval cleanup will handle stale sessions.
-        // We *don't* delete from streamProgress here unless we know it's abandoned.
-        // However, we *should* remove it from the *active* sessions count.
-        streamStats.activeSessions.delete(sessionId);
-        console.log(`Client connection closed for session: ${sessionId}`);
-
+        // We don't log session stats here automatically, as closing one chunk
+        // doesn't mean the whole session is abandoned. Track switches, timeouts,
+        // completion, errors, or interval cleanup handle session logging.
+        // console.log(`Chunk stream closed for session: ${sessionId}`);
     });
 }
 
 // Main streaming endpoint
 router.get('/stream/:trackId', (req, res) => {
-    const trackId = req.params.trackId;
-    // Generate session ID based on client IP and track ID for better session tracking
+    const requestedTrackId = req.params.trackId;
+    // Generate session ID based on client IP and track ID
     const clientIp = req.socket.remoteAddress || req.ip || 'unknown';
-    const sessionId = `${clientIp}-${trackId}`;
-    const filename = `${trackId}.mp3`;
+    const currentSessionId = `${clientIp}-${requestedTrackId}`;
+    const filename = `${requestedTrackId}.mp3`;
     const trackPath = path.resolve(__dirname, "..", '..', "audio", filename);
+    const range = req.headers.range; // Declare range header earlier
 
     // Cleanup function (now mainly for destroying the specific chunk stream)
     const cleanup = (audioStream?: fs.ReadStream) => {
         try {
             // Don't remove from activeSessions here, let the handlers do it based on state
-            // streamStats.activeSessions.delete(sessionId);
             if (audioStream && !audioStream.destroyed) {
                 audioStream.destroy();
             }
@@ -301,49 +316,83 @@ router.get('/stream/:trackId', (req, res) => {
     };
 
     try {
-        // Add to active sessions only when starting to process the request
-        streamStats.activeSessions.add(sessionId);
-
-        // Initialize or update session progress including chunk count
-        let progress = streamProgress.get(sessionId);
-        if (!progress) {
-            progress = { totalBytes: 0, startTime: process.hrtime(), lastActivityTime: Date.now(), chunkCount: 1 };
-            streamProgress.set(sessionId, progress);
-            console.log(`Starting new stream session: ${sessionId} for track ${trackId}`);
-            streamStats.streamCount++;
-        } else {
-            progress.chunkCount++;
-            progress.lastActivityTime = Date.now();
+        // --- Track Switch Detection ---
+        const previousSessionId = ipToCurrentSessionId.get(clientIp);
+        if (previousSessionId && previousSessionId !== currentSessionId) {
+            // User likely switched tracks
+            console.log(`Track switch detected for IP ${clientIp}: ${previousSessionId} -> ${currentSessionId}`);
+            logSessionStats(previousSessionId, 'switched');
+            // Note: logSessionStats handles cleanup of previousSessionId
         }
+        // Update the current session for this IP
+        ipToCurrentSessionId.set(clientIp, currentSessionId);
+        // ----------------------------- 
 
+        // Add to active sessions *set* (used for global count)
+        streamStats.activeSessions.add(currentSessionId);
+
+        // Get file size early for progress tracking
         if (!fs.existsSync(trackPath)) {
-            cleanup(); // Clean up potential stream
-            streamStats.activeSessions.delete(sessionId); // Remove from active if file not found
-            logStreamError(trackId, sessionId, new Error('Track not found'));
+            // No need to log error here, just return 404
+            streamStats.activeSessions.delete(currentSessionId);
+            ipToCurrentSessionId.delete(clientIp); // Clean up IP map if file not found on first try
             return res.status(404).json({ error: 'Track not found' });
         }
+        const stats = fs.statSync(trackPath);
+        const fileSize = stats.size;
 
-        const range = req.headers.range;
+        // Check for range header *after* confirming file exists and getting size
         if (!range) {
             cleanup();
-            streamStats.activeSessions.delete(sessionId); // Remove from active if no range header
+            streamStats.activeSessions.delete(currentSessionId);
+            // Don't log stats here, it's just a bad request, not a stream failure
             return res.status(400).json({ error: 'Range header is required' });
         }
 
-        const { headers, fileSize, start, end, contentLength } = calculateStreamHeaders(trackPath, range);
+        // Initialize or update session progress in the map
+        let progress = streamProgress.get(currentSessionId);
+        if (!progress) {
+            progress = {
+                totalBytes: 0,
+                startTime: process.hrtime(),
+                lastActivityTime: Date.now(),
+                chunkCount: 1, // First chunk for this session
+                fileSize: fileSize, // Store fileSize with progress
+                trackId: requestedTrackId // Store trackId with progress
+            };
+            streamProgress.set(currentSessionId, progress);
+            console.log(`Starting new stream session: ${currentSessionId}`);
+            streamStats.streamCount++; // Increment global counter only for new sessions
+        } else {
+            progress.chunkCount++;
+            progress.lastActivityTime = Date.now();
+            // Ensure fileSize is up-to-date in case it changed? Unlikely for static audio.
+            // progress.fileSize = fileSize; 
+        }
+
+        // Now safe to use range here
+        const { headers, start, end, contentLength } = calculateStreamHeaders(trackPath, range);
         res.writeHead(206, headers);
 
         const audioStream = fs.createReadStream(trackPath, { start, end });
         const chunkStartTime = process.hrtime(); // Time for this specific chunk request
 
-        setupStreamHandlers(audioStream, trackId, sessionId, chunkStartTime, { start, end, contentLength, fileSize }, res, req, cleanup);
+        setupStreamHandlers(audioStream, requestedTrackId, currentSessionId, chunkStartTime, { start, end, contentLength, fileSize }, res, req, cleanup);
 
         audioStream.pipe(res);
 
     } catch (error) {
         cleanup(); // Clean up potential stream
-        streamStats.activeSessions.delete(sessionId); // Remove from active on error
-        logStreamError(trackId, sessionId, error as Error);
+        // Attempt to log stats if session exists, otherwise just log the setup error
+        if (streamProgress.has(currentSessionId)) {
+            logStreamError(requestedTrackId, currentSessionId, error as Error);
+            logSessionStats(currentSessionId, 'error');
+        } else {
+            console.error(`Error during initial setup for track ${requestedTrackId} (IP: ${clientIp}):`, error);
+            streamStats.activeSessions.delete(currentSessionId); // Ensure cleanup if session wasn't fully created
+            ipToCurrentSessionId.delete(clientIp); // Clean up ip map too
+        }
+
         if (!res.headersSent) {
             res.status(500).json({ error: 'Internal server error' });
         }

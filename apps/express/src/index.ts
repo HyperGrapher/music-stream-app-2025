@@ -52,15 +52,15 @@ app.use(helmet({
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 app.use(bodyParser.json());
-app.use(limiter);
 
 
 
 // Auth routes for desktop app
+app.use('/tracks', trackRoutes);
+app.use(limiter);
 app.use('/', indexRoutes);
 app.use('/auth', authRoutes);
 app.use('/user', userRoutes);
-app.use('/tracks', trackRoutes);
 
 // Use httpServer instead of app.listen for Socket.IO
 app.listen(port, () => {
