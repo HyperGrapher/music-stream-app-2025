@@ -141,7 +141,7 @@ export function logSessionStats(sessionId: string, status: SessionStatus) { // R
         sessionDuration: `${sessionDuration.toFixed(2)}s`,
         sessionAverageSpeed: `${formatBytesToKB(sessionSpeed)}/s`,
         numberOfChunks: chunkCount,
-        activeSessions: streamStats.activeSessions.size - 1 >= 0 ? streamStats.activeSessions.size - 1 : 0,
+        activeSessions: streamStats.activeSessions.size,
         totalSessionsStarted: streamStats.streamCount,
         totalBytesAllStreams: formatBytesToKB(streamStats.totalBytes),
         errorsForSession: streamStats.errors.get(sessionId) ?? 0,

@@ -1,5 +1,7 @@
 "use client"
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { authClient } from "@/lib/auth-client";
+import { cn } from '@/lib/utils';
 
 const TRACKS = [
     { id: "dont-panic", label: "Don't Panic" },
@@ -12,14 +14,30 @@ const TRACKS = [
 ];
 
 const TestPlayer = () => {
+    const { data: session } = authClient.useSession();
     const audioRef = useRef<HTMLAudioElement>(null);
     const [selectedTrack, setSelectedTrack] = useState(TRACKS[0]!.id);
+    const [audioSrc, setAudioSrc] = useState<string | undefined>(undefined); // don't pass empty string, it will break the stream
+
+    useEffect(() => {
+        if (session?.user?.id) {
+            setAudioSrc(`http://localhost:4000/tracks/stream/${selectedTrack}?id=${session?.user?.id}`);
+        } else {
+            setTimeout(() => {
+                setAudioSrc(`http://localhost:4000/tracks/stream/${selectedTrack}?id=anonymous`);
+            }, 1500);
+        }
+    }, [session]);
 
     // Express endpoint: /tracks/stream/:trackId
-    const audioSrc = `http://localhost:4000/tracks/stream/${selectedTrack}`;
+    // const audioSrc = `http://localhost:4000/tracks/stream/${selectedTrack}?id=${session?.user?.name ?? 'anonymous'}`;
 
     return (
-        <div className="bg-cyan-900 p-4 rounded-md max-w-md mx-auto mt-8">
+        <div className={cn("p-4 rounded-md w-2xl max-w-md mx-auto mt-8", session?.user?.id ? 'bg-cyan-900 ' : 'bg-cyan-900/50')}>
+            <p className="text-white mb-4">
+                Session ID: {session?.user?.id ?? 'anonymous'}
+            </p>
+
             <div className="mb-4">
                 <label htmlFor="track-select" className="text-white mr-2">Select Track:</label>
                 <select
