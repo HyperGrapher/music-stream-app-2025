@@ -8,197 +8,346 @@ import { query, validationResult, param } from 'express-validator';
 import jwt from 'jsonwebtoken';
 import fs from "fs";
 import path from "path";
-
+import crypto from "crypto";
 
 const router: Router = express.Router();
-
 
 const JWT_PLAYBACK_SECRET = process.env.JWT_PLAYBACK_SECRET as string;
 if (!JWT_PLAYBACK_SECRET) {
     throw new Error('JWT_PLAYBACK_SECRET is not defined');
 }
 
+router.use(function (req, res, next) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.header("Cross-Origin-Resource-Policy", "cross-origin");
+    res.header("Content-Type", "audio/mp3");
+    res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Origin,X-Requested-With,Content-Type,Accept,content-type,audio/mp3");
+    next();
+});
 
+// Streaming statistics
+interface StreamStats {
+    totalBytes: number;
+    streamCount: number;
+    startTime: [number, number];
+    averageSpeed: number;
+    activeSessions: Set<string>;
+    errors: Map<string, number>;
+}
 
+const streamStats: StreamStats = {
+    totalBytes: 0,
+    streamCount: 0,
+    startTime: process.hrtime(),
+    averageSpeed: 0,
+    activeSessions: new Set(),
+    errors: new Map()
+};
 
+// Track total bytes streamed per session
+const streamProgress = new Map<string, { totalBytes: number; startTime: [number, number]; lastActivityTime: number; chunkCount: number }>();
 
+// Add timeout handling and resource limits
+const STREAM_TIMEOUT = 30000; // 30 seconds
+const MAX_CHUNK_RETRIES = 3;
+const SESSION_CLEANUP_INTERVAL = STREAM_TIMEOUT * 2; // Check for inactive sessions every 60 seconds
 
-// Protected streaming endpoint
-router.get('/stream/:trackId', (req, res) => {
-    const trackId = req.params.trackId;
-    const filename = `${trackId}.mp3`;
-    const trackPath = path.resolve(__dirname, "..", "audio", filename);
-    // const trackPath = path.resolve(__dirname, `./tracks/${trackId}.mp3`);
-
-    // Verify the file exists
-    if (!fs.existsSync(trackPath)) {
-        return res.status(404).send('Track not found');
+// Cleanup inactive sessions
+setInterval(() => {
+    const now = Date.now();
+    for (const [sessionId, progress] of streamProgress.entries()) {
+        if (now - progress.lastActivityTime > SESSION_CLEANUP_INTERVAL) {
+            console.log(`Removing inactive session: ${sessionId}`);
+            streamProgress.delete(sessionId);
+            // Also remove from active sessions if it exists there (though it should be removed on close/end/error)
+            streamStats.activeSessions.delete(sessionId);
+        }
     }
+}, SESSION_CLEANUP_INTERVAL);
 
-    const stat = fs.statSync(trackPath);
-    const fileSize = stat.size;
-    const range = req.headers.range;
+function calculateStreamHeaders(filepath: string, range: string) {
+    const fileSize = fs.statSync(filepath).size;
+    const CHUNK_SIZE = Math.floor(10 ** 6 / 10); // 100kb chunks for optimal streaming
+    const parts = range.replace(/bytes=/, '').split('-');
+    const start = parseInt(parts[0]!, 10);
+    const end = Math.min(start + CHUNK_SIZE, fileSize - 1);
+    const contentLength = end - start + 1;
 
-    // Handle range requests (important for seeking in audio)
-    if (range) {
-        const parts = range.replace(/bytes=/, '').split('-');
-        const start = parseInt(parts[0]!, 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-        const chunkSize = (end - start) + 1;
-        const file = fs.createReadStream(trackPath, { start, end });
-
-        // Set proper headers for streaming
-        res.writeHead(206, {
+    return {
+        headers: {
             'Content-Range': `bytes ${start}-${end}/${fileSize}`,
             'Accept-Ranges': 'bytes',
-            'Content-Length': chunkSize,
-            'Content-Type': 'audio/mpeg',
-            'Content-Disposition': 'inline', // Important to prevent downloads
-            'Cache-Control': 'no-store, no-cache, must-revalidate, private',
-        });
-
-        file.pipe(res);
-    } else {
-        // Stream the whole file if no range is specified
-        res.writeHead(200, {
-            'Content-Length': fileSize,
+            'Content-Length': contentLength,
             'Content-Type': 'audio/mpeg',
             'Content-Disposition': 'inline',
             'Cache-Control': 'no-store, no-cache, must-revalidate, private',
-        });
-
-        fs.createReadStream(trackPath).pipe(res);
-    }
-});
-
-
-let counter = 1;
-let totalBytes = 0;
-let begin: [number, number];
-
-router.get("/stream-api/stream/:target", (req: Request<{ target: string }>, res: Response) => {
-    if (begin === null) begin = process.hrtime();
-
-    const { target } = req.params;
-    const jwtTarget = 'asa'// req.user?.target;
-    const user = req.user ?? null;
-
-    if (jwtTarget) {
-        // jwtTarget is rate limited, so only check if it exists
-        if (target !== jwtTarget) return res.status(403).json({ error: true, message: "Invalid request" });
-    }
-
-    const filename = `${target}.mp3`;
-    const filepath = path.resolve(__dirname, "..", "music", filename);
-
-    if (!fs.existsSync(filepath)) {
-        console.error("NO FILE", __filename, __dirname);
-        return res.status(404).json({
-            error: true,
-            message: "Source not found E:117",
-        });
-    }
-
-    const range = req.headers.range;
-
-    if (!range) {
-        return res.status(400).json({
-            error: true,
-            message: "Stream not allowed: E:126",
-        });
-    }
-
-    const { headers, fileSize, start, end } = calculateHeaders(filepath, range);
-    if (start < 10) totalBytes = 0; // reset totalBytes on re-runs
-    res.writeHead(206, headers); // 206 -> Partial content
-
-    const audioStream = fs.createReadStream(filepath, { start, end });
-
-    audioStream.on("error", async (err) => {
-        console.error("Streaming error: E:152", err);
-        try {
-            await prisma.trackError.upsert({
-                create: {
-                    track_id: jwtTarget,
-                    title: jwtTarget,
-                    filepath: filepath,
-                    reason: 'streaming error',
-                },
-                update: {
-                    count: {
-                        increment: 1,
-                    },
-                },
-                where: {
-                    track_id: jwtTarget,
-                },
-            });
-        } catch (error) {
-            console.error(error);
-        }
-    });
-
-    audioStream.on("close", async () => {
-        const streamDiff = fileSize - end;
-
-        if (streamDiff < 100) {
-            const diff = process.hrtime(begin);
-            const res = diff[0] * 1e9 + diff[1];
-
-            console.log("%d times streamed, %d bytes processed, %d bytes per sec", counter, totalBytes, (totalBytes / res) * 1e9);
-            console.log("Stream time: %d seconds", res / 1e9);
-            console.log("<<<<< Stream reached its end >>>>>");
-        }
-    });
-
-    audioStream.pipe(res);
-});
-
-
-
-
-
-
-// Add short-lived playback tokens
-// https://claude.ai/chat/3506c123-0cf9-4be6-897b-8d36f39c8fda
-// /http://localhost:4000/tracks/v1/:trackId/playback-token
-router.post('/v1/:trackId/playback-token', (req: Request, res: Response) => {
-    const trackId = req.params.trackId ?? '';
-    const userId = req.user!.userId;
-
-    // Generate a token that expires in 5 minutes
-    const playbackToken = jwt.sign(
-        { trackId, userId, timestamp: Date.now() },
-        JWT_PLAYBACK_SECRET,
-        { expiresIn: '5m' }
-    );
-
-    res.json({ playbackToken });
-});
-
-function calculateHeaders(filepath: string, range: string) {
-    const fileSize = fs.statSync(filepath).size;
-    const CHUNK_SIZE = Math.floor(10 ** 6 / 10); // 10**6=100kb
-    const start = Number(range.replace(/\D/g, ""));
-    const end = Math.min(start + CHUNK_SIZE, fileSize - 1);
-    const contentLength = end - start + 1;
-    const NEXT_URL = process.env.NEXT_URL ?? "http://localhost:3001";
-
-    totalBytes += contentLength;
-    counter += 1;
-
-    const headers = {
-        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-        "Accept-Ranges": "bytes",
-        "Content-Length": contentLength,
-        "Content-Type": "audio/mp3",
-        "Cross-Origin-Resource-Policy": "cross-origin",
-        "Access-Control-Allow-Origin": NEXT_URL, // TODO: full SSL address - get from environment var
+            'Cross-Origin-Resource-Policy': 'cross-origin',
+            'Access-Control-Allow-Origin': process.env.NEXT_URL ?? '*'
+        },
+        fileSize,
+        start,
+        end,
+        contentLength
     };
-
-    return { headers, fileSize, start, end };
 }
 
+async function logStreamError(trackId: string, sessionId: string, error: Error) {
+    console.error(`Streaming error for track ${trackId}, session ${sessionId}:`, error);
+    streamStats.errors.set(sessionId, (streamStats.errors.get(sessionId) ?? 0) + 1);
 
+    try {
+        await prisma.trackError.upsert({
+            create: {
+                track_id: trackId,
+                title: trackId,
+                filepath: path.resolve(__dirname, "..", '..', "audio", `${trackId}.mp3`),
+                reason: error.message,
+            },
+            update: {
+                count: { increment: 1 },
+            },
+            where: {
+                track_id: trackId,
+            },
+        });
+    } catch (dbError) {
+        console.error('Failed to log stream error to database:', dbError);
+    }
+}
+
+function setupStreamHandlers(
+    audioStream: fs.ReadStream,
+    trackId: string,
+    sessionId: string,
+    startTime: [number, number], // This startTime is for the *chunk*, not the whole session
+    streamDetails: { start: number; end: number; contentLength: number; fileSize: number },
+    res: Response,
+    req: Request, // Added req to get session key
+    cleanup: (audioStream?: fs.ReadStream) => void
+) {
+    const { start, end, contentLength, fileSize } = streamDetails;
+    let chunkRetries = 0;
+    let bytesTransferredInChunk = 0; // Renamed from bytesTransferred for clarity
+    let streamTimeout: NodeJS.Timeout;
+
+    // Initialize or retrieve session progress tracking
+    let progress = streamProgress.get(sessionId);
+    if (!progress) {
+        console.warn(`Session progress not found for ${sessionId} in setupStreamHandlers. Initializing.`);
+        progress = { totalBytes: 0, startTime: process.hrtime(), lastActivityTime: Date.now(), chunkCount: 1 };
+        streamProgress.set(sessionId, progress);
+        streamStats.streamCount++;
+    } else {
+        progress.lastActivityTime = Date.now();
+    }
+
+    // Reset stream timeout
+    const resetTimeout = () => {
+        if (streamTimeout) clearTimeout(streamTimeout);
+        streamTimeout = setTimeout(() => {
+            console.error(`Stream timeout for track ${trackId}, session ${sessionId}`);
+            cleanup(audioStream);
+            logStreamError(trackId, sessionId, new Error('Stream timeout'));
+            if (!res.headersSent) {
+                res.status(408).json({ error: 'Stream timeout' });
+            }
+            res.end();
+            streamProgress.delete(sessionId); // Clean up session on timeout
+            streamStats.activeSessions.delete(sessionId);
+        }, STREAM_TIMEOUT);
+    };
+
+    resetTimeout();
+
+    // Handle data chunks
+    audioStream.on('data', (chunk: string | Buffer) => {
+        try {
+            resetTimeout();
+            progress!.lastActivityTime = Date.now(); // Update last activity time
+            const chunkSize = Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(chunk);
+            bytesTransferredInChunk += chunkSize;
+            streamStats.totalBytes += chunkSize; // Global total bytes
+            progress!.totalBytes += chunkSize; // Session total bytes
+
+            if (bytesTransferredInChunk > contentLength) {
+                throw new Error('Stream exceeded expected content length');
+            }
+        } catch (error) {
+            console.error('Error processing chunk:', error);
+            chunkRetries++;
+
+            if (chunkRetries >= MAX_CHUNK_RETRIES) {
+                cleanup(audioStream);
+                logStreamError(trackId, sessionId, error as Error);
+                if (!res.headersSent) {
+                    res.status(500).json({ error: 'Maximum retry attempts exceeded' });
+                }
+                res.end();
+                streamProgress.delete(sessionId); // Clean up session on retry failure
+                streamStats.activeSessions.delete(sessionId);
+            }
+        }
+    });
+
+    audioStream.on('error', (error: Error) => {
+        clearTimeout(streamTimeout);
+        cleanup(audioStream);
+        logStreamError(trackId, sessionId, error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Streaming error occurred' });
+        }
+        res.end();
+        streamProgress.delete(sessionId); // Clean up session on error
+        streamStats.activeSessions.delete(sessionId);
+    });
+
+    // Handle stream completion (for the *chunk*)
+    audioStream.on('end', () => {
+        try {
+            clearTimeout(streamTimeout);
+            progress!.lastActivityTime = Date.now(); // Update last activity time on chunk end
+
+            // Check if the *entire file* has been streamed for this session
+            const isFullFile = progress!.totalBytes >= fileSize;
+
+            if (isFullFile) {
+                const sessionEndTime = process.hrtime(progress!.startTime);
+                const sessionDuration = (sessionEndTime[0] * 1e9 + sessionEndTime[1]) / 1e9;
+                const sessionSpeed = progress!.totalBytes / sessionDuration; // Use session totals
+
+                // Update global average speed based on completed session speed
+                if (!isNaN(sessionSpeed) && isFinite(sessionSpeed)) {
+                    // Simple moving average might not be best, maybe weighted? For now, simple average.
+                    // Recalculate average based on *all* completed sessions. A bit complex.
+                    // Let's just log the session speed for now.
+                    // streamStats.averageSpeed = ((streamStats.averageSpeed * (completedSessionCount - 1)) + sessionSpeed) / completedSessionCount;
+                }
+
+                console.log('*** Full Stream Completed ***');
+                console.log({
+                    trackId,
+                    sessionId,
+                    totalFileSize: fileSize,
+                    totalBytesStreamedForSession: progress!.totalBytes, // Log session total
+                    sessionDuration: `${sessionDuration.toFixed(2)}s`,
+                    sessionAverageSpeed: `${(sessionSpeed / 1024 / 1024).toFixed(2)} MB/s`,
+                    numberOfChunks: progress!.chunkCount,
+                    activeSessions: streamStats.activeSessions.size, // Current active count
+                    totalSessionsStarted: streamStats.streamCount, // Total sessions ever started
+                    totalBytesAllStreams: streamStats.totalBytes, // Global bytes total
+                    errorsForTrack: streamStats.errors.get(trackId) ?? 0,
+                });
+
+                // Clean up the completed session
+                streamProgress.delete(sessionId);
+                streamStats.activeSessions.delete(sessionId); // Also remove from active sessions set
+
+            } else {
+                // Optional: Log chunk completion if needed for debugging, but not the full summary
+                // console.log(`Chunk completed for session ${sessionId}, track ${trackId}. Bytes in chunk: ${bytesTransferredInChunk}. Total for session: ${progress.totalBytes}/${fileSize}`);
+            }
+
+        } catch (error) {
+            console.error('Error in stream end handler:', error);
+            logStreamError(trackId, sessionId, error as Error);
+            streamProgress.delete(sessionId); // Clean up session on handler error
+            streamStats.activeSessions.delete(sessionId);
+        } finally {
+            // Don't call cleanup here for the session unless it's fully complete or errored
+            // Cleanup for the *chunk* stream happens implicitly or via res.on('close')
+            // cleanup(audioStream); <--- Removed from here
+        }
+    });
+    // Handle client disconnect
+    res.on('close', () => {
+        clearTimeout(streamTimeout);
+        if (!audioStream.destroyed) {
+            // cleanup(audioStream); // This destroys the chunk stream
+            audioStream.destroy(); // Destroy the specific chunk stream
+        }
+        // If the connection closes before the full file is sent,
+        // the session might still be in streamProgress.
+        // The interval cleanup will handle stale sessions.
+        // We *don't* delete from streamProgress here unless we know it's abandoned.
+        // However, we *should* remove it from the *active* sessions count.
+        streamStats.activeSessions.delete(sessionId);
+        console.log(`Client connection closed for session: ${sessionId}`);
+
+    });
+}
+
+// Main streaming endpoint
+router.get('/stream/:trackId', (req, res) => {
+    const trackId = req.params.trackId;
+    // Generate session ID based on client IP and track ID for better session tracking
+    const clientIp = req.socket.remoteAddress || req.ip || 'unknown';
+    const sessionId = `${clientIp}-${trackId}`;
+    const filename = `${trackId}.mp3`;
+    const trackPath = path.resolve(__dirname, "..", '..', "audio", filename);
+
+    // Cleanup function (now mainly for destroying the specific chunk stream)
+    const cleanup = (audioStream?: fs.ReadStream) => {
+        try {
+            // Don't remove from activeSessions here, let the handlers do it based on state
+            // streamStats.activeSessions.delete(sessionId);
+            if (audioStream && !audioStream.destroyed) {
+                audioStream.destroy();
+            }
+        } catch (error) {
+            console.error('Error in cleanup:', error);
+        }
+    };
+
+    try {
+        // Add to active sessions only when starting to process the request
+        streamStats.activeSessions.add(sessionId);
+
+        // Initialize or update session progress including chunk count
+        let progress = streamProgress.get(sessionId);
+        if (!progress) {
+            progress = { totalBytes: 0, startTime: process.hrtime(), lastActivityTime: Date.now(), chunkCount: 1 };
+            streamProgress.set(sessionId, progress);
+            console.log(`Starting new stream session: ${sessionId} for track ${trackId}`);
+            streamStats.streamCount++;
+        } else {
+            progress.chunkCount++;
+            progress.lastActivityTime = Date.now();
+        }
+
+        if (!fs.existsSync(trackPath)) {
+            cleanup(); // Clean up potential stream
+            streamStats.activeSessions.delete(sessionId); // Remove from active if file not found
+            logStreamError(trackId, sessionId, new Error('Track not found'));
+            return res.status(404).json({ error: 'Track not found' });
+        }
+
+        const range = req.headers.range;
+        if (!range) {
+            cleanup();
+            streamStats.activeSessions.delete(sessionId); // Remove from active if no range header
+            return res.status(400).json({ error: 'Range header is required' });
+        }
+
+        const { headers, fileSize, start, end, contentLength } = calculateStreamHeaders(trackPath, range);
+        res.writeHead(206, headers);
+
+        const audioStream = fs.createReadStream(trackPath, { start, end });
+        const chunkStartTime = process.hrtime(); // Time for this specific chunk request
+
+        setupStreamHandlers(audioStream, trackId, sessionId, chunkStartTime, { start, end, contentLength, fileSize }, res, req, cleanup);
+
+        audioStream.pipe(res);
+
+    } catch (error) {
+        cleanup(); // Clean up potential stream
+        streamStats.activeSessions.delete(sessionId); // Remove from active on error
+        logStreamError(trackId, sessionId, error as Error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+});
 
 export default router;
