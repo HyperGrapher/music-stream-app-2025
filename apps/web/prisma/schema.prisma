@@ -80,35 +80,44 @@ model Verification {
   @@map("verification")
 }
 
-
+// Music Track model
 model Track {
-  id                 String   @id
-  name               String
-  description        String   @db.Text
-  slug               String
-  user               User     @relation(fields: [user_id], references: [id])
-  user_id            String
-  playlist_url       String? // url check ?in= https://soundcloud.com/propellerrecordings/slotface-indoor-kid?in=propellerrecordings/sets/slotface-2022-2023
-  album              String?
-  genre              String?
-  artwork            String? // url
-  permalink          String // full url
-  filepath           String // for local dev
-  public             Boolean  @default(true)
-  commentable        Boolean  @default(true)
-  downloadable       Boolean  @default(false)
-  downloads          Int      @default(0)
-  likes              Int      @default(0)
-  playbacks          Int      @default(0)
-  playbacks_on_close Int      @default(0) // audioStream.on("close")
-  comments           Int      @default(0)
-  duration           Int      @default(0)
-  releasedBy         String?
-  dateRelease        DateTime @default(now())
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id            String    @id
+  title         String
+  description   String?   @db.Text
+  // Audio file details
+  audioUrl      String
+  duration      Int // Duration in seconds
+  waveform      String?   @db.Text // JSON string of waveform data points
+  isOriginal    Boolean   @default(true)
+  isPrivate     Boolean   @default(false)
+  // Track metadata
+  genre         String?
+  subGenre      String?
+  bpm           Int?
+  key           String? // Musical key
+  tags          String? // Comma-separated tags
+  releaseDate   DateTime?
+  recordLabel   String?
+  // Cover art
+  artworkUrl    String?
+  // Stats
+  playCount     Int       @default(0)
+  downloadCount Int       @default(0)
+  likeCount     Int       @default(0)
+  repostCount   Int       @default(0)
+  commentCount  Int       @default(0)
 
-  @@index([id, name])
+  // Relationships
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([genre])
+  @@index([isPrivate])
+  @@map("track")
 }
 
 model TrackError {

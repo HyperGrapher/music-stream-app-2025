@@ -20,6 +20,16 @@ router.get('/stream-error', async (req: Request, res: Response) => {
     return successResponse(res, errors);
 });
 
+// Stream errors route
+router.get('/tracks', async (req: Request, res: Response) => {
+
+    const tracks = await prisma.track.findMany();
+
+
+    // Sending a simple success message or API status
+    return successResponse(res, tracks);
+});
+
 // Version route
 router.get('/api/version', (req: Request, res: Response) => {
     // Using the successResponse helper for consistency
