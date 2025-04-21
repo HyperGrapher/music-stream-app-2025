@@ -7,8 +7,8 @@ import bodyParser from 'body-parser';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/user';
 import indexRoutes from './routes/index';
-import { checkReferrer } from './middlewares/check-referer';
-import jwt from 'jsonwebtoken';
+import trackRoutes from './routes/tracks';
+
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -34,9 +34,9 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true
 }));
-
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.static("public"));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -53,33 +53,14 @@ app.use(helmet({
 }));
 app.use(bodyParser.json());
 app.use(limiter);
-app.use(checkReferrer);
 
 
 
 // Auth routes for desktop app
 app.use('/', indexRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/user', userRoutes);
-
-// Add short-lived playback tokens
-// https://claude.ai/chat/3506c123-0cf9-4be6-897b-8d36f39c8fda
-app.post('/api/tracks/:trackId/playback-token', (req, res) => {
-  const trackId = req.params.trackId;
-  const userId = req.user?.userId;
-  
-  // Generate a token that expires in 5 minutes
-  const playbackToken = jwt.sign(
-    { trackId, userId, timestamp: Date.now() },
-    process.env.JWT_PLAYBACK_SECRET as string,
-    { expiresIn: '5m' }
-  );
-  
-  res.json({ playbackToken });
-});
-
-
-
+app.use('/auth', authRoutes);
+app.use('/user', userRoutes);
+app.use('/tracks', trackRoutes);
 
 // Use httpServer instead of app.listen for Socket.IO
 app.listen(port, () => {
