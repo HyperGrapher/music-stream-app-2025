@@ -9,170 +9,27 @@ import jwt from 'jsonwebtoken';
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import {
+    logSessionStats,
+    formatBytesToKB,
+    streamProgress,
+    StreamStats,
+    SessionProgress,
+    SessionStatus,
+    calculateStreamHeaders,
+    logStreamError,
+    streamStats,
+    ipToCurrentSessionId,
+    STREAM_TIMEOUT,
+    MAX_CHUNK_RETRIES,
+    SESSION_CLEANUP_INTERVAL
+} from '../helpers/stream-utils';
 
 const router: Router = express.Router();
 
 const JWT_PLAYBACK_SECRET = process.env.JWT_PLAYBACK_SECRET as string;
 if (!JWT_PLAYBACK_SECRET) {
     throw new Error('JWT_PLAYBACK_SECRET is not defined');
-}
-
-// Streaming statistics
-interface StreamStats {
-    totalBytes: number;
-    streamCount: number;
-    startTime: [number, number];
-    averageSpeed: number;
-    activeSessions: Set<string>;
-    errors: Map<string, number>;
-}
-
-const streamStats: StreamStats = {
-    totalBytes: 0,
-    streamCount: 0,
-    startTime: process.hrtime(),
-    averageSpeed: 0,
-    activeSessions: new Set(),
-    errors: new Map()
-};
-
-// Enum for session statuses
-enum SessionStatus {
-    Completed = 'completed',
-    Switched = 'switched',
-    Timeout = 'timeout',
-    Error = 'error',
-    InactiveCleanup = 'inactive_cleanup',
-}
-
-// Session progress structure
-interface SessionProgress {
-    totalBytes: number;
-    startTime: [number, number];
-    lastActivityTime: number;
-    chunkCount: number;
-    fileSize: number;
-    trackId: string;
-}
-
-// Track total bytes streamed per session
-const streamProgress = new Map<string, SessionProgress>();
-
-// Add timeout handling and resource limits
-const STREAM_TIMEOUT = 30000; // 30 seconds
-const MAX_CHUNK_RETRIES = 3;
-const SESSION_CLEANUP_INTERVAL = STREAM_TIMEOUT * 2; // Check for inactive sessions every 60 seconds
-
-// Map client IP to their latest session ID to detect track changes
-const ipToCurrentSessionId = new Map<string, string>();
-
-// Helper function to format bytes to KB
-function formatBytesToKB(bytes: number): string {
-    if (bytes === 0) return '0 KB';
-    const kb = bytes / 1024;
-    return `${kb.toFixed(2)} KB`;
-}
-
-// Centralized function for logging session stats and cleaning up
-function logSessionStats(sessionId: string, status: SessionStatus) {
-    const progress = streamProgress.get(sessionId);
-    if (!progress) {
-        console.log(`Attempted to log stats for already cleaned session: ${sessionId} (${status})`);
-        return;
-    }
-
-    const { totalBytes, startTime, chunkCount, fileSize, trackId, lastActivityTime } = progress;
-    const sessionEndTime = process.hrtime(startTime);
-    const sessionDuration = (sessionEndTime[0] * 1e9 + sessionEndTime[1]) / 1e9;
-    const sessionSpeed = sessionDuration > 0 ? totalBytes / sessionDuration : 0;
-
-    console.log(`🚩 *** Stream Session ${status.toUpperCase()} ***`);
-    console.log({
-        status,
-        trackId,
-        sessionId,
-        totalFileSize: formatBytesToKB(fileSize),
-        totalBytesStreamed: formatBytesToKB(totalBytes),
-        sessionDuration: `${sessionDuration.toFixed(2)}s`,
-        sessionAverageSpeed: `${formatBytesToKB(sessionSpeed)}/s`,
-        numberOfChunks: chunkCount,
-        activeSessions: streamStats.activeSessions.size - 1 >= 0 ? streamStats.activeSessions.size - 1 : 0,
-        totalSessionsStarted: streamStats.streamCount,
-        totalBytesAllStreams: formatBytesToKB(streamStats.totalBytes),
-        errorsForSession: streamStats.errors.get(sessionId) ?? 0,
-        isComplete: status === SessionStatus.Completed || totalBytes >= fileSize
-    });
-
-    // Clean up session data
-    streamProgress.delete(sessionId);
-    streamStats.activeSessions.delete(sessionId);
-    streamStats.errors.delete(sessionId); // Clean up errors for this session
-
-    // We might also want to remove from ipToCurrentSessionId if it matches, 
-    // but the next request from that IP will overwrite it anyway.
-}
-
-// Cleanup inactive sessions
-setInterval(() => {
-    const now = Date.now();
-    for (const [sessionId, progress] of streamProgress.entries()) {
-        if (now - progress.lastActivityTime > SESSION_CLEANUP_INTERVAL) {
-            console.log(`Cleaning up inactive session via interval: ${sessionId}`);
-            logSessionStats(sessionId, SessionStatus.InactiveCleanup);
-            // No need to delete here, logSessionStats does it
-        }
-    }
-}, SESSION_CLEANUP_INTERVAL);
-
-function calculateStreamHeaders(fileSize: number, range: string) {
-    const CHUNK_SIZE = Math.floor(10 ** 6 / 10); // 100kb chunks for optimal streaming
-    const parts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(parts[0]!, 10);
-    const end = Math.min(start + CHUNK_SIZE, fileSize - 1);
-    const contentLength = end - start + 1;
-
-    return {
-        headers: {
-            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-            'Accept-Ranges': 'bytes',
-            'Content-Length': contentLength,
-            'Content-Type': 'audio/mpeg',
-            'Content-Disposition': 'inline',
-            'Cache-Control': 'no-store, no-cache, must-revalidate, private',
-            'Cross-Origin-Resource-Policy': 'cross-origin',
-            'Access-Control-Allow-Origin': process.env.NEXT_URL ?? (process.env.APP_DOMAIN ?? '*')
-        },
-        fileSize,
-        start,
-        end,
-        contentLength
-    };
-}
-
-async function logStreamError(trackId: string, sessionId: string, error: Error) {
-    console.error(`Streaming error occurred for track ${trackId}, session ${sessionId}:`, error.message);
-    // Increment error count for this specific session
-    streamStats.errors.set(sessionId, (streamStats.errors.get(sessionId) ?? 0) + 1);
-
-    // Attempt to log to DB, but don't let it block console logging
-    try {
-        await prisma.trackError.upsert({
-            create: {
-                track_id: trackId,
-                title: trackId,
-                filepath: `audio/${trackId}.mp3`,
-                reason: error.message,
-            },
-            update: {
-                count: { increment: 1 },
-            },
-            where: {
-                track_id: trackId,
-            },
-        });
-    } catch (dbError) {
-        console.error(`Failed to log stream error to database for session ${sessionId}:`, dbError);
-    }
 }
 
 function setupStreamHandlers(
