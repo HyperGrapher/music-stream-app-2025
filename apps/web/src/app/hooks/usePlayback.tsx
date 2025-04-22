@@ -10,8 +10,8 @@ import {
   useRef,
   useCallback,
 } from 'react';
-
-
+import { api } from '@/trpc/react';
+import { toast } from 'sonner';
 
 type Panel = 'sidebar' | 'tracklist';
 
@@ -32,6 +32,7 @@ type PlaybackContextType = {
   setActivePanel: (panel: Panel) => void;
   registerPanelRef: (panel: Panel, ref: React.RefObject<HTMLElement>) => void;
   handleKeyNavigation: (e: React.KeyboardEvent, panel: Panel) => void;
+  audioSrc: string | undefined;
 };
 
 const PlaybackContext = createContext<PlaybackContextType | undefined>(
@@ -105,43 +106,92 @@ function useKeyboardNavigation() {
   return { activePanel, setActivePanel, registerPanelRef, handleKeyNavigation };
 }
 
-export function PlaybackProvider({ children }: { children: ReactNode }) {
+export function PlaybackProvider({
+  children,
+  userId,
+}: {
+  children: ReactNode;
+  userId: string | undefined;
+}) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playlist, setPlaylist] = useState<Track[]>([]);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [audioSrc, setAudioSrc] = useState<string | undefined>(undefined);
+  const [playbackToken, setPlaybackToken] = useState<string | null>(null);
 
   const { activePanel, setActivePanel, registerPanelRef, handleKeyNavigation } =
     useKeyboardNavigation();
+
+  const getPlaybackTokenMutation = api.stream.getPlaybackToken.useMutation({
+    onSuccess: (data) => {
+      console.log('Received playback token:', data.token);
+      setPlaybackToken(data.token);
+      if (currentTrack) {
+        const newAudioSrc = `http://localhost:4000/tracks/stream/${currentTrack.id}?token=${data.token}`;
+        setAudioSrc(newAudioSrc);
+        if (audioRef.current) {
+          audioRef.current.src = newAudioSrc;
+          audioRef.current.load();
+          audioRef.current
+            .play()
+            .catch((error) => console.error('Audio play error:', error));
+          setIsPlaying(true);
+        }
+      }
+    },
+    onError: (error) => {
+      console.error('Failed to get playback token:', error);
+      toast.error('Failed to get playback token. Please try again.');
+      setPlaybackToken(null);
+      setAudioSrc(undefined);
+      setIsPlaying(false);
+      if (error.data?.code === 'UNAUTHORIZED') {
+        toast.error('You are not authorized to play this track.');
+      }
+    },
+  });
 
   const togglePlayPause = useCallback(() => {
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
       } else {
-        audioRef.current.play();
+        if (audioSrc && currentTrack) {
+          audioRef.current
+            .play()
+            .catch((error) => console.error('Audio play error:', error));
+        }
       }
-      setIsPlaying(!isPlaying);
+      if (currentTrack) {
+        setIsPlaying(!isPlaying);
+      }
     }
-  }, [isPlaying]);
+  }, [isPlaying, audioSrc, currentTrack]);
 
   const playTrack = useCallback(
     (track: Track) => {
+      console.log('🚩 playTrack called with:', track);
       setCurrentTrack(track);
-      console.log('🚩 playTrack', track);
-      
-      setIsPlaying(true);
+      setIsPlaying(false);
       setCurrentTime(0);
-      const audioSrc = getAudioSrc(/* track?.audioUrl || */ '');
-      if (audioRef.current && audioSrc) {
-        audioRef.current.src = audioSrc;
-        audioRef.current.play();
+      setAudioSrc(undefined);
+      setPlaybackToken(null);
+
+      if (userId && track.id) {
+        console.log(`Fetching token for track: ${track.id}`);
+        getPlaybackTokenMutation.mutate({ trackId: track.id });
+      } else {
+        console.log('User not logged in or no track ID, cannot fetch token.');
+        toast.error(
+          'Please log in to play tracks.'
+        );
       }
       setActivePanel('tracklist');
     },
-    [setActivePanel]
+    [setActivePanel, userId, getPlaybackTokenMutation]
   );
 
   const playNextTrack = useCallback(() => {
@@ -165,14 +215,9 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     }
   }, [currentTrack, playlist, playTrack]);
 
-  const getAudioSrc = (url: string) => {
-    
-    return undefined;
-  };
-
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.key === ' ' && e.target === document.body) {
+      if (e.key === ' ' && e.target === document.body && currentTrack) {
         e.preventDefault();
         togglePlayPause();
       } else if (e.key === '/') {
@@ -186,7 +231,71 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [togglePlayPause]);
+  }, [togglePlayPause, currentTrack]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const handleLoadedMetadata = () => {
+      if (isFinite(audio.duration)) {
+        setDuration(audio.duration);
+      } else {
+        setDuration(0);
+        console.warn("Received infinite or invalid duration.");
+      }
+    }
+    const handleEnded = () => {
+      setIsPlaying(false);
+      playNextTrack();
+    };
+    const handleError = (e: Event) => {
+        console.error("Audio Error:", e);
+        const mediaError = (e.target as HTMLAudioElement).error;
+        if (mediaError) {
+            let errorMsg = `Audio error code: ${mediaError.code}.`;
+            switch (mediaError.code) {
+                case MediaError.MEDIA_ERR_ABORTED:
+                    errorMsg += " Playback aborted by the user or script.";
+                    break;
+                case MediaError.MEDIA_ERR_NETWORK:
+                    errorMsg += " Network error caused download to fail.";
+                    toast.error("Network error playing track. Check connection.");
+                    break;
+                case MediaError.MEDIA_ERR_DECODE:
+                    errorMsg += " Decoding error during playback.";
+                    toast.error("Error decoding audio track.");
+                    break;
+                case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                    errorMsg += " Audio source format not supported.";
+                    toast.error("Audio format not supported.");
+                    break;
+                default:
+                    errorMsg += " An unknown error occurred.";
+            }
+             console.error(errorMsg);
+        } else {
+            toast.error("An unknown audio error occurred.");
+        }
+        setIsPlaying(false);
+        setAudioSrc(undefined);
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError);
+
+
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
+    };
+  }, [audioRef, setCurrentTime, setDuration, playNextTrack, userId, currentTrack?.id]);
+
 
   return (
     <PlaybackContext.Provider
@@ -207,9 +316,11 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
         setActivePanel,
         registerPanelRef,
         handleKeyNavigation,
+        audioSrc,
       }}
     >
       {children}
+      <audio ref={audioRef} preload="metadata" />
     </PlaybackContext.Provider>
   );
 }

@@ -10,7 +10,7 @@ import type { Track } from '@prisma/client';
 
 export function NowPlayingCard() {
   const { currentTrack } = usePlayback();
-  console.log({ currentTrack });
+  console.log({ currentTrack }); // TODO: rerenders all the time. continuesly prints the current track
 
   if (!currentTrack) {
     return null;

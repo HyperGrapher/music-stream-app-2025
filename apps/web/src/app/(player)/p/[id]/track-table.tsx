@@ -42,6 +42,10 @@ function TrackRow({
   let isProduction = process.env.NEXT_PUBLIC_VERCEL_ENV === 'production';
   let isCurrentTrack = currentTrack?.title === track.title;
 
+  useEffect(() => {
+    console.log('🚩 TrackRow rerendered: currentTrack', currentTrack);
+  });
+
   function onClickTrackRow(e: React.MouseEvent) {
     e.preventDefault();
     console.log('onClickTrackRow', track);

@@ -16,6 +16,7 @@ import { usePlayback } from '@/app/hooks/usePlayback';
 
 function TrackInfo() {
   let { currentTrack } = usePlayback();
+  console.log('🚩 TrackInfo currentTrack', currentTrack);
 
   return (
     <div className="flex items-center space-x-3 ">
@@ -227,7 +228,7 @@ function Volume() {
   );
 }
 
-export function PlaybackControls({ userId }: { userId: string | undefined }) {
+export function PlaybackControls() {
   let {
     currentTrack,
     audioRef,
@@ -237,8 +238,6 @@ export function PlaybackControls({ userId }: { userId: string | undefined }) {
     playNextTrack,
     togglePlayPause,
   } = usePlayback();
-
-  console.log('🚩 userId', userId);
 
   useEffect(() => {
     let audio = audioRef.current;
