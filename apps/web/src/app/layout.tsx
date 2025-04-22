@@ -3,6 +3,7 @@ import { type Metadata, type Viewport } from "next";
 import { Geist } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner"
 import { TRPCReactProvider } from "@/trpc/react";
+import { Navbar } from "@/app/_components/Navbar";
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -30,6 +31,7 @@ export default function RootLayout({
     <html lang="en" className={`${geist.variable}`}>
       <body className="dark">
         <TRPCReactProvider>
+          <Navbar />
           {children}
         </TRPCReactProvider>
         <Toaster
