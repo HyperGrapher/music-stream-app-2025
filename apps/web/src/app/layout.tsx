@@ -1,9 +1,25 @@
 import "@/styles/globals.css";
 
-import { type Metadata } from "next";
+import { type Metadata, type Viewport } from "next";
 import { Geist } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner"
 import { TRPCReactProvider } from "@/trpc/react";
+import { NowPlaying } from './now-playing';
+import { PlaybackProvider } from './playback-context';
+import { OptimisticPlaylists } from './optimistic-playlists';
+import { PlaylistProvider } from './hooks/use-playlist';
+import { PlaybackControls } from './playback-controls';
+
+
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#0A0A0A',
+};
+
 
 export const metadata: Metadata = {
   title: "Streaming app",
@@ -22,7 +38,14 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geist.variable}`}>
       <body className="dark">
-        <TRPCReactProvider>{children}</TRPCReactProvider>
+        <TRPCReactProvider>
+          <PlaybackProvider>
+            {/* <OptimisticPlaylists /> */}
+            {children}
+            <NowPlaying />
+            <PlaybackControls />
+          </PlaybackProvider>
+        </TRPCReactProvider>
         <Toaster
           position="top-right"
           toastOptions={{
@@ -47,3 +70,22 @@ export default function RootLayout({
     </html>
   );
 }
+
+
+function ExampleLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className={`${geist.variable}`}>
+      <body className="dark">
+        <TRPCReactProvider>
+          <PlaybackProvider>
+            <OptimisticPlaylists />
+            {children}
+            <NowPlaying />
+            <PlaybackControls />
+          </PlaybackProvider>
+        </TRPCReactProvider>
+      </body>
+    </html>
+  );
+}
+

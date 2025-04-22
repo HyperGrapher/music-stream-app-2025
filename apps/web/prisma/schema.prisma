@@ -114,6 +114,10 @@ model Track {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // temporary fields
+  albumId String?
+  album   Album?  @relation(fields: [albumId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([genre])
   @@index([isPrivate])
@@ -132,4 +136,14 @@ model TrackError {
   @@unique([track_id])
   @@index([track_id])
   @@map("track_error")
+}
+
+// temp album model
+model Album {
+  id          String   @id
+  title       String
+  description String?  @db.Text
+  artworkUrl  String?
+  createdAt   DateTime @default(now())
+  tracks      Track[]
 }

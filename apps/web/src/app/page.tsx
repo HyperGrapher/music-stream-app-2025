@@ -1,33 +1,60 @@
-import Link from "next/link";
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { TrackTable } from './p/[id]/track-table';
+import { Suspense } from 'react';
 
-import { LatestPost } from "@/app/_components/post";
-import { api, HydrateClient } from "@/trpc/server";
-import Authanticate from "./_components/authanticate";
+async function Tracks({
+  searchParams,
+}: {
+  searchParams: Promise<{ q: string }>;
+}) {
+  const query = (await searchParams).q;
+  const songs = [
+    {
+      id: '1',
+      title: 'Song 1',
+      duration: 100,
+      artworkUrl: 'https://placehold.co/600x400',
+      userId: '1',
+      albumId: '1',
+      genre: 'Pop',
+      bpm: 120,
+      key: 'C',
+      tags: ['Pop', 'Dance'],
+      releaseDate: '2021-01-01',
+    },
+    {
+      id: '2',
+      title: 'Song 2',
+      duration: 100,
+      artworkUrl: 'https://placehold.co/600x400',
+      userId: '2',
+      albumId: '2',
+      genre: 'Rock',
+      bpm: 120,
+      key: 'C',
+      tags: ['Rock', 'Dance'],
+      releaseDate: '2021-01-01',
+    },
+  ];
+  // @ts-ignore
+  return <TrackTable query={query} playlist={{ songs }} />;
+}
 
-export default async function Home() {
-  const hello = await api.post.hello({ text: "from tRPC" });
-
-  void api.post.getLatest.prefetch();
-
+export default function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ q: string }>;
+}) {
   return (
-    <HydrateClient>
-      <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#2e026d] to-[#15162c] text-white">
-        <div className="container flex flex-col items-center justify-center gap-12 px-4 py-16">
-          <h1 className="text-5xl font-extrabold tracking-tight sm:text-[5rem]">
-            Streaming app
-          </h1>
-
-          <Link href="/stream">Go to Stream</Link>
-
-          <div className="flex flex-col items-center gap-2">
-            <Authanticate />
-          </div>
-
-       
-
-          <LatestPost />
+    <div className="flex-1 flex flex-col overflow-hidden bg-[#0A0A0A] pb-[69px] pt-2">
+      <ScrollArea className="flex-1">
+        <div className="min-w-max">
+          <Suspense fallback={<div className="w-full" />}>
+            <Tracks searchParams={searchParams} />
+          </Suspense>
         </div>
-      </main>
-    </HydrateClient>
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
+    </div>
   );
 }
