@@ -130,6 +130,8 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   const playTrack = useCallback(
     (track: Track) => {
       setCurrentTrack(track);
+      console.log('🚩 playTrack', track);
+      
       setIsPlaying(true);
       setCurrentTime(0);
       const audioSrc = getAudioSrc(/* track?.audioUrl || */ '');

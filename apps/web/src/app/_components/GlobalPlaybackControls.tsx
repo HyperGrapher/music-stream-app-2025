@@ -227,7 +227,7 @@ function Volume() {
   );
 }
 
-export function PlaybackControls() {
+export function PlaybackControls({ userId }: { userId: string | undefined }) {
   let {
     currentTrack,
     audioRef,
@@ -237,6 +237,8 @@ export function PlaybackControls() {
     playNextTrack,
     togglePlayPause,
   } = usePlayback();
+
+  console.log('🚩 userId', userId);
 
   useEffect(() => {
     let audio = audioRef.current;
