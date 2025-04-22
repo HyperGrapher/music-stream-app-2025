@@ -4,6 +4,9 @@ import { cn } from '@/lib/utils';
 import { api } from "@/trpc/react";
 import { toast } from "sonner"
 import { useRouter } from 'next/navigation';
+import { HopeWave } from './hope-wave';
+import WavesurferPlayer from '@wavesurfer/react'
+
 
 const TRACKS = [
     { id: "dont-panic", label: "Don't Panic" },
@@ -62,15 +65,15 @@ const TestPlayer = ({ userId }: { userId: string | undefined }) => {
     }, [selectedTrack, userId, getPlaybackTokenMutation.mutate]); // Ensure mutate is stable or handled correctly
 
     return (
-        <div className={cn("p-4 rounded-md w-2xl max-w-md mx-auto mt-8", userId ? 'bg-cyan-900 ' : 'bg-cyan-900/50')}>
+        <div className={cn("p-4 rounded-md w-2xl h-[170px] max-w-md mx-auto", userId ? 'bg-cyan-900 ' : 'bg-cyan-900/50')}>
             <p className="text-white mb-4">
                 User ID: {userId ?? 'anonymous'}
             </p>
-            <p className="text-white mb-4 text-[9px] break-all">
-              <span className='select-none text-slate-400'> Token: </span>  {playbackToken ?? 'none'} {getPlaybackTokenMutation.isPending ? '(loading...)' : ''}
+            <p className="text-white mb-4 text-[9px] break-all h-12 px-2 py-1 bg-zinc-900/50">
+                <span className='select-none text-slate-400'> Token: </span>  {playbackToken ?? 'none'} {getPlaybackTokenMutation.isPending ? '(loading...)' : ''}
             </p>
 
-            <div className="mb-4">
+            <div className="mb-4 ">
                 <label htmlFor="track-select" className="text-white mr-2">Select Track:</label>
                 <select
                     id="track-select"
@@ -83,10 +86,11 @@ const TestPlayer = ({ userId }: { userId: string | undefined }) => {
                     ))}
                 </select>
             </div>
+
             <audio
                 ref={audioRef}
                 controls
-                className="w-full"
+                className="w-full mt-auto absolute bottom-8 px-48 left-0"
                 src={audioSrc}
                 onError={e => {
                     toast.error("Audio failed to load. Please reload the page.");

@@ -171,6 +171,9 @@ importers:
       '@trpc/server':
         specifier: ^11.1.0
         version: 11.1.0(typescript@5.8.3)
+      '@wavesurfer/react':
+        specifier: 1.0.11
+        version: 1.0.11(react@19.1.0)(wavesurfer.js@7.9.4)
       better-auth:
         specifier: ^1.2.7
         version: 1.2.7
@@ -216,6 +219,9 @@ importers:
       uuid:
         specifier: ^11.0.1
         version: 11.1.0
+      wavesurfer.js:
+        specifier: ^7.9.4
+        version: 7.9.4
       zod:
         specifier: ^3.24.3
         version: 3.24.3
@@ -1763,6 +1769,12 @@ packages:
     resolution: {integrity: sha512-uNnVmvDLZBDQ4sLFNTugTtzUH9LEoHXG46HdWaih+pK4knwi+wcz+nd0fQC92n/dH4PwPc5T8XArvlCKpfU6vQ==}
     cpu: [x64]
     os: [win32]
+
+  '@wavesurfer/react@1.0.11':
+    resolution: {integrity: sha512-DRpaA3MRTKy4Jby12xvoHASa+w31FZtxaqanXcJjfqNqfamkKi8VJfRnz+Uub9LkpdgoAc3g5SuZF75lEcGgzQ==}
+    peerDependencies:
+      react: ^18.2.0 || ^19.0.0
+      wavesurfer.js: '>=7.7.14'
 
   abbrev@1.1.1:
     resolution: {integrity: sha512-nne9/IiQ/hzIhY6pdDnbBtz7DjPTKrY00P/zvPSm5pOFkl6xuGrGnXn/VtTNNfNtAfZ9/1RtehkszU9qcTii0Q==}
@@ -4275,6 +4287,9 @@ packages:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
 
+  wavesurfer.js@7.9.4:
+    resolution: {integrity: sha512-ahOMvrOKo5jULNnXq8Ske8v/ZStoNNTDjYohvgLNerUFuh+6fJSt7wlxFesEXmnlcTnjMy5/tIzhn9KusjO6bg==}
+
   wcwidth@1.0.1:
     resolution: {integrity: sha512-XHPEwS0q6TaxcvG85+8EYkbiCux2XtWG2mkc47Ng2A77BQu9+DqIOJldST4HgPkuea7dvKSj5VgX3P1d4rW8Tg==}
 
@@ -5773,6 +5788,11 @@ snapshots:
 
   '@unrs/resolver-binding-win32-x64-msvc@1.6.1':
     optional: true
+
+  '@wavesurfer/react@1.0.11(react@19.1.0)(wavesurfer.js@7.9.4)':
+    dependencies:
+      react: 19.1.0
+      wavesurfer.js: 7.9.4
 
   abbrev@1.1.1: {}
 
@@ -8748,6 +8768,8 @@ snapshots:
   validator@13.12.0: {}
 
   vary@1.1.2: {}
+
+  wavesurfer.js@7.9.4: {}
 
   wcwidth@1.0.1:
     dependencies:
