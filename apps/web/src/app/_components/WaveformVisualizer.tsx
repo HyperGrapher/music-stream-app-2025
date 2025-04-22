@@ -45,45 +45,62 @@ const WaveformVisualizer: React.FC<WaveformProps> = ({
     canvas.height = canvasHeight * dpr;
     context.scale(dpr, dpr);
     
-    // Clear canvas
+    // Clear canvas with the background color
     context.fillStyle = backgroundColor;
     context.fillRect(0, 0, canvasWidth, canvasHeight);
     
     // Calculate playback progress
-    const playbackProgress = Math.min(currentTime / duration, 1);
-    const progressWidth = canvasWidth * playbackProgress;
+    const playbackProgress = duration > 0 ? Math.min(currentTime / duration, 1) : 0;
+    const progressX = canvasWidth * playbackProgress;
     
-    // Calculate bar width and spacing
-    const barWidth = Math.max(1, canvasWidth / waveformData.length - 1);
-    const barSpacing = 1;
+    // Calculate bar width (no spacing)
+    const barWidth = canvasWidth / waveformData.length;
     
-    // Normalize the waveform data to fit canvas height
-    const maxAmplitude = Math.max(...waveformData.map(val => Math.abs(val)));
-    const amplitudeFactor = (canvasHeight / 2) / (maxAmplitude * 0.5 || 1);
-    
+    // Find the effective maximum amplitude for scaling (avoid division by zero)
+    // Use a slightly higher scaling factor to amplify the look
+    const maxAmplitude = Math.max(...waveformData.map(val => Math.abs(val)), 1); // Ensure max is at least 1
+    const amplitudeFactor = (canvasHeight * 0.8) / maxAmplitude; // Use 80% of height, adjust as needed
+
+    // --- Create Gradients --- 
+    // Helper to create a vertical gradient
+    const createGradient = (color: string) => {
+      const gradient = context.createLinearGradient(0, 0, 0, canvasHeight);
+      // Adjust gradient colors for a SoundCloud-like feel (e.g., slightly darker bottom)
+      // This is an example, feel free to tweak colors
+      gradient.addColorStop(0, color); // Top color
+      gradient.addColorStop(1, progressColor === color ? '#c40' : '#666'); // Darker bottom based on main color
+      return gradient;
+    };
+
+    const progressGradient = createGradient(progressColor);
+    const baseGradient = createGradient(color);
+    // ------------------------
+
     // Draw each bar of the waveform
     waveformData.forEach((amplitude, index) => {
-      const x = index * (barWidth + barSpacing);
-      const barHeight = Math.abs(amplitude) * amplitudeFactor;
-      
+      const x = index * barWidth;
+      // Use amplified amplitude for visual height
+      const barHeight = Math.max(1, Math.abs(amplitude) * amplitudeFactor); // Ensure minimum height of 1px
+            
       // Determine if this bar is before or after the playback position
-      context.fillStyle = x < progressWidth ? progressColor : color;
+      const currentX = x + barWidth / 2; // Check center of the bar
+      context.fillStyle = currentX < progressX ? progressGradient : baseGradient;
       
-      // Draw from the middle (like SoundCloud)
+      // Draw from the middle, extending up and down
       const y = (canvasHeight / 2) - (barHeight / 2);
       context.fillRect(x, y, barWidth, barHeight);
     });
     
     // Draw hover position line if hovering
     if (isHovering) {
-      context.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+      context.strokeStyle = progressColor; // Use progress color for hover line
       context.lineWidth = 1;
       context.beginPath();
       context.moveTo(hoverPosition, 0);
       context.lineTo(hoverPosition, canvasHeight);
       context.stroke();
     }
-  }, [waveformData, currentTime, duration, isHovering, hoverPosition, color, progressColor, backgroundColor]);
+  }, [waveformData, currentTime, duration, isHovering, hoverPosition, color, progressColor, backgroundColor, height]); // Added height to deps
 
   // Handle mouse events for seeking
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -132,7 +149,8 @@ const WaveformVisualizer: React.FC<WaveformProps> = ({
           top: 0,
           left: 0,
           width: '100%',
-          height: '100%'
+          height: '100%',
+          opacity: '1'
         }}
       />
     </div>

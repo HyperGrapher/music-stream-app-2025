@@ -6,6 +6,8 @@ import { api } from '@/trpc/react';
 import { toast } from 'sonner';
 import { processWaveformData } from '@/lib/waveform-utils';
 import { cn } from '@/lib/utils';
+import WebGLBackground from './WebGL';
+import SinWave from './SinWave';
 
 const TRACKS = [
     { id: "hope", label: "Hope" },
@@ -35,12 +37,19 @@ const WaveAudioPlayer: React.FC = () => {
     const [currentTime, setCurrentTime] = useState<number>(0);
     const [duration, setDuration] = useState<number>(0);
 
+    // Add visualization toggle state
+    const [visualizationType, setVisualizationType] = useState<'bars' | 'wave'>('wave');
+
     ///
 
     const [selectedTrack, setSelectedTrack] = useState(TRACKS[0]!.id);
     const [audioSrc, setAudioSrc] = useState<string | undefined>(undefined); // don't pass empty string, it will break the stream
     const [waveformFetchUrl, setWaveformFetchUrl] = useState<string | undefined>(undefined); // New state for waveform URL
     const [playbackToken, setPlaybackToken] = useState<string | null>(null);
+
+    // Ref and state for dimensions of the waveform container
+    const visualizerContainerRef = useRef<HTMLDivElement>(null);
+    const [visualizerDimensions, setVisualizerDimensions] = useState({ width: 0, height: 0 });
 
     const getPlaybackTokenMutation = api.stream.getPlaybackToken.useMutation({
         onSuccess: (data) => {
@@ -118,6 +127,27 @@ const WaveAudioPlayer: React.FC = () => {
 
     }, [waveformFetchUrl]); // Dependency is now only the URL
 
+    // Get dimensions of the visualizer container
+    useEffect(() => {
+        const container = visualizerContainerRef.current;
+        if (!container) return;
+
+        const resizeObserver = new ResizeObserver(entries => {
+            for (let entry of entries) {
+                const { width, height } = entry.contentRect;
+                setVisualizerDimensions({ width, height });
+            }
+        });
+
+        resizeObserver.observe(container);
+
+        // Initial size
+        const { width, height } = container.getBoundingClientRect();
+        setVisualizerDimensions({ width, height });
+
+        return () => resizeObserver.disconnect();
+    }, []);
+
     // Update current time during playback
     useEffect(() => {
         const audio = audioRef.current;
@@ -145,7 +175,7 @@ const WaveAudioPlayer: React.FC = () => {
             audio.removeEventListener('durationchange', handleDurationChange);
             audio.removeEventListener('ended', handleEnded);
         };
-    }, []);
+    }, []); // Empty dependency array means this runs once on mount
 
     // Handle play/pause
     const togglePlayPause = () => {
@@ -201,6 +231,34 @@ const WaveAudioPlayer: React.FC = () => {
                         ))}
                     </select>
                 </div>
+                
+                {/* Add visualization toggle */}
+                <div className="mb-4">
+                    <label className="text-white mr-2">Visualization:</label>
+                    <div className="inline-flex rounded-md overflow-hidden">
+                        <button 
+                            className={cn("px-3 py-1 text-sm", 
+                                visualizationType === 'bars' 
+                                    ? "bg-orange-500 text-white" 
+                                    : "bg-gray-700 text-gray-200"
+                            )}
+                            onClick={() => setVisualizationType('bars')}
+                        >
+                            Bars
+                        </button>
+                        <button 
+                            className={cn("px-3 py-1 text-sm", 
+                                visualizationType === 'wave' 
+                                    ? "bg-cyan-500 text-white" 
+                                    : "bg-gray-700 text-gray-200"
+                            )}
+                            onClick={() => setVisualizationType('wave')}
+                        >
+                            Wave
+                        </button>
+                    </div>
+                </div>
+
             </div>
 
             <div className="player-controls" style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
@@ -228,16 +286,51 @@ const WaveAudioPlayer: React.FC = () => {
                 </div>
             </div>
 
-            <WaveformVisualizer
-                waveformData={waveformData}
-                duration={duration}
-                currentTime={currentTime}
-                onSeek={handleSeek}
-                height={80}
-                color="#CCCCCC"
-                progressColor="#f50"
-                backgroundColor="#ffffff00"
-            />
+            {/* Container for both visualizers */}
+            <div 
+                ref={visualizerContainerRef} 
+                style={{ 
+                    position: 'relative', 
+                    width: '100%', 
+                    height: '80px' /* Match WaveformVisualizer height */ 
+                }}
+            >
+                {/* WebGL Background - Renders only if dimensions are valid */}
+                {visualizationType === 'bars' && (
+                    <WebGLBackground 
+                        waveformData={waveformData}
+                        isPlaying={isPlaying}
+                        width={visualizerDimensions.width}
+                        height={visualizerDimensions.height} 
+                        color="#ff9900" 
+                        barCount={200}
+                    />
+                )}
+                
+                {/* SinWave Background - Alternative visualization */}
+                {visualizationType === 'wave' && waveformData.length > 0 && (
+                    <SinWave 
+                        waveformData={waveformData}
+                        isPlaying={isPlaying}
+                        width={visualizerDimensions.width}
+                        height={visualizerDimensions.height} 
+                        color="#00ccff"
+                        secondaryColor="#ff3366"
+                    />
+                )}
+
+                {/* Existing 2D Waveform Visualizer */}
+                <WaveformVisualizer
+                    waveformData={waveformData}
+                    duration={duration}
+                    currentTime={currentTime}
+                    onSeek={handleSeek}
+                    height={80}
+                    color="#CCCCCC"
+                    progressColor="#f50"
+                    backgroundColor="#ffffff00" // Keep it transparent
+                />
+            </div>
 
             <div className="track-info" style={{ marginTop: '10px' }}>
                 <h3 style={{ margin: '0', fontSize: '16px' }}>Track Title</h3>
