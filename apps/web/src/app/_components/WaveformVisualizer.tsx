@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 
 interface WaveformProps {
   waveformData: number[];
@@ -24,12 +24,36 @@ const WaveformVisualizer: React.FC<WaveformProps> = ({
   backgroundColor = '#ddd'
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isHovering, setIsHovering] = useState<boolean>(false);
-  const [hoverPosition, setHoverPosition] = useState<number>(0);
+  
+  // Use refs for values that don't need to trigger re-renders
+  const hoverPositionRef = useRef<number>(0);
+  const renderRequestRef = useRef<number | null>(null);
+  const waveformRenderedRef = useRef<boolean>(false);
+  
+  // Cache for common calculations
+  const calculationCache = useRef<{
+    canvasWidth: number;
+    canvasHeight: number;
+    barWidth: number;
+    barSpacing: number;
+    actualBarWidth: number;
+    amplitudeFactor: number;
+    progressX: number;
+  }>({
+    canvasWidth: 0,
+    canvasHeight: 0,
+    barWidth: 0,
+    barSpacing: 0,
+    actualBarWidth: 0,
+    amplitudeFactor: 0,
+    progressX: 0
+  });
 
-  // Draw the waveform on canvas
-  useEffect(() => {
+  // Draw the main waveform (only when data or playback position changes)
+  const drawWaveform = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !waveformData || waveformData.length === 0) return;
 
@@ -64,6 +88,17 @@ const WaveformVisualizer: React.FC<WaveformProps> = ({
     // Use a slightly higher scaling factor to amplify the look
     const maxAmplitude = Math.max(...waveformData.map(val => Math.abs(val)), 1); // Ensure max is at least 1
     const amplitudeFactor = (canvasHeight * 0.7) / maxAmplitude; // Use 70% of height, adjust as needed
+
+    // Cache these calculations for the overlay canvas
+    calculationCache.current = {
+      canvasWidth,
+      canvasHeight,
+      barWidth,
+      barSpacing,
+      actualBarWidth,
+      amplitudeFactor,
+      progressX
+    };
 
     // Reflection constants
     const reflectionHeight = 0.3; // How tall reflections are (0-1)
@@ -174,56 +209,132 @@ const WaveformVisualizer: React.FC<WaveformProps> = ({
       context.shadowBlur = isPlayed ? 5 : 3; // Restore glow for next bar
     });
     
-    // Draw hover position line if hovering
-    if (isHovering) {
-      // Reset shadow properties
-      context.shadowBlur = 0;
-      context.shadowColor = 'transparent';
+    waveformRenderedRef.current = true;
+  }, [waveformData, currentTime, duration, color, progressColor, backgroundColor, height]);
+  
+  // Draw hover line on the overlay canvas - this can update more frequently
+  const drawHoverLine = useCallback(() => {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas || !isHovering) return;
+    
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    
+    const dpr = window.devicePixelRatio || 1;
+    const { canvasWidth, canvasHeight, amplitudeFactor } = calculationCache.current;
+    
+    // Make sure overlay canvas is properly sized
+    if (canvas.width !== canvasWidth * dpr || canvas.height !== canvasHeight * dpr) {
+      canvas.width = canvasWidth * dpr;
+      canvas.height = canvasHeight * dpr;
+      context.scale(dpr, dpr);
+    }
+    
+    // Clear the overlay canvas
+    context.clearRect(0, 0, canvasWidth, canvasHeight);
+    
+    // Get the current hover position
+    const hoverPosition = hoverPositionRef.current;
+    
+    // Reset shadow properties
+    context.shadowBlur = 0;
+    context.shadowColor = 'transparent';
+    
+    // Create a gradient for the seek line
+    const seekLineGradient = context.createLinearGradient(0, 0, 0, canvasHeight);
+    seekLineGradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
+    seekLineGradient.addColorStop(0.5, progressColor);
+    seekLineGradient.addColorStop(1, 'rgba(255, 255, 255, 0.2)');
+    
+    context.strokeStyle = seekLineGradient;
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(hoverPosition, 0);
+    context.lineTo(hoverPosition, canvasHeight);
+    context.stroke();
+    
+    // Add a small circle at the intersection of the line and the waveform
+    const timeRatio = hoverPosition / canvasWidth;
+    const dataIndex = Math.floor(timeRatio * waveformData.length);
+    if (dataIndex >= 0 && dataIndex < waveformData.length) {
+      const amplitude = Math.abs(waveformData[dataIndex] || 0);
+      const barHeight = Math.max(4, amplitude * amplitudeFactor);
+      const centerY = canvasHeight / 2;
       
-      // Create a gradient for the seek line
-      const seekLineGradient = context.createLinearGradient(0, 0, 0, canvasHeight);
-      seekLineGradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
-      seekLineGradient.addColorStop(0.5, progressColor);
-      seekLineGradient.addColorStop(1, 'rgba(255, 255, 255, 0.2)');
-      
-      context.strokeStyle = seekLineGradient;
-      context.lineWidth = 2;
+      context.fillStyle = progressColor;
       context.beginPath();
-      context.moveTo(hoverPosition, 0);
-      context.lineTo(hoverPosition, canvasHeight);
-      context.stroke();
+      context.arc(hoverPosition, centerY, 5, 0, Math.PI * 2);
+      context.fill();
+    }
+    
+    // Cancel any pending animation frame
+    if (renderRequestRef.current !== null) {
+      cancelAnimationFrame(renderRequestRef.current);
+      renderRequestRef.current = null;
+    }
+  }, [isHovering, waveformData, progressColor]);
+  
+  // Animation loop for hover effects
+  const animateHover = useCallback(() => {
+    drawHoverLine();
+    renderRequestRef.current = requestAnimationFrame(animateHover);
+  }, [drawHoverLine]);
+  
+  // Update waveform when data or playback changes
+  useEffect(() => {
+    drawWaveform();
+  }, [drawWaveform]);
+  
+  // Set up and clean up hover animation
+  useEffect(() => {
+    if (isHovering) {
+      renderRequestRef.current = requestAnimationFrame(animateHover);
+    } else {
+      // Clear overlay canvas when not hovering
+      const canvas = overlayCanvasRef.current;
+      if (canvas) {
+        const context = canvas.getContext('2d');
+        if (context) {
+          context.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      }
       
-      // Add a small circle at the intersection of the line and the waveform
-      const timeRatio = hoverPosition / canvasWidth;
-      const dataIndex = Math.floor(timeRatio * waveformData.length);
-      if (dataIndex >= 0 && dataIndex < waveformData.length) {
-        const amplitude = Math.abs(waveformData[dataIndex] || 0);
-        const barHeight = Math.max(4, amplitude * amplitudeFactor);
-        const centerY = canvasHeight / 2;
-        
-        context.fillStyle = progressColor;
-        context.beginPath();
-        context.arc(hoverPosition, centerY, 5, 0, Math.PI * 2);
-        context.fill();
+      // Cancel any pending animation frame
+      if (renderRequestRef.current !== null) {
+        cancelAnimationFrame(renderRequestRef.current);
+        renderRequestRef.current = null;
       }
     }
-  }, [waveformData, currentTime, duration, isHovering, hoverPosition, color, progressColor, backgroundColor, height]);
-
+    
+    return () => {
+      if (renderRequestRef.current !== null) {
+        cancelAnimationFrame(renderRequestRef.current);
+        renderRequestRef.current = null;
+      }
+    };
+  }, [isHovering, animateHover]);
+  
   // Handle mouse events for seeking
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current) return;
     
     const rect = containerRef.current.getBoundingClientRect();
     const position = e.clientX - rect.left;
-    setHoverPosition(position);
-    setIsHovering(true);
-  };
+    
+    // Update hover position directly without state change
+    hoverPositionRef.current = position;
+    
+    // Only set isHovering to true if not already true
+    if (!isHovering) {
+      setIsHovering(true);
+    }
+  }, [isHovering]);
   
-  const handleMouseLeave = () => {
+  const handleMouseLeave = useCallback(() => {
     setIsHovering(false);
-  };
+  }, []);
   
-  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current) return;
     
     const rect = containerRef.current.getBoundingClientRect();
@@ -232,7 +343,7 @@ const WaveformVisualizer: React.FC<WaveformProps> = ({
     const seekTime = seekPercentage * duration;
     
     onSeek(seekTime);
-  };
+  }, [duration, onSeek]);
 
   return (
     <div 
@@ -249,6 +360,7 @@ const WaveformVisualizer: React.FC<WaveformProps> = ({
       onMouseLeave={handleMouseLeave}
       onClick={handleClick}
     >
+      {/* Main canvas for waveform */}
       <canvas 
         ref={canvasRef}
         style={{ 
@@ -258,6 +370,19 @@ const WaveformVisualizer: React.FC<WaveformProps> = ({
           width: '100%',
           height: '100%',
           opacity: '1'
+        }}
+      />
+      
+      {/* Overlay canvas for hover effects */}
+      <canvas 
+        ref={overlayCanvasRef}
+        style={{ 
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none'
         }}
       />
     </div>
