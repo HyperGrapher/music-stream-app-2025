@@ -8,6 +8,15 @@ import { formatDuration } from '@/lib/utils';
 import { CoverImage } from './cover-image';
 import { EditableTitle } from './editable-title';
 
+const TRACKS = [
+  { id: "dont-panic", label: "Don't Panic" },
+  { id: "SolarOntheRise", label: "Solar On the Rise" },
+  { id: "PollenSong", label: "Pollen Song" },
+  { id: "voodoo", label: "Voodoo" },
+  { id: "hope", label: "Hope" },
+  { id: "blackout_days", label: "Blackout Days" },
+  { id: "basics", label: "Basics" }
+];
 
 async function getPlaylistWithSongs(id: string) {
   await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -15,34 +24,20 @@ async function getPlaylistWithSongs(id: string) {
     id: '1',
     name: 'Playlist 1',
     coverUrl: 'https://placehold.co/600x400',
-    trackCount: 2,
+    trackCount: TRACKS.length,
     duration: 100,
-    songs: [
-      {
-        id: '1',
-        title: 'Song playlist 1',
-        duration: 100,
-        artworkUrl: 'https://placehold.co/600x400',
-        userId: '1',
-        genre: 'Pop',
-        bpm: 120,
-        key: 'C',
-        tags: ['Pop', 'Dance'],
-        releaseDate: '2021-01-01',
-      },
-      {
-        id: '2',
-        title: 'Song playlist 2',
-        duration: 100,
-        artworkUrl: 'https://placehold.co/600x400',
-        userId: '2',
-        genre: 'Rock',
-        bpm: 120,
-        key: 'C',
-        tags: ['Rock', 'Dance'],
-        releaseDate: '2021-01-01',
-      },
-    ],
+    songs: TRACKS.map(track => ({
+      id: track.id,
+      title: track.label,
+      duration: 100,
+      artworkUrl: 'https://placehold.co/600x400',
+      userId: '1',
+      genre: 'Pop',
+      bpm: 120,
+      key: 'C',
+      tags: ['Pop', 'Dance'],
+      releaseDate: '2021-01-01',
+    })),
   };
 }
 

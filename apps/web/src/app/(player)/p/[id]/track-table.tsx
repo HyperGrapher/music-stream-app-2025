@@ -44,6 +44,7 @@ function TrackRow({
 
   function onClickTrackRow(e: React.MouseEvent) {
     e.preventDefault();
+    console.log('onClickTrackRow', track);
     setActivePanel('tracklist');
     onSelect();
     if (isCurrentTrack) {
@@ -92,7 +93,7 @@ function TrackRow({
         <span className="flex items-center">
           <div className="relative  mr-2">
 
-            <Button onClick={() =>  playTrack(track)} variant="ghost" size="icon" className="">Play</Button>
+            <Button onClick={onClickTrackRow} variant="ghost" size="icon" className="">Play</Button>
           </div>
           <span className="font-medium truncate max-w-[180px] sm:max-w-[200px] text-[#d1d5db]">
             {track.title}
