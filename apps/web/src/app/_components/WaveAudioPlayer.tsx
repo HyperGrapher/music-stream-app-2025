@@ -6,8 +6,8 @@ import { api } from '@/trpc/react';
 import { toast } from 'sonner';
 import { processWaveformData } from '@/lib/waveform-utils';
 import { cn } from '@/lib/utils';
-import WebGLBackground from './WebGL';
-import SinWave from './SinWave';
+import AnimatedBars from './AnimatedBars';
+import AnimatedWaveMesh from './AnimatedWaveMesh';
 
 const TRACKS = [
     { id: "hope", label: "Hope" },
@@ -38,7 +38,7 @@ const WaveAudioPlayer: React.FC = () => {
     const [duration, setDuration] = useState<number>(0);
 
     // Add visualization toggle state
-    const [visualizationType, setVisualizationType] = useState<'bars' | 'wave'>('wave');
+    const [visualizationType, setVisualizationType] = useState<'bars' | 'wave' | null>(null);
 
     ///
 
@@ -118,8 +118,8 @@ const WaveAudioPlayer: React.FC = () => {
                 setWaveformData(waveArr);
             } catch (error) {
                 console.error('Failed to fetch waveform data:', error);
-                 // Clear waveform data on error?
-                 // setWaveformData([]); 
+                // Clear waveform data on error?
+                // setWaveformData([]); 
             }
         };
 
@@ -210,7 +210,7 @@ const WaveAudioPlayer: React.FC = () => {
         <div className="audio-player" style={{ width: '100%', maxWidth: '800px', margin: '20px auto' }}>
             <audio ref={audioRef} src={audioSrc} preload="metadata" />
 
-            <div className={cn("p-4 rounded-md w-2xl h-[170px] max-w-md mx-auto", userId ? 'bg-cyan-900 ' : 'bg-cyan-900/50')}>
+            <div className={cn("p-4 rounded-md w-2xl h-[170px] max-w-md mx-auto", userId ? 'bg-zinc-900 ' : 'bg-cyan-900/50')}>
                 <p className="text-white mb-4">
                     User ID: {userId ?? 'anonymous'}
                 </p>
@@ -231,25 +231,25 @@ const WaveAudioPlayer: React.FC = () => {
                         ))}
                     </select>
                 </div>
-                
+
                 {/* Add visualization toggle */}
                 <div className="mb-4">
                     <label className="text-white mr-2">Visualization:</label>
                     <div className="inline-flex rounded-md overflow-hidden">
-                        <button 
-                            className={cn("px-3 py-1 text-sm", 
-                                visualizationType === 'bars' 
-                                    ? "bg-orange-500 text-white" 
+                        <button
+                            className={cn("px-3 py-1 text-sm",
+                                visualizationType === 'bars'
+                                    ? "bg-orange-500 text-white"
                                     : "bg-gray-700 text-gray-200"
                             )}
                             onClick={() => setVisualizationType('bars')}
                         >
                             Bars
                         </button>
-                        <button 
-                            className={cn("px-3 py-1 text-sm", 
-                                visualizationType === 'wave' 
-                                    ? "bg-cyan-500 text-white" 
+                        <button
+                            className={cn("px-3 py-1 text-sm",
+                                visualizationType === 'wave'
+                                    ? "bg-cyan-500 text-white"
                                     : "bg-gray-700 text-gray-200"
                             )}
                             onClick={() => setVisualizationType('wave')}
@@ -287,50 +287,52 @@ const WaveAudioPlayer: React.FC = () => {
             </div>
 
             {/* Container for both visualizers */}
-            <div 
-                ref={visualizerContainerRef} 
-                style={{ 
-                    position: 'relative', 
-                    width: '100%', 
-                    height: '80px' /* Match WaveformVisualizer height */ 
+            <section
+                className='hidden'
+                ref={visualizerContainerRef}
+                style={{
+                    position: 'relative',
+                    width: '100%',
+                    height: '80px' /* Match WaveformVisualizer height */
                 }}
             >
                 {/* WebGL Background - Renders only if dimensions are valid */}
-                {visualizationType === 'bars' && (
-                    <WebGLBackground 
+                {visualizationType === 'bars' && waveformData.length > 0 && (
+                    <AnimatedBars
                         waveformData={waveformData}
                         isPlaying={isPlaying}
                         width={visualizerDimensions.width}
-                        height={visualizerDimensions.height} 
-                        color="#ff9900" 
+                        height={visualizerDimensions.height}
+                        color="#ff9900"
                         barCount={200}
                     />
                 )}
-                
-                {/* SinWave Background - Alternative visualization */}
-                {visualizationType === 'wave' && waveformData.length < 0 && (
-                    <SinWave 
+
+                {/* AnimatedWaveMesh Background - Alternative visualization */}
+                {visualizationType === 'wave' && waveformData.length > 0 && (
+                    <AnimatedWaveMesh
                         waveformData={waveformData}
                         isPlaying={isPlaying}
                         width={visualizerDimensions.width}
-                        height={visualizerDimensions.height} 
+                        height={visualizerDimensions.height}
                         color="#00ccff"
                         secondaryColor="#ff3366"
                     />
                 )}
 
-                {/* Existing 2D Waveform Visualizer */}
-                <WaveformVisualizer
-                    waveformData={waveformData}
-                    duration={duration}
-                    currentTime={currentTime}
-                    onSeek={handleSeek}
-                    height={80}
-                    color="#CCCCCC"
-                    progressColor="#f50"
-                    backgroundColor="#ffffff00" // Keep it transparent
-                />
-            </div>
+            </section>
+
+            {/* Existing 2D Waveform Visualizer */}
+            <WaveformVisualizer
+                waveformData={waveformData}
+                duration={duration}
+                currentTime={currentTime}
+                onSeek={handleSeek}
+                height={80}
+                color="#CCCCCC"
+                progressColor="#f50"
+                backgroundColor="#ffffff00" // Keep it transparent
+            />
 
             <div className="track-info" style={{ marginTop: '10px' }}>
                 <h3 style={{ margin: '0', fontSize: '16px' }}>Track Title</h3>

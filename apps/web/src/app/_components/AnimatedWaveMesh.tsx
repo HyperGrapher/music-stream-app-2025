@@ -12,7 +12,7 @@ interface SinWaveProps {
     secondaryColor?: string;
 }
 
-const WaveMesh: React.FC<Omit<SinWaveProps, 'width' | 'height'> & { canvasWidth: number, canvasHeight: number }> = ({
+const AnimatedWaveMesh: React.FC<Omit<SinWaveProps, 'width' | 'height'> & { canvasWidth: number, canvasHeight: number }> = ({
     waveformData,
     isPlaying,
     canvasWidth,
@@ -206,7 +206,7 @@ const SinWave: React.FC<SinWaveProps> = ({ width, height, ...props }) => {
         >
             <ambientLight intensity={0.8} />
             <directionalLight position={[0, 5, 5]} intensity={1} />
-            <WaveMesh {...props} canvasWidth={width} canvasHeight={height} />
+            <AnimatedWaveMesh {...props} canvasWidth={width} canvasHeight={height} />
         </Canvas>
     );
 };
