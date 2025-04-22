@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+
+This is a turborepo consists of `web` and `express` apps.
+
+This app is a music player app similar to the `soundcloud.com`.
+
+
+// TODO
