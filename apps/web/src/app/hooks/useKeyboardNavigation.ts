@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, type RefObject } from 'react';
-import { usePlayback } from '@/app/playback-context';
+import { usePlayback } from '@/app/hooks/usePlayback';
 
 type KeyboardNavigationOptions = {
   containerRef: RefObject<HTMLElement>;

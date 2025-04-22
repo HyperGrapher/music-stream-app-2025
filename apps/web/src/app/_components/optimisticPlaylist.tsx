@@ -6,7 +6,7 @@ import { useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { usePlayback } from '@/app/playback-context';
+import { usePlayback } from '@/app/hooks/usePlayback';
 import {
   DropdownMenu,
   DropdownMenuContent,

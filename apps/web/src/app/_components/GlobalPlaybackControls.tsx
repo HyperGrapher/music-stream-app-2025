@@ -12,13 +12,13 @@ import {
   VolumeX,
   Shuffle,
 } from 'lucide-react';
-import { usePlayback } from '@/app/playback-context';
+import { usePlayback } from '@/app/hooks/usePlayback';
 
 function TrackInfo() {
   let { currentTrack } = usePlayback();
 
   return (
-    <div className="flex items-center space-x-3 w-1/3">
+    <div className="flex items-center space-x-3 ">
       {currentTrack && (
         <>
           <img
@@ -104,7 +104,7 @@ function PlaybackButtons() {
   );
 }
 
-export function ProgressBar() {
+function ProgressBar() {
   let { currentTime, duration, audioRef, setCurrentTime } = usePlayback();
   let progressBarRef = useRef<HTMLDivElement>(null);
 
@@ -126,7 +126,7 @@ export function ProgressBar() {
   };
 
   return (
-    <div className="flex items-center w-full mt-1">
+    <div className="flex items-center mt-1 max-w-xl min-w-48 flex-1 pl-8">
       <span className="text-xs tabular-nums text-gray-400">
         {formatTime(currentTime)}
       </span>
@@ -149,7 +149,7 @@ export function ProgressBar() {
   );
 }
 
-export function Volume() {
+function Volume() {
   let { audioRef, currentTrack } = usePlayback();
   let [volume, setVolume] = useState(100);
   let [isMuted, setIsMuted] = useState(false);
@@ -192,7 +192,7 @@ export function Volume() {
   };
 
   return (
-    <div className="relative">
+    <div className="relative translate-y-0.5 pl-8">
       <Button
         variant="ghost"
         size="icon"
@@ -338,16 +338,17 @@ export function PlaybackControls() {
   ]);
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 flex items-center justify-between p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] bg-[#181818] border-t border-[#282828]">
+    <>
       <audio ref={audioRef} />
-      <TrackInfo />
-      <div className="flex flex-col items-center w-1/3">
-        <PlaybackButtons />
-        <ProgressBar />
+      <div className="h-[48px] fixed bottom-0 left-0 right-0 flex items-center justify-between p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] bg-[#181818] border-t border-[#282828]">
+        <div className="flex items-center justify-center w-full px-8">
+          <PlaybackButtons />
+          <ProgressBar />
+          <Volume />
+          <TrackInfo />
+        </div>
       </div>
-      <div className="flex items-center justify-end space-x-2 w-1/3">
-        <Volume />
-      </div>
-    </div>
+
+    </>
   );
 }

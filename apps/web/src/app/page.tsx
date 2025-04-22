@@ -1,6 +1,6 @@
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { TrackTable } from './p/[id]/track-table';
 import { Suspense } from 'react';
+import Link from 'next/link';
 
 async function Tracks({
   searchParams,
@@ -36,21 +36,26 @@ async function Tracks({
       releaseDate: '2021-01-01',
     },
   ];
-  // @ts-ignore
-  return <TrackTable query={query} playlist={{ songs }} />;
+
+  // return <TrackTable query={query} playlist={{ songs }} />;
+  return <div />;
 }
 
-export default function Page({
-  searchParams,
-}: {
-  searchParams: Promise<{ q: string }>;
-}) {
+export default function Page() {
+
+  const searchParams = Promise.resolve({ q: '' })
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[#0A0A0A] pb-[69px] pt-2">
+    <div className="flex-1 flex flex-col overflow-hidden pb-[69px] pt-2">
       <ScrollArea className="flex-1">
         <div className="min-w-max">
           <Suspense fallback={<div className="w-full" />}>
-            <Tracks searchParams={searchParams} />
+            {/* <Tracks searchParams={searchParams} /> */}
+
+            <h1 className="text-2xl font-bold text-center">Home Page</h1>
+            <div className="flex flex-col gap-4 justify-center items-center mt-8">
+              <Link href="/discover">Discover</Link>
+              <Link href="/feed">Feed</Link>
+            </div>
           </Suspense>
         </div>
         <ScrollBar orientation="horizontal" />

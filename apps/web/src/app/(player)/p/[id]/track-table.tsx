@@ -1,22 +1,10 @@
 'use client';
 
-import { usePlayback } from '@/app/playback-context';
+import { usePlayback } from '@/app/hooks/usePlayback';
 import { type Track } from '@prisma/client';
 import { formatDuration } from '@/lib/utils';
 import { useRef, useEffect, useState, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, Play, Pause, Plus } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-// import { usePlaylist } from '@/app/hooks/use-playlist';
-import Image from 'next/image';
 
 type PlaylistWithSongs = {
   id: string;
@@ -81,7 +69,7 @@ function TrackRow({
 
   return (
     <tr
-      className={`group cursor-pointer hover:bg-[#1A1A1A] select-none relative ${isCurrentTrack ? 'bg-[#1A1A1A]' : ''
+      className={`group cursor-pointer hover:bg-zinc-700/50 select-none relative ${isCurrentTrack ? 'bg-zinc-800/50' : ''
         }`}
       tabIndex={0}
       // onClick={onClickTrackRow}
