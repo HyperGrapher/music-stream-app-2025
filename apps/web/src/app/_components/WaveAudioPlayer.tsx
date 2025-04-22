@@ -308,7 +308,7 @@ const WaveAudioPlayer: React.FC = () => {
                 )}
                 
                 {/* SinWave Background - Alternative visualization */}
-                {visualizationType === 'wave' && waveformData.length > 0 && (
+                {visualizationType === 'wave' && waveformData.length < 0 && (
                     <SinWave 
                         waveformData={waveformData}
                         isPlaying={isPlaying}

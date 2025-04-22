@@ -46,6 +46,7 @@ const WaveformVisualizer: React.FC<WaveformProps> = ({
     context.scale(dpr, dpr);
     
     // Clear canvas with the background color
+    context.clearRect(0, 0, canvasWidth, canvasHeight);
     context.fillStyle = backgroundColor;
     context.fillRect(0, 0, canvasWidth, canvasHeight);
     
@@ -54,53 +55,159 @@ const WaveformVisualizer: React.FC<WaveformProps> = ({
     const progressX = canvasWidth * playbackProgress;
     
     // Calculate bar width (no spacing)
-    const barWidth = canvasWidth / waveformData.length;
+    const totalBars = waveformData.length;
+    const barWidth = canvasWidth / totalBars;
+    const barSpacing = Math.max(1, barWidth * 0.2); // Dynamic spacing based on width
+    const actualBarWidth = barWidth - barSpacing;
     
     // Find the effective maximum amplitude for scaling (avoid division by zero)
     // Use a slightly higher scaling factor to amplify the look
     const maxAmplitude = Math.max(...waveformData.map(val => Math.abs(val)), 1); // Ensure max is at least 1
-    const amplitudeFactor = (canvasHeight * 0.8) / maxAmplitude; // Use 80% of height, adjust as needed
+    const amplitudeFactor = (canvasHeight * 0.7) / maxAmplitude; // Use 70% of height, adjust as needed
 
-    // --- Create Gradients --- 
-    // Helper to create a vertical gradient
-    const createGradient = (color: string) => {
-      const gradient = context.createLinearGradient(0, 0, 0, canvasHeight);
-      // Adjust gradient colors for a SoundCloud-like feel (e.g., slightly darker bottom)
-      // This is an example, feel free to tweak colors
-      gradient.addColorStop(0, color); // Top color
-      gradient.addColorStop(1, progressColor === color ? '#c40' : '#666'); // Darker bottom based on main color
+    // Reflection constants
+    const reflectionHeight = 0.3; // How tall reflections are (0-1)
+    const reflectionOpacity = 0.3; // Base opacity for reflections
+
+    // Define glow parameters
+    context.shadowBlur = 5;
+    context.shadowOffsetX = 0;
+    context.shadowOffsetY = 0;
+    
+    // --- Create Gradients for Bars --- 
+    const createBarGradient = (x: number, barHeight: number, isPlayed: boolean) => {
+      const centerY = canvasHeight / 2;
+      const topY = centerY - barHeight / 2;
+      
+      const gradient = context.createLinearGradient(0, topY, 0, centerY);
+      
+      if (isPlayed) {
+        // Played section - more vibrant with highlight
+        gradient.addColorStop(0, '#ff7b00'); // Orange-top
+        gradient.addColorStop(0.5, progressColor); // Main color
+        gradient.addColorStop(1, '#ff2d00'); // Red-bottom
+        context.shadowColor = '#ff4500'; // Orange glow
+      } else {
+        // Unplayed section - more subtle
+        gradient.addColorStop(0, '#aaa'); // Light top
+        gradient.addColorStop(0.5, color); // Main color
+        gradient.addColorStop(1, '#444'); // Dark bottom
+        context.shadowColor = 'rgba(150, 150, 150, 0.5)'; // Subtle glow
+      }
+      
       return gradient;
     };
-
-    const progressGradient = createGradient(progressColor);
-    const baseGradient = createGradient(color);
-    // ------------------------
-
+    
+    // Function to draw a rounded bar
+    const drawRoundedBar = (x: number, width: number, height: number, topY: number) => {
+      const radius = Math.min(width / 2, 4); // Limit radius based on width, max 4px
+      
+      context.beginPath();
+      // Top-left corner
+      context.moveTo(x + radius, topY);
+      // Top-right corner
+      context.lineTo(x + width - radius, topY);
+      context.quadraticCurveTo(x + width, topY, x + width, topY + radius);
+      // Bottom-right corner
+      context.lineTo(x + width, topY + height - radius);
+      context.quadraticCurveTo(x + width, topY + height, x + width - radius, topY + height);
+      // Bottom-left corner
+      context.lineTo(x + radius, topY + height);
+      context.quadraticCurveTo(x, topY + height, x, topY + height - radius);
+      // Top-left corner again
+      context.lineTo(x, topY + radius);
+      context.quadraticCurveTo(x, topY, x + radius, topY);
+      context.closePath();
+      
+      context.fill();
+    };
+    
     // Draw each bar of the waveform
     waveformData.forEach((amplitude, index) => {
-      const x = index * barWidth;
-      // Use amplified amplitude for visual height
-      const barHeight = Math.max(1, Math.abs(amplitude) * amplitudeFactor); // Ensure minimum height of 1px
-            
-      // Determine if this bar is before or after the playback position
-      const currentX = x + barWidth / 2; // Check center of the bar
-      context.fillStyle = currentX < progressX ? progressGradient : baseGradient;
+      const x = index * barWidth + barSpacing / 2;
       
-      // Draw from the middle, extending up and down
-      const y = (canvasHeight / 2) - (barHeight / 2);
-      context.fillRect(x, y, barWidth, barHeight);
+      // Add a subtle variation to each bar's height based on its index
+      // This gives a more organic, less machine-perfect look
+      const variationFactor = 1 + (Math.sin(index * 0.1) * 0.05);
+      
+      // Use amplified amplitude for visual height
+      const rawHeight = Math.abs(amplitude) * amplitudeFactor * variationFactor;
+      const barHeight = Math.max(4, rawHeight); // Ensure minimum height
+      
+      // Determine if this bar is before or after the playback position
+      const currentX = x + actualBarWidth / 2; // Check center of the bar
+      const isPlayed = currentX < progressX;
+      
+      // Set fill style with gradient
+      context.fillStyle = createBarGradient(x, barHeight, isPlayed);
+      
+      // Draw the bar from the middle
+      const centerY = canvasHeight / 2;
+      const topY = centerY - barHeight / 2;
+      
+      // Draw the main bar with rounded corners
+      drawRoundedBar(x, actualBarWidth, barHeight, topY);
+      
+      // Draw reflection (slightly narrower, beneath the bar)
+      context.shadowBlur = 0; // Disable glow for reflection
+      context.globalAlpha = isPlayed ? reflectionOpacity : reflectionOpacity * 0.6;
+      
+      // Create reflection gradient
+      const reflectionGradient = context.createLinearGradient(
+        0, centerY + barHeight / 2, 
+        0, centerY + barHeight / 2 + barHeight * reflectionHeight
+      );
+      reflectionGradient.addColorStop(0, isPlayed ? progressColor : color);
+      reflectionGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      context.fillStyle = reflectionGradient;
+      
+      // Draw the reflection with narrower width and fading height
+      drawRoundedBar(
+        x + actualBarWidth * 0.1, // Slightly narrower
+        actualBarWidth * 0.8, 
+        barHeight * reflectionHeight,
+        centerY + barHeight / 2
+      );
+      
+      // Reset opacity
+      context.globalAlpha = 1;
+      context.shadowBlur = isPlayed ? 5 : 3; // Restore glow for next bar
     });
     
     // Draw hover position line if hovering
     if (isHovering) {
-      context.strokeStyle = progressColor; // Use progress color for hover line
-      context.lineWidth = 1;
+      // Reset shadow properties
+      context.shadowBlur = 0;
+      context.shadowColor = 'transparent';
+      
+      // Create a gradient for the seek line
+      const seekLineGradient = context.createLinearGradient(0, 0, 0, canvasHeight);
+      seekLineGradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
+      seekLineGradient.addColorStop(0.5, progressColor);
+      seekLineGradient.addColorStop(1, 'rgba(255, 255, 255, 0.2)');
+      
+      context.strokeStyle = seekLineGradient;
+      context.lineWidth = 2;
       context.beginPath();
       context.moveTo(hoverPosition, 0);
       context.lineTo(hoverPosition, canvasHeight);
       context.stroke();
+      
+      // Add a small circle at the intersection of the line and the waveform
+      const timeRatio = hoverPosition / canvasWidth;
+      const dataIndex = Math.floor(timeRatio * waveformData.length);
+      if (dataIndex >= 0 && dataIndex < waveformData.length) {
+        const amplitude = Math.abs(waveformData[dataIndex] || 0);
+        const barHeight = Math.max(4, amplitude * amplitudeFactor);
+        const centerY = canvasHeight / 2;
+        
+        context.fillStyle = progressColor;
+        context.beginPath();
+        context.arc(hoverPosition, centerY, 5, 0, Math.PI * 2);
+        context.fill();
+      }
     }
-  }, [waveformData, currentTime, duration, isHovering, hoverPosition, color, progressColor, backgroundColor, height]); // Added height to deps
+  }, [waveformData, currentTime, duration, isHovering, hoverPosition, color, progressColor, backgroundColor, height]);
 
   // Handle mouse events for seeking
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
