@@ -19,6 +19,7 @@ export const validatePlaybackToken = (req: Request, res: Response, next: NextFun
 
         // Check if the token matches the requested track
         if (decoded.trackId !== req.params.trackId) {
+            console.error('Invalid playback token for this track');
             return res.status(403).send('Invalid playback token for this track');
         }
 

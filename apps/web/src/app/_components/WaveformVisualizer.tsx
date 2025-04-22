@@ -21,7 +21,7 @@ const WaveformVisualizer: React.FC<WaveformProps> = ({
   height = 100,
   color = '#999999',
   progressColor = '#f50',
-  backgroundColor = '#f5f5f5'
+  backgroundColor = '#ddd'
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -59,7 +59,7 @@ const WaveformVisualizer: React.FC<WaveformProps> = ({
     
     // Normalize the waveform data to fit canvas height
     const maxAmplitude = Math.max(...waveformData.map(val => Math.abs(val)));
-    const amplitudeFactor = (canvasHeight / 2) / (maxAmplitude || 1);
+    const amplitudeFactor = (canvasHeight / 2) / (maxAmplitude * 0.5 || 1);
     
     // Draw each bar of the waveform
     waveformData.forEach((amplitude, index) => {

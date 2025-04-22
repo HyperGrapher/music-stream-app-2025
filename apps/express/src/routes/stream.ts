@@ -168,6 +168,26 @@ function setupStreamHandlers(
         // console.log(`Chunk stream closed for session: ${sessionId}`);
     });
 }
+router.get('/stream/:trackId/waveform', validatePlaybackToken, async (req, res) => {
+    const { trackId: jwtTrackId, userId: jwtUserId } = req.playbackData as PlaybackData;
+    const requestedTrackId = req.params.trackId ?? '';
+
+    const filename = `${requestedTrackId}.json`;
+    const waveform = path.resolve(__dirname, "..", '..', "audio", filename);
+
+    if (!fs.existsSync(waveform)) {
+        console.error('⛔ Waveform file not found');
+        return res.status(404).json({ error: 'Waveform file not found' });
+    }
+
+    const waveformData = JSON.parse(fs.readFileSync(waveform, 'utf8'));
+
+    res.json(waveformData);
+
+
+
+});
+
 
 // Main streaming endpoint
 router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {

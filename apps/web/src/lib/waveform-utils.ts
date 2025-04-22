@@ -80,17 +80,3 @@ export const normalizeWaveformData = (data: number[], maxValue: number = 100): n
     const scaleFactor = maxValue / max;
     return data.map(v => v * scaleFactor);
 };
-
-/**
- * Fetch waveform data from your API
- */
-export const fetchWaveformData = async (trackId: string): Promise<number[]> => {
-    try {
-        const response = await fetch(`/api/tracks/${trackId}/waveform`);
-        const data = await response.json();
-        return processWaveformData(data);
-    } catch (error) {
-        console.error('Failed to fetch waveform data:', error);
-        return [];
-    }
-};
