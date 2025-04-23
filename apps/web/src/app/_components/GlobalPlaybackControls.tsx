@@ -71,10 +71,6 @@ const selectVolumeActions = (state: PlaybackState) => ({
 const TrackInfo = memo(function TrackInfo() {
   const { currentTrack } = usePlaybackStore(selectTrackInfo, shallow);
 
-  // Remove debug effect that causes extra renders
-  // useEffect(() => {console.log("🧨TrackInfo re-renders: Current track:", currentTrack?.title);});
-  console.log("🧨TrackInfo re-renders: Current track:", currentTrack?.title);
-
   if (!currentTrack) return null;
 
   return (
@@ -114,9 +110,6 @@ const PlaybackButtons = memo(function PlaybackButtons() {
     togglePlayPause,
   } = usePlaybackStore(selectPlaybackButtons, shallow);
   
-  // Remove debug effect that causes extra renders
-  // useEffect(() => {console.log("🤦‍♂️ PlaybackButtons re-renders: Current track:", currentTrack?.title);});
-
   return (
     <div className="flex items-center space-x-1 sm:space-x-2 relative">
       <Button

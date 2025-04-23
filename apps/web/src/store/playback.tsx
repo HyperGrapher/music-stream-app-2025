@@ -141,12 +141,22 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
         console.log('🚩 Zustand: playTrack action called with:', track);
         const audio = audioRefGlobal?.current;
         if (audio) {
-            audio.pause();
-            audio.currentTime = 0;
+            // Properly clean up the audio element
+            try {
+                audio.pause();
+                audio.currentTime = 0;
+                // Clear the source to force a complete reset
+                audio.src = '';
+                audio.load(); // Explicitly load to clear any pending operations
+            } catch (e) {
+                console.error('Error cleaning up audio element:', e);
+            }
         }
+        
+        // Manually reset any previous token data to force a new request
         set({
             currentTrack: track,
-            isPlaying: false,
+            isPlaying: true,
             currentTime: 0,
             duration: 0,
             audioSrc: undefined,
@@ -452,6 +462,25 @@ export function PlaybackInitializer({ userId }: { userId: string | undefined }) 
     useGlobalKeyListeners();
     useMediaSession();
 
+    // Common ref to track reset attempts and prevent infinite loops
+    const resetAttemptedRef = useRef(false);
+    const lastResetTimeRef = useRef(0);
+    const MIN_RESET_INTERVAL = 1000; // Minimum 1 second between reset attempts
+    
+    const resetMutationIfNeeded = () => {
+        // Only allow resets once per second to prevent infinite loops
+        const now = Date.now();
+        if (now - lastResetTimeRef.current < MIN_RESET_INTERVAL) {
+            console.log('Skipping reset: too frequent');
+            return false;
+        }
+        
+        resetAttemptedRef.current = true;
+        lastResetTimeRef.current = now;
+        getPlaybackTokenMutation.reset();
+        return true;
+    };
+
     const {
         currentTrack,
         playbackToken,
@@ -470,11 +499,13 @@ export function PlaybackInitializer({ userId }: { userId: string | undefined }) 
         onSuccess: (data, variables) => {
             console.log('Initializer: Mutation Success', data);
             setTokenAndPrepare(data.token, variables.trackId);
+            resetAttemptedRef.current = false;
         },
         onError: (error) => {
             console.error('Initializer: Mutation Error:', error);
             const message = error.data?.code === 'UNAUTHORIZED' ? 'Unauthorized to play this track.' : 'Failed to get playback token.';
             handlePlaybackError(message, error.data?.code === 'UNAUTHORIZED');
+            resetAttemptedRef.current = false;
         },
     });
 
@@ -482,6 +513,9 @@ export function PlaybackInitializer({ userId }: { userId: string | undefined }) 
         if (currentTrack && !playbackToken && userId &&
             getPlaybackTokenMutation.status === 'idle' && !getPlaybackTokenMutation.isError) {
             console.log(`Initializer: Triggering mutation for track: ${currentTrack.id} (Status: ${getPlaybackTokenMutation.status})`);
+            // When a track is selected, request a token which will then set audioSrc
+            // and trigger playback in the audioSrc effect below
+            resetAttemptedRef.current = false; // Reset the flag when a successful request is made
             getPlaybackTokenMutation.mutate({ trackId: currentTrack.id });
         }
         else if (!currentTrack) {
@@ -489,12 +523,56 @@ export function PlaybackInitializer({ userId }: { userId: string | undefined }) 
                 getPlaybackTokenMutation.reset();
             }
         }
-    }, [currentTrack, playbackToken, userId, getPlaybackTokenMutation.reset, getPlaybackTokenMutation.status, getPlaybackTokenMutation.isError]);
+        else {
+            // Debug why the token request wasn't triggered
+            console.log('Token request conditions not met:', {
+                hasTrack: !!currentTrack,
+                noToken: !playbackToken,
+                hasUserId: !!userId,
+                mutationIdle: getPlaybackTokenMutation.status === 'idle',
+                noError: !getPlaybackTokenMutation.isError
+            });
+            
+            // If all conditions are met except mutation status, reset it
+            // But don't attempt too frequently to avoid infinite loops
+            if (currentTrack && !playbackToken && userId && 
+                (getPlaybackTokenMutation.status !== 'idle' || getPlaybackTokenMutation.isError) && 
+                !resetAttemptedRef.current) {
+                console.log('Resetting mutation to allow new token request');
+                resetMutationIfNeeded();
+            }
+        }
+    }, [currentTrack, playbackToken, userId, getPlaybackTokenMutation]);
 
     const audioSrc = usePlaybackStore(state => state.audioSrc);
+    
+    // Add tracking of the current track ID to detect changes
+    const currentTrackId = usePlaybackStore(state => state.currentTrack?.id);
+    const previousTrackIdRef = useRef<string | undefined>(null);
+    
     useEffect(() => {
         const audio = audioRef.current;
-        if (audio && audioSrc && audio.src !== audioSrc) {
+        if (!audio) return;
+        
+        // Track ID has changed, force a reset
+        if (currentTrackId !== previousTrackIdRef.current) {
+            console.log(`Initializer: Track ID changed from ${previousTrackIdRef.current} to ${currentTrackId}`);
+            previousTrackIdRef.current = currentTrackId;
+            
+            // If we don't have an audioSrc yet but have a track ID, 
+            // make sure we force the mutation to reset in the next cycle
+            if (!audioSrc && currentTrackId && !resetAttemptedRef.current) {
+                console.log("Initializer: No audioSrc but track changed, will reset mutation once");
+                resetMutationIfNeeded();
+                return;
+            }
+        }
+        
+        // Handle audio source change
+        if (audioSrc) {
+            // Reset our flag when we get a valid audioSrc
+            resetAttemptedRef.current = false;
+            
             console.log("Initializer: Setting audio source and playing", audioSrc);
             audio.src = audioSrc;
             audio.load();
@@ -514,7 +592,7 @@ export function PlaybackInitializer({ userId }: { userId: string | undefined }) 
                     });
             }
         }
-    }, [audioSrc, audioRef]);
+    }, [audioSrc, audioRef, currentTrackId, handlePlaybackError]);
 
     useEffect(() => {
         setUserIdAction(userId);

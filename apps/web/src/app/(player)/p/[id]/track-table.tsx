@@ -51,7 +51,6 @@ const TrackRow = memo(function TrackRow({
 
   // Remove debug effect that causes extra renders
   // useEffect(() => {console.log("TrackRow re-renders: isPlaying:", isPlaying);});
-  console.log("🧨TrackRow re-renders: isPlaying:", isPlaying);
   let [isFocused, setIsFocused] = useState(false);
 
   function onClickTrackRow(e: React.MouseEvent) {
@@ -59,22 +58,21 @@ const TrackRow = memo(function TrackRow({
     console.log('onClickTrackRow', track);
     setActivePanel('tracklist');
     onSelect();
-    if (isCurrentPlaying) {
-      togglePlayPause();
-    } else {
-      playTrack(track);
-    }
+    
+    // Always play the track when clicked, regardless of current playing state
+    // This ensures we can switch between tracks at any time
+    playTrack(track);
+    
+    // The playTrack function will set up the track, then the PlaybackInitializer
+    // will handle requesting the token and starting playback
   }
 
   function onKeyDownTrackRow(e: React.KeyboardEvent<HTMLTableRowElement>) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       onSelect();
-      if (isCurrentPlaying) {
-        togglePlayPause();
-      } else {
-        playTrack(track);
-      }
+      // Always play the track when triggered via keyboard, same as click behavior
+      playTrack(track);
     } else {
       handleKeyNavigation(e);
     }
