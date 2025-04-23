@@ -3,9 +3,10 @@
 import { usePlaybackStore } from '@/store/playback';
 import { type Track } from '@prisma/client';
 import { formatDuration } from '@/lib/utils';
-import { useRef, useEffect, useState, type RefObject } from 'react';
+import { useRef, useEffect, useState, type RefObject, useMemo, memo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Pause, Play } from 'lucide-react';
+import { shallow } from 'zustand/shallow';
 
 type PlaylistWithSongs = {
   id: string;
@@ -16,7 +17,8 @@ type PlaylistWithSongs = {
   songs: Track[];
 } | any;
 
-function TrackRow({
+// Memoize TrackRow component to prevent unnecessary re-renders
+const TrackRow = memo(function TrackRow({
   track,
   index,
   isSelected,
@@ -29,18 +31,27 @@ function TrackRow({
   isCurrentPlaying: boolean;
   onSelect: () => void;
 }) {
-  const { playTrack, togglePlayPause, setActivePanel, handleKeyNavigation } = usePlaybackStore(
+  // Consolidated store subscription with shallow equality
+  const { 
+    playTrack, 
+    togglePlayPause, 
+    setActivePanel, 
+    handleKeyNavigation,
+    isPlaying 
+  } = usePlaybackStore(
     (state) => ({
       playTrack: state.playTrack,
       togglePlayPause: state.togglePlayPause,
       setActivePanel: state.setActivePanel,
       handleKeyNavigation: state.handleKeyNavigation,
-    })
+      isPlaying: state.isPlaying
+    }),
+    shallow // Use shallow equality to prevent unnecessary re-renders
   );
-  const isPlaying = usePlaybackStore((state) => state.isPlaying);
 
-  useEffect(() => {console.log("TrackRow re-renders: isPlaying:", isPlaying);});
-
+  // Remove debug effect that causes extra renders
+  // useEffect(() => {console.log("TrackRow re-renders: isPlaying:", isPlaying);});
+  console.log("🧨TrackRow re-renders: isPlaying:", isPlaying);
   let [isFocused, setIsFocused] = useState(false);
 
   function onClickTrackRow(e: React.MouseEvent) {
@@ -125,7 +136,16 @@ function TrackRow({
       </td>
     </tr>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison function for memo
+  // Only re-render if these props change
+  return (
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.isCurrentPlaying === nextProps.isCurrentPlaying &&
+    prevProps.track.id === nextProps.track.id &&
+    prevProps.index === nextProps.index
+  );
+});
 
 export function TrackTable({
   playlist,
@@ -135,29 +155,48 @@ export function TrackTable({
   query?: string;
 }) {
   let tableRef = useRef<HTMLTableElement>(null);
+  
+  // Consolidated store subscription with shallow equality
   const {
     registerPanelRef,
     setActivePanel,
     setPlaylist,
+    currentTrackId,
   } = usePlaybackStore(state => ({
     registerPanelRef: state.registerPanelRef,
     setActivePanel: state.setActivePanel,
     setPlaylist: state.setPlaylist,
-  }));
-  const currentTrackId = usePlaybackStore((state) => state.currentTrack?.id);
-  useEffect(() => {console.log("TrackTable re-renders: Current track:", currentTrackId);});
+    currentTrackId: state.currentTrack?.id,
+  }), shallow);
+  
+  // Remove debug effect that causes extra renders
+  // useEffect(() => {console.log("TrackTable re-renders: Current track:", currentTrackId);});
 
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log("TrackTable: Registering panel ref");
+    // console.log("TrackTable: Registering panel ref");
     registerPanelRef('tracklist', tableRef as unknown as RefObject<HTMLElement>);
   }, [registerPanelRef]);
 
   useEffect(() => {
-    console.log("TrackTable: Setting playlist in store");
+    // console.log("TrackTable: Setting playlist in store");
     setPlaylist(playlist.songs);
   }, [playlist.songs, setPlaylist]);
+
+  // Memoize the rendered rows to prevent unnecessary re-renders
+  const renderedRows = useMemo(() => {
+    return playlist.songs.map((track: Track, index: number) => (
+      <TrackRow
+        key={track.id}
+        track={track}
+        index={index}
+        isSelected={selectedTrackId === track.id}
+        isCurrentPlaying={currentTrackId === track.id}
+        onSelect={() => setSelectedTrackId(track.id)}
+      />
+    ));
+  }, [playlist.songs, selectedTrackId, currentTrackId]);
 
   return (
     <table
@@ -175,16 +214,7 @@ export function TrackTable({
         </tr>
       </thead>
       <tbody className="mt-[1px]">
-        {playlist.songs.map((track: Track, index: number) => (
-          <TrackRow
-            key={track.id}
-            track={track}
-            index={index}
-            isSelected={selectedTrackId === track.id}
-            isCurrentPlaying={currentTrackId === track.id}
-            onSelect={() => setSelectedTrackId(track.id)}
-          />
-        ))}
+        {renderedRows}
       </tbody>
     </table>
   );

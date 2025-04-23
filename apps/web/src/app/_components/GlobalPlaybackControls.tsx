@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, memo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Heart,
@@ -15,6 +15,7 @@ import {
 import { usePlaybackStore } from '@/store/playback';
 import { formatDuration } from '@/lib/utils';
 import type { Track } from '@prisma/client';
+import { shallow } from 'zustand/shallow';
 
 interface PlaybackState {
   isPlaying: boolean;
@@ -37,7 +38,10 @@ interface PlaybackState {
   toggleStoreMute: () => void;
 }
 
-const selectTrackInfo = (state: PlaybackState) => ({ currentTrack: state.currentTrack });
+const selectTrackInfo = (state: PlaybackState) => ({ 
+  currentTrack: state.currentTrack 
+});
+
 const selectPlaybackButtons = (state: PlaybackState) => ({
   isPlaying: state.isPlaying,
   currentTrack: state.currentTrack,
@@ -45,66 +49,73 @@ const selectPlaybackButtons = (state: PlaybackState) => ({
   playNextTrack: state.playNextTrack,
   togglePlayPause: state.togglePlayPause,
 });
+
 const selectProgressBar = (state: PlaybackState) => ({
   currentTime: state.currentTime,
   duration: state.duration,
   seekTo: state.seekTo,
 });
+
 const selectVolumeState = (state: PlaybackState) => ({
   currentTrack: state.currentTrack,
   volume: state.volume,
   isMuted: state.isMuted,
 });
+
 const selectVolumeActions = (state: PlaybackState) => ({
   setVolume: state.setVolume,
   toggleStoreMute: state.toggleStoreMute,
 });
 
-function TrackInfo() {
-  const { currentTrack } = usePlaybackStore(selectTrackInfo);
+// Using React.memo to prevent unnecessary re-renders
+const TrackInfo = memo(function TrackInfo() {
+  const { currentTrack } = usePlaybackStore(selectTrackInfo, shallow);
 
-  useEffect(() => {console.log("🧨TrackInfo re-renders: Current track:", currentTrack?.title);});
+  // Remove debug effect that causes extra renders
+  // useEffect(() => {console.log("🧨TrackInfo re-renders: Current track:", currentTrack?.title);});
+  console.log("🧨TrackInfo re-renders: Current track:", currentTrack?.title);
+
+  if (!currentTrack) return null;
 
   return (
     <div className="flex items-center space-x-3 flex-shrink min-w-0">
-      {currentTrack && (
-        <>
-          <img
-            src={currentTrack.artworkUrl || '/placeholder.svg'}
-            alt="Now playing"
-            className="w-10 h-10 object-cover rounded-sm flex-shrink-0"
-          />
-          <div className="flex-shrink min-w-0">
-            <div className="text-sm font-medium truncate max-w-[120px] sm:max-w-[200px] text-gray-200">
-              {currentTrack.title}
-            </div>
-            <div className="text-xs text-gray-400 truncate max-w-[120px] sm:max-w-[200px]">
-              {currentTrack.userId}
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 flex-shrink-0 hidden sm:flex text-gray-400 hover:text-white"
-            onClick={() => console.log("Like clicked - implement state")}
-          >
-            <Heart className="w-4 h-4" />
-          </Button>
-        </>
-      )}
+      <img
+        src={currentTrack.artworkUrl || '/placeholder.svg'}
+        alt="Now playing"
+        className="w-10 h-10 object-cover rounded-sm flex-shrink-0"
+      />
+      <div className="flex-shrink min-w-0">
+        <div className="text-sm font-medium truncate max-w-[120px] sm:max-w-[200px] text-gray-200">
+          {currentTrack.title}
+        </div>
+        <div className="text-xs text-gray-400 truncate max-w-[120px] sm:max-w-[200px]">
+          {currentTrack.userId}
+        </div>
+      </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 flex-shrink-0 hidden sm:flex text-gray-400 hover:text-white"
+        onClick={() => console.log("Like clicked - implement state")}
+      >
+        <Heart className="w-4 h-4" />
+      </Button>
     </div>
   );
-}
+});
 
-function PlaybackButtons() {
+// Using React.memo to prevent unnecessary re-renders
+const PlaybackButtons = memo(function PlaybackButtons() {
   const {
     isPlaying,
     currentTrack,
     playPreviousTrack,
     playNextTrack,
     togglePlayPause,
-  } = usePlaybackStore(selectPlaybackButtons);
-  useEffect(() => {console.log("🤦‍♂️ PlaybackButtons re-renders: Current track:", currentTrack?.title);});
+  } = usePlaybackStore(selectPlaybackButtons, shallow);
+  
+  // Remove debug effect that causes extra renders
+  // useEffect(() => {console.log("🤦‍♂️ PlaybackButtons re-renders: Current track:", currentTrack?.title);});
 
   return (
     <div className="flex items-center space-x-1 sm:space-x-2 relative">
@@ -165,14 +176,15 @@ function PlaybackButtons() {
       </Button>
     </div>
   );
-}
+});
 
-function ProgressBar() {
+// Using React.memo to prevent unnecessary re-renders
+const ProgressBar = memo(function ProgressBar() {
   const {
     currentTime,
     duration,
     seekTo,
-  } = usePlaybackStore(selectProgressBar);
+  } = usePlaybackStore(selectProgressBar, shallow);
 
   let progressBarRef = useRef<HTMLDivElement>(null);
 
@@ -213,11 +225,12 @@ function ProgressBar() {
       </span>
     </div>
   );
-}
+});
 
-function Volume() {
-  const { currentTrack, volume, isMuted } = usePlaybackStore(selectVolumeState);
-  const { setVolume, toggleStoreMute } = usePlaybackStore(selectVolumeActions);
+// Using React.memo to prevent unnecessary re-renders
+const Volume = memo(function Volume() {
+  const { currentTrack, volume, isMuted } = usePlaybackStore(selectVolumeState, shallow);
+  const { setVolume, toggleStoreMute } = usePlaybackStore(selectVolumeActions, shallow);
 
   const volumeBarRef = useRef<HTMLDivElement>(null);
 
@@ -265,9 +278,9 @@ function Volume() {
       </div>
     </div>
   );
-}
+});
 
-export function PlaybackControls() {
+export const PlaybackControls = memo(function PlaybackControls() {
   return (
     <>
       <div className="h-[60px] fixed bottom-0 left-0 right-0 flex items-center justify-between p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] bg-[#181818] border-t border-[#282828] z-50">
@@ -288,4 +301,4 @@ export function PlaybackControls() {
       </div>
     </>
   );
-}
+});
