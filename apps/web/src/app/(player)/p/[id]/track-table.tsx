@@ -1,11 +1,11 @@
 'use client';
 
-import { usePlaybackStore } from '@/store/playback';
+import { usePlayerStore } from '@/store/player';
 import { type Track } from '@prisma/client';
 import { formatDuration } from '@/lib/utils';
-import { useRef, useEffect, useState, type RefObject, useMemo, memo } from 'react';
+import { useRef, useEffect, useState, useMemo, memo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Pause, Play } from 'lucide-react';
+import { Pause, Play, RefreshCw } from 'lucide-react';
 import { shallow } from 'zustand/shallow';
 
 type PlaylistWithSongs = {
@@ -32,57 +32,47 @@ const TrackRow = memo(function TrackRow({
   onSelect: () => void;
 }) {
   // Consolidated store subscription with shallow equality
-  const { 
-    playTrack, 
-    togglePlayPause, 
-    setActivePanel, 
-    handleKeyNavigation,
-    isPlaying 
-  } = usePlaybackStore(
+  const {
+    playTrack,
+    togglePlay,
+    status
+  } = usePlayerStore(
     (state) => ({
       playTrack: state.playTrack,
-      togglePlayPause: state.togglePlayPause,
-      setActivePanel: state.setActivePanel,
-      handleKeyNavigation: state.handleKeyNavigation,
-      isPlaying: state.isPlaying
+      togglePlay: state.togglePlay,
+      status: state.status
     }),
     shallow // Use shallow equality to prevent unnecessary re-renders
   );
 
-  // Remove debug effect that causes extra renders
-  // useEffect(() => {console.log("TrackRow re-renders: isPlaying:", isPlaying);});
+  // Check if this track is playing based on the current status
+  const isPlaying = status === 'playing';
+
   let [isFocused, setIsFocused] = useState(false);
 
   function onClickTrackRow(e: React.MouseEvent) {
     e.preventDefault();
     console.log('onClickTrackRow', track);
-    setActivePanel('tracklist');
     onSelect();
-    
-    // Always play the track when clicked, regardless of current playing state
-    // This ensures we can switch between tracks at any time
+
+    // Always use playTrack, which internally handles toggling if it's the current track
     playTrack(track);
-    
-    // The playTrack function will set up the track, then the PlaybackInitializer
-    // will handle requesting the token and starting playback
   }
 
   function onKeyDownTrackRow(e: React.KeyboardEvent<HTMLTableRowElement>) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       onSelect();
-      // Always play the track when triggered via keyboard, same as click behavior
+
+      // Always use playTrack, which internally handles toggling if it's the current track
       playTrack(track);
-    } else {
-      handleKeyNavigation(e);
     }
   }
 
   return (
     <tr
-      className={`group cursor-pointer hover:bg-zinc-700/50 select-none relative ${
-        isCurrentPlaying ? 'bg-zinc-800/50 text-green-400' : ''
-      }`}
+      className={`group cursor-pointer hover:bg-zinc-700/50 select-none relative ${isCurrentPlaying ? 'bg-zinc-800/50 text-green-400' : ''
+        }`}
       tabIndex={0}
       onKeyDown={onKeyDownTrackRow}
       onFocus={() => setIsFocused(true)}
@@ -111,7 +101,7 @@ const TrackRow = memo(function TrackRow({
               {isCurrentPlaying && isPlaying ? (
                 <Pause className="h-4 w-4" />
               ) : (
-                <Play className="h-4 w-4" />
+                <PauseOrLoadingIcon status={status} isCurrent={isCurrentPlaying} />
               )}
             </Button>
           </div>
@@ -145,6 +135,13 @@ const TrackRow = memo(function TrackRow({
   );
 });
 
+
+function PauseOrLoadingIcon({ status, isCurrent }: { status: string, isCurrent: boolean }) {
+  if (status === 'loading' && isCurrent) return <RefreshCw className="w-3 h-3 animate-spin" />;
+  return <Pause className="h-4 w-4" />;
+}
+
+
 export function TrackTable({
   playlist,
   query,
@@ -153,32 +150,20 @@ export function TrackTable({
   query?: string;
 }) {
   let tableRef = useRef<HTMLTableElement>(null);
-  
+
   // Consolidated store subscription with shallow equality
   const {
-    registerPanelRef,
-    setActivePanel,
     setPlaylist,
-    currentTrackId,
-  } = usePlaybackStore(state => ({
-    registerPanelRef: state.registerPanelRef,
-    setActivePanel: state.setActivePanel,
+    currentTrack,
+  } = usePlayerStore(state => ({
     setPlaylist: state.setPlaylist,
-    currentTrackId: state.currentTrack?.id,
+    currentTrack: state.currentTrack,
   }), shallow);
-  
-  // Remove debug effect that causes extra renders
-  // useEffect(() => {console.log("TrackTable re-renders: Current track:", currentTrackId);});
 
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
 
   useEffect(() => {
-    // console.log("TrackTable: Registering panel ref");
-    registerPanelRef('tracklist', tableRef as unknown as RefObject<HTMLElement>);
-  }, [registerPanelRef]);
-
-  useEffect(() => {
-    // console.log("TrackTable: Setting playlist in store");
+    // Set the playlist in the store
     setPlaylist(playlist.songs);
   }, [playlist.songs, setPlaylist]);
 
@@ -190,17 +175,16 @@ export function TrackTable({
         track={track}
         index={index}
         isSelected={selectedTrackId === track.id}
-        isCurrentPlaying={currentTrackId === track.id}
+        isCurrentPlaying={currentTrack?.id === track.id}
         onSelect={() => setSelectedTrackId(track.id)}
       />
     ));
-  }, [playlist.songs, selectedTrackId, currentTrackId]);
+  }, [playlist.songs, selectedTrackId, currentTrack]);
 
   return (
     <table
       ref={tableRef}
       className="w-full text-xs"
-      onClick={() => setActivePanel('tracklist')}
     >
       <thead className="sticky top-0 bg-[#0A0A0A] z-10 border-b border-[#282828]">
         <tr className="text-left text-gray-400">

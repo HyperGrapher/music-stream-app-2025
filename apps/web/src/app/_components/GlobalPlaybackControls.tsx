@@ -12,64 +12,16 @@ import {
   VolumeX,
   Shuffle,
 } from 'lucide-react';
-import { usePlaybackStore } from '@/store/playback';
+import { usePlayerStore } from '@/store/player';
 import { formatDuration } from '@/lib/utils';
 import type { Track } from '@prisma/client';
 import { shallow } from 'zustand/shallow';
 
-interface PlaybackState {
-  isPlaying: boolean;
-  currentTrack: Track | null;
-  playlist: Track[];
-  audioSrc: string | undefined;
-  playbackToken: string | null;
-  userId: string | undefined;
-  currentTime: number;
-  duration: number;
-  activePanel: 'sidebar' | 'tracklist';
-  playPreviousTrack: () => void;
-  playNextTrack: () => void;
-  togglePlayPause: () => void;
-  setCurrentTime: (time: number) => void;
-  volume: number;
-  isMuted: boolean;
-  seekTo: (time: number) => void;
-  setVolume: (volume: number) => void;
-  toggleStoreMute: () => void;
-}
-
-const selectTrackInfo = (state: PlaybackState) => ({ 
-  currentTrack: state.currentTrack 
-});
-
-const selectPlaybackButtons = (state: PlaybackState) => ({
-  isPlaying: state.isPlaying,
-  currentTrack: state.currentTrack,
-  playPreviousTrack: state.playPreviousTrack,
-  playNextTrack: state.playNextTrack,
-  togglePlayPause: state.togglePlayPause,
-});
-
-const selectProgressBar = (state: PlaybackState) => ({
-  currentTime: state.currentTime,
-  duration: state.duration,
-  seekTo: state.seekTo,
-});
-
-const selectVolumeState = (state: PlaybackState) => ({
-  currentTrack: state.currentTrack,
-  volume: state.volume,
-  isMuted: state.isMuted,
-});
-
-const selectVolumeActions = (state: PlaybackState) => ({
-  setVolume: state.setVolume,
-  toggleStoreMute: state.toggleStoreMute,
-});
-
 // Using React.memo to prevent unnecessary re-renders
 const TrackInfo = memo(function TrackInfo() {
-  const { currentTrack } = usePlaybackStore(selectTrackInfo, shallow);
+  const { currentTrack } = usePlayerStore(state => ({ 
+    currentTrack: state.currentTrack 
+  }), shallow);
 
   if (!currentTrack) return null;
 
@@ -103,13 +55,21 @@ const TrackInfo = memo(function TrackInfo() {
 // Using React.memo to prevent unnecessary re-renders
 const PlaybackButtons = memo(function PlaybackButtons() {
   const {
-    isPlaying,
+    status,
     currentTrack,
-    playPreviousTrack,
-    playNextTrack,
-    togglePlayPause,
-  } = usePlaybackStore(selectPlaybackButtons, shallow);
+    previousTrack,
+    nextTrack,
+    togglePlay,
+  } = usePlayerStore(state => ({
+    status: state.status,
+    currentTrack: state.currentTrack,
+    previousTrack: state.previousTrack,
+    nextTrack: state.nextTrack,
+    togglePlay: state.togglePlay,
+  }), shallow);
   
+  const isPlaying = status === 'playing';
+
   return (
     <div className="flex items-center space-x-1 sm:space-x-2 relative">
       <Button
@@ -127,7 +87,7 @@ const PlaybackButtons = memo(function PlaybackButtons() {
         variant="ghost"
         size="icon"
         className="h-8 w-8 text-gray-400 hover:text-white"
-        onClick={playPreviousTrack}
+        onClick={previousTrack}
         disabled={!currentTrack}
         title="Previous"
       >
@@ -137,7 +97,7 @@ const PlaybackButtons = memo(function PlaybackButtons() {
         variant="ghost"
         size="icon"
         className="h-10 w-10 bg-white text-black rounded-full hover:scale-105 hover:bg-gray-200 transition-transform duration-75 mx-1"
-        onClick={togglePlayPause}
+        onClick={togglePlay}
         disabled={!currentTrack}
         title={isPlaying ? "Pause" : "Play"}
       >
@@ -151,7 +111,7 @@ const PlaybackButtons = memo(function PlaybackButtons() {
         variant="ghost"
         size="icon"
         className="h-8 w-8 text-gray-400 hover:text-white"
-        onClick={playNextTrack}
+        onClick={nextTrack}
         disabled={!currentTrack}
         title="Next"
       >
@@ -176,8 +136,12 @@ const ProgressBar = memo(function ProgressBar() {
   const {
     currentTime,
     duration,
-    seekTo,
-  } = usePlaybackStore(selectProgressBar, shallow);
+    seek,
+  } = usePlayerStore(state => ({
+    currentTime: state.currentTime,
+    duration: state.duration,
+    seek: state.seek,
+  }), shallow);
 
   let progressBarRef = useRef<HTMLDivElement>(null);
 
@@ -187,7 +151,7 @@ const ProgressBar = memo(function ProgressBar() {
       let x = e.clientX - rect.left;
       let percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
       let newTime = (percentage / 100) * duration;
-      seekTo(newTime);
+      seek(newTime);
     }
   };
 
@@ -222,8 +186,19 @@ const ProgressBar = memo(function ProgressBar() {
 
 // Using React.memo to prevent unnecessary re-renders
 const Volume = memo(function Volume() {
-  const { currentTrack, volume, isMuted } = usePlaybackStore(selectVolumeState, shallow);
-  const { setVolume, toggleStoreMute } = usePlaybackStore(selectVolumeActions, shallow);
+  const { 
+    currentTrack, 
+    volume, 
+    isMuted,
+    setVolume,
+    toggleMute
+  } = usePlayerStore(state => ({
+    currentTrack: state.currentTrack,
+    volume: state.volume,
+    isMuted: state.isMuted,
+    setVolume: state.setVolume,
+    toggleMute: state.toggleMute
+  }), shallow);
 
   const volumeBarRef = useRef<HTMLDivElement>(null);
 
@@ -236,17 +211,13 @@ const Volume = memo(function Volume() {
     }
   };
 
-  let handleToggleMute = () => {
-    toggleStoreMute();
-  };
-
   return (
     <div className="flex items-center space-x-2">
       <Button
         variant="ghost"
         size="icon"
         className="h-8 w-8 text-gray-400 hover:text-white"
-        onClick={handleToggleMute}
+        onClick={toggleMute}
         disabled={!currentTrack}
         title={isMuted ? "Unmute" : "Mute"}
       >

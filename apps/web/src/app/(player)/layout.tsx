@@ -1,9 +1,9 @@
 import { api } from "@/trpc/server";
-// import { NowPlayingCard } from "../_components/NowPlayingCard";
+import { NowPlayingCard } from "../_components/NowPlayingCard";
 import { PlaybackControls } from "../_components/GlobalPlaybackControls";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { PlaybackInitializer } from "@/store/playback";
+import { PlayerController } from "@/store/player";
 
 export default async function Layout({
     children,
@@ -19,10 +19,10 @@ export default async function Layout({
         <>
             <main className="bg-zinc-950 min-h-screen relative pb-[60px]">
                 {children}
-                {/* <NowPlayingCard /> */}
+                <NowPlayingCard />
             </main>
             <PlaybackControls />
-            <PlaybackInitializer userId={userId} />
+            <PlayerController userId={userId} />
         </>
     )
 }

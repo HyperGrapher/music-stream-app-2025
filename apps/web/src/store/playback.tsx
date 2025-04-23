@@ -9,6 +9,9 @@ import { useRef, useEffect } from 'react';
 import { useStore } from 'zustand';
 import { shallow } from 'zustand/shallow';
 
+throw new Error("DO NOT USE THIS STORE. IT IS DEPRECATED. USE player.tsx INSTEAD.");
+
+
 type Panel = 'sidebar' | 'tracklist';
 
 // --- Non-reactive Refs ---

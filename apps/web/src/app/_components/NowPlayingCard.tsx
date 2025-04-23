@@ -1,14 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { useActionState } from 'react';
-import { PencilIcon, Loader2, CheckIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Track } from '@prisma/client';
-
+import { usePlayerStore } from '@/store/player';
 
 export function NowPlayingCard() {
-  const { currentTrack } = {currentTrack: {}} as any //usePlayback();
+  const currentTrack = usePlayerStore(state => state.currentTrack);
   console.log({ currentTrack }); // TODO: rerenders all the time. continuesly prints the current track
 
   if (!currentTrack) {
