@@ -3,13 +3,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useActionState } from 'react';
 import { PencilIcon, Loader2, CheckIcon } from 'lucide-react';
-import { usePlayback } from '@/app/hooks/usePlayback';
 import { cn } from '@/lib/utils';
 import type { Track } from '@prisma/client';
 
 
 export function NowPlayingCard() {
-  const { currentTrack } = usePlayback();
+  const { currentTrack } = {currentTrack: {}} as any //usePlayback();
   console.log({ currentTrack }); // TODO: rerenders all the time. continuesly prints the current track
 
   if (!currentTrack) {

@@ -1,10 +1,11 @@
 'use client';
 
-import { usePlayback } from '@/app/hooks/usePlayback';
+import { usePlaybackStore } from '@/store/playback';
 import { type Track } from '@prisma/client';
 import { formatDuration } from '@/lib/utils';
 import { useRef, useEffect, useState, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
+import { Pause, Play } from 'lucide-react';
 
 type PlaylistWithSongs = {
   id: string;
@@ -18,40 +19,36 @@ type PlaylistWithSongs = {
 function TrackRow({
   track,
   index,
-  query,
   isSelected,
+  isCurrentPlaying,
   onSelect,
 }: {
   track: Track;
   index: number;
-  query?: string;
   isSelected: boolean;
+  isCurrentPlaying: boolean;
   onSelect: () => void;
 }) {
-  let {
-    currentTrack,
-    playTrack,
-    togglePlayPause,
-    isPlaying,
-    setActivePanel,
-    handleKeyNavigation,
-  } = usePlayback();
-  // let { playlists } = usePlaylist();
+  const { playTrack, togglePlayPause, setActivePanel, handleKeyNavigation } = usePlaybackStore(
+    (state) => ({
+      playTrack: state.playTrack,
+      togglePlayPause: state.togglePlayPause,
+      setActivePanel: state.setActivePanel,
+      handleKeyNavigation: state.handleKeyNavigation,
+    })
+  );
+  const isPlaying = usePlaybackStore((state) => state.isPlaying);
+
+  useEffect(() => {console.log("TrackRow re-renders: isPlaying:", isPlaying);});
 
   let [isFocused, setIsFocused] = useState(false);
-  let isProduction = process.env.NEXT_PUBLIC_VERCEL_ENV === 'production';
-  let isCurrentTrack = currentTrack?.title === track.title;
-
-  useEffect(() => {
-    console.log('🚩 TrackRow rerendered: currentTrack', currentTrack);
-  });
 
   function onClickTrackRow(e: React.MouseEvent) {
     e.preventDefault();
     console.log('onClickTrackRow', track);
     setActivePanel('tracklist');
     onSelect();
-    if (isCurrentTrack) {
+    if (isCurrentPlaying) {
       togglePlayPause();
     } else {
       playTrack(track);
@@ -62,42 +59,52 @@ function TrackRow({
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       onSelect();
-      if (isCurrentTrack) {
+      if (isCurrentPlaying) {
         togglePlayPause();
       } else {
         playTrack(track);
       }
     } else {
-      handleKeyNavigation(e, 'tracklist');
+      handleKeyNavigation(e);
     }
   }
 
   return (
     <tr
-      className={`group cursor-pointer hover:bg-zinc-700/50 select-none relative ${isCurrentTrack ? 'bg-zinc-800/50' : ''
-        }`}
+      className={`group cursor-pointer hover:bg-zinc-700/50 select-none relative ${
+        isCurrentPlaying ? 'bg-zinc-800/50 text-green-400' : ''
+      }`}
       tabIndex={0}
-      // onClick={onClickTrackRow}
       onKeyDown={onKeyDownTrackRow}
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
     >
       <td className="py-[2px] pl-3 pr-2 tabular-nums w-10 text-center">
-        {true ? (
+        {isCurrentPlaying && isPlaying ? (
           <span className="flex items-end justify-center space-x-[2px] size-[0.65rem] mx-auto">
-            <span className="w-1 bg-neutral-600 animate-now-playing-1"></span>
-            <span className="w-1 bg-neutral-600 animate-now-playing-2 [animation-delay:0.2s]"></span>
-            <span className="w-1 bg-neutral-600 animate-now-playing-3 [animation-delay:0.4s]"></span>
+            <span className="w-1 bg-green-500 animate-now-playing-1"></span>
+            <span className="w-1 bg-green-500 animate-now-playing-2 [animation-delay:0.2s]"></span>
+            <span className="w-1 bg-green-500 animate-now-playing-3 [animation-delay:0.4s]"></span>
           </span>
         ) : (
-          <span className="text-gray-400">{index + 1}</span>
+          !isCurrentPlaying || (isCurrentPlaying && !isPlaying) ? (
+            <span className="text-gray-400 group-hover:hidden block">{index + 1}</span>
+          ) : null
+        )}
+        {!isCurrentPlaying && (
+          <Play className="h-4 w-4 group-hover:block hidden mx-auto" onClick={onClickTrackRow} />
         )}
       </td>
       <td className="py-[2px] px-2">
         <span className="flex items-center">
-          <div className="relative  mr-2">
-
-            <Button onClick={onClickTrackRow} variant="ghost" size="icon" className="">Play</Button>
+          <div className="relative mr-2">
+            <Button onClick={onClickTrackRow} variant="ghost" size="icon" className="h-6 w-6">
+              {isCurrentPlaying && isPlaying ? (
+                <Pause className="h-4 w-4" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+            </Button>
           </div>
           <span className="font-medium truncate max-w-[180px] sm:max-w-[200px] text-[#d1d5db]">
             {track.title}
@@ -128,14 +135,27 @@ export function TrackTable({
   query?: string;
 }) {
   let tableRef = useRef<HTMLTableElement>(null);
-  let { registerPanelRef, setActivePanel, setPlaylist } = usePlayback();
+  const {
+    registerPanelRef,
+    setActivePanel,
+    setPlaylist,
+  } = usePlaybackStore(state => ({
+    registerPanelRef: state.registerPanelRef,
+    setActivePanel: state.setActivePanel,
+    setPlaylist: state.setPlaylist,
+  }));
+  const currentTrackId = usePlaybackStore((state) => state.currentTrack?.id);
+  useEffect(() => {console.log("TrackTable re-renders: Current track:", currentTrackId);});
+
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log("TrackTable: Registering panel ref");
     registerPanelRef('tracklist', tableRef as unknown as RefObject<HTMLElement>);
   }, [registerPanelRef]);
 
   useEffect(() => {
+    console.log("TrackTable: Setting playlist in store");
     setPlaylist(playlist.songs);
   }, [playlist.songs, setPlaylist]);
 
@@ -160,8 +180,8 @@ export function TrackTable({
             key={track.id}
             track={track}
             index={index}
-            query={query}
             isSelected={selectedTrackId === track.id}
+            isCurrentPlaying={currentTrackId === track.id}
             onSelect={() => setSelectedTrackId(track.id)}
           />
         ))}

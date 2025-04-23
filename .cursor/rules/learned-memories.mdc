@@ -1,8 +1,3 @@
----
-description: Notes taken by AI agent about the project.
-globs: 
-alwaysApply: false
----
 # Project Memory
 
 This file stores project-specific knowledge, conventions, and user preferences learned by the AI assistant.
@@ -22,3 +17,8 @@ This file stores project-specific knowledge, conventions, and user preferences l
 
 -   [Convention 1]
 -   [Convention 2]
+description: Notes taken by AI agent about the project.
+globs: 
+alwaysApply: false
+---
+No memory yet.

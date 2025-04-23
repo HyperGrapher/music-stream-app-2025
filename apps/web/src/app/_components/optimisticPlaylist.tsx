@@ -6,7 +6,8 @@ import { useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { usePlayback } from '@/app/hooks/usePlayback';
+import { usePlaybackStore } from '@/store/playback';
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -86,7 +87,7 @@ export function OptimisticPlaylists() {
   let playlistsContainerRef = useRef<HTMLUListElement>(null);
   let pathname = usePathname();
   let router = useRouter();
-  let { registerPanelRef, handleKeyNavigation, setActivePanel } = usePlayback();
+  let { registerPanelRef, handleKeyNavigation, setActivePanel } = usePlaybackStore();
 
   useEffect(() => {
     registerPanelRef('sidebar', playlistsContainerRef as React.RefObject<HTMLElement>);
@@ -150,7 +151,7 @@ export function OptimisticPlaylists() {
         <ul
           ref={playlistsContainerRef}
           className="space-y-0.5 text-xs mt-[1px]"
-          onKeyDown={(e) => handleKeyNavigation(e, 'sidebar')}
+          onKeyDown={(e) => handleKeyNavigation(e)}
         >
           {/* {playlists.map((playlist) => (
             <PlaylistRow key={playlist.id} playlist={playlist} />

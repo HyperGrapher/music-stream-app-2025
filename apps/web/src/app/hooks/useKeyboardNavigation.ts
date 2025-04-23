@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, type RefObject } from 'react';
-import { usePlayback } from '@/app/hooks/usePlayback';
+import { usePlaybackStore } from '@/store/playback';
 
 type KeyboardNavigationOptions = {
   containerRef: RefObject<HTMLElement>;
@@ -18,7 +18,7 @@ export function useKeyboardNavigation({
   onSelect,
   onExit,
 }: KeyboardNavigationOptions) {
-  let { activePanel, setActivePanel } = usePlayback();
+  let { activePanel, setActivePanel } = usePlaybackStore();
 
   useEffect(() => {
     let handleKeyDown = (e: KeyboardEvent) => {

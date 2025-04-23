@@ -1,9 +1,10 @@
-import { PlaybackProvider } from "../hooks/usePlayback";
 import { api } from "@/trpc/server";
 // import { NowPlayingCard } from "../_components/NowPlayingCard";
 import { PlaybackControls } from "../_components/GlobalPlaybackControls";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { PlaybackInitializer } from "@/store/playback";
+
 export default async function Layout({
     children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -12,14 +13,17 @@ export default async function Layout({
         headers: await headers(),
     })
 
+    const userId = session?.user?.id;
+
     return (
-        <PlaybackProvider userId={session?.user?.id}>
-            <main className="bg-zinc-950 min-h-screen">
+        <>
+            <main className="bg-zinc-950 min-h-screen relative pb-[60px]">
                 {children}
                 {/* <NowPlayingCard /> */}
             </main>
             <PlaybackControls />
-        </PlaybackProvider>
+            <PlaybackInitializer userId={userId} />
+        </>
     )
 }
 
