@@ -1,8 +1,6 @@
 import Link from "next/link";
-
 import { LatestPost } from "@/app/_components/post";
 import { api, HydrateClient } from "@/trpc/server";
-import Authanticate from "./_components/authanticate";
 
 export default async function Home() {
   const hello = await api.post.hello({ text: "from tRPC" });
@@ -17,13 +15,7 @@ export default async function Home() {
             Streaming app
           </h1>
 
-          <Link href="/stream">Go to Stream</Link>
-
-          <div className="flex flex-col items-center gap-2">
-            <Authanticate />
-          </div>
-
-       
+          <Link href="/stream">Go to Stream</Link>       
 
           <LatestPost />
         </div>

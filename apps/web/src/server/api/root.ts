@@ -1,5 +1,6 @@
 import { postRouter } from "@/server/api/routers/post";
 import { streamRouter } from "@/server/api/routers/strream";
+import { artistRouter } from "./routers/artist";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
 /**
@@ -10,6 +11,7 @@ import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 export const appRouter = createTRPCRouter({
   post: postRouter,
   stream: streamRouter,
+  artist: artistRouter,
 });
 
 // export type definition of API
