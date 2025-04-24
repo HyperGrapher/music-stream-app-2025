@@ -1,6 +1,5 @@
 "use client";
 import Link from "next/link";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -19,10 +18,34 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { authClient } from "@/lib/auth-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useUser } from "@/hooks/useUser";
+import { useEffect } from "react";
+import { useUserStore } from "@/store/user";
 
-export function Navbar() {
-    const { data } = authClient.useSession();
-    const user = data?.user;
+type User = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+};
+
+interface NavbarProps {
+  initialUser: User | null;
+}
+
+export function Navbar({ initialUser }: NavbarProps) {
+    const { user } = useUser();
+    const { setUser } = useUserStore();
+    
+    // Initialize with server-provided user on first render
+    useEffect(() => {
+      if (initialUser) {
+        setUser(initialUser);
+      }
+    }, [initialUser, setUser]);
+    
+    // Use initial user data for first render, then use store data after hydration
+    const displayUser = user || initialUser;
 
     return (
         <nav className="flex items-center justify-between p-3 bg-black text-white border-b border-gray-800">
@@ -68,14 +91,14 @@ export function Navbar() {
                     <span className="hidden md:inline">Upload</span>
                 </Button>
                 
-                {user ? (
+                {displayUser ? (
                     <>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" className="p-1 hover:bg-gray-800">
                                     <Avatar className="h-8 w-8">
-                                        <AvatarImage src={user.image || ''} />
-                                        <AvatarFallback>{user.name?.charAt(0) || 'U'}</AvatarFallback>
+                                        <AvatarImage src={displayUser.image || ''} />
+                                        <AvatarFallback>{displayUser.name?.charAt(0) || 'U'}</AvatarFallback>
                                     </Avatar>
                                     <ChevronDown className="ml-1 h-4 w-4 text-gray-400" />
                                 </Button>
@@ -83,7 +106,10 @@ export function Navbar() {
                             <DropdownMenuContent align="end" className="bg-gray-900 text-white border-gray-800">
                                 <DropdownMenuItem className="hover:bg-gray-800">Profile</DropdownMenuItem>
                                 <DropdownMenuItem className="hover:bg-gray-800">Settings</DropdownMenuItem>
-                                <DropdownMenuItem className="hover:bg-gray-800">Sign out</DropdownMenuItem>
+                                <DropdownMenuItem className="hover:bg-gray-800"
+                                    onClick={() => authClient.signOut()}>
+                                    Sign out
+                                </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                         
@@ -97,8 +123,16 @@ export function Navbar() {
                     </>
                 ) : (
                     <div className="flex gap-2">
-                        <Button variant="ghost" className="text-sm hover:text-orange-500">Sign in</Button>
-                        <Button className="text-sm bg-orange-500 hover:bg-orange-600">Sign up</Button>
+                        <Button variant="ghost" 
+                            className="text-sm hover:text-orange-500"
+                            onClick={() => null}>
+                            Sign in
+                        </Button>
+                        <Button 
+                            className="text-sm bg-orange-500 hover:bg-orange-600"
+                            onClick={() => null}>
+                            Sign up
+                        </Button>
                     </div>
                 )}
                 

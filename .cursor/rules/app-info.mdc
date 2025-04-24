@@ -4,9 +4,40 @@ globs:
 alwaysApply: false
 ---
 
-This is a turborepo consists of `web` and `express` apps.
+This is a turborepo consists of `web` which is a next.js v15.3 and `express` apps.
 
 This app is a music player app similar to the `soundcloud.com`.
 
+Next.js `web` uses app router and 'better-auth' library for auth.
 
-// TODO
+better-auth session/user object retriaval in server components: 
+
+```ts
+
+// app/page.tsx
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+
+export default async function Page() {
+    const session = await auth.api.getSession({
+        headers: await headers(),
+    })
+
+    const user = session?.user
+    return (<></>)
+}
+
+```
+
+and better-auth session/user object retriaval in client components:
+```tsx
+import { authClient } from "@/lib/auth-client";
+
+export default function ClientComponent() {
+    const { data } = authClient.useSession();
+    const user = data?.user;
+    return (<></>)
+}
+
+```
+

@@ -1,19 +1,18 @@
-import { api } from "@/trpc/server";
 import { NowPlayingCard } from "../_components/NowPlayingCard";
 import { PlaybackControls } from "../_components/GlobalPlaybackControls";
+import { PlayerControllerWrapper } from "@/components/PlayerControllerWrapper";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { PlayerController } from "@/store/player";
 
 export default async function Layout({
     children,
 }: Readonly<{ children: React.ReactNode }>) {
-
+    // Get session server-side
     const session = await auth.api.getSession({
         headers: await headers(),
-    })
+    });
 
-    const userId = session?.user?.id;
+    const userId = session?.user?.id || null;
 
     return (
         <>
@@ -22,8 +21,9 @@ export default async function Layout({
                 <NowPlayingCard />
             </main>
             <PlaybackControls />
-            <PlayerController userId={userId} />
+            <PlayerControllerWrapper initialUserId={userId} />
         </>
     )
 }
+
 

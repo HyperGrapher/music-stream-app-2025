@@ -23,14 +23,14 @@ async function getPlaylistWithSongs(id: string) {
   return {
     id: '1',
     name: 'Playlist 1',
-    coverUrl: 'https://placehold.co/600x400',
+    coverUrl: 'https://placehold.co/600x600',
     trackCount: TRACKS.length,
     duration: 100,
     songs: TRACKS.map(track => ({
       id: track.id,
       title: track.label,
       duration: 100,
-      artworkUrl: 'https://placehold.co/600x400',
+      artworkUrl: 'https://placehold.co/600x600',
       userId: '1',
       genre: 'Pop',
       bpm: 120,
