@@ -10,8 +10,8 @@ export default async function FeedPage() {
 
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden pb-[69px] pt-2 relative h-[calc(100vh-69px)]">
-            <div className="h-[1px] bg-red-500/20 w-full absolute bottom-0 left-0 z-50"></div>
+        <div className="flex-1 flex flex-col pb-[-61px] overflow-hidden pt-0 relative">
+            <div className="h-[1px] bg-red-500 w-full absolute bottom-0 left-0 z-50"></div>
             <ScrollArea className="flex-1">
                 <div className="min-w-max">
                 <Suspense fallback={<div className="w-full" />}>

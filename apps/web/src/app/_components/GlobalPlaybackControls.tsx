@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, memo } from 'react';
+import { useRef, memo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Heart,
@@ -247,7 +247,7 @@ const Volume = memo(function Volume() {
 export const PlaybackControls = memo(function PlaybackControls() {
   return (
     <>
-      <div className="h-[60px] fixed bottom-0 left-0 right-0 flex items-center justify-between p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] bg-[#181818] border-t border-[#282828] z-50">
+      <div className="h-[69px] fixed bottom-0 left-0 right-0 flex items-center justify-between p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] bg-[#181818] border-t border-[#282828] z-50">
         <div className="flex items-center justify-between w-full max-w-screen-xl mx-auto px-4 sm:px-8">
           <div className="w-1/3 flex justify-start">
             <TrackInfo />

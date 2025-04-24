@@ -16,7 +16,7 @@ export default async function Layout({
 
     return (
         <>
-            <main className="bg-zinc-950 min-h-screen relative pb-[60px]">
+            <main className="bg-zinc-950 min-h-[calc(100vh-190px)] relative">
                 {children}
                 <NowPlayingCard />
             </main>

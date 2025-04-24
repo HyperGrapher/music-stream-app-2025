@@ -59,3 +59,22 @@ ALTER USER my_user CREATEDB;
 GRANT ALL PRIVILEGES ON DATABASE db_name TO my_user;
 \q #quit command
 ```
+
+```ts
+// middleware.ts
+import { getSessionCookie } from "better-auth/cookies";
+import { NextRequest, NextResponse } from "next/server";
+
+export async function middleware(request: NextRequest) {
+    const sessionCookie = getSessionCookie(request); // Optionally pass config as the second argument if cookie name or prefix is customized.
+    if (!sessionCookie) {
+        return NextResponse.redirect(new URL("/", request.url));
+    }
+    return NextResponse.next();
+}
+
+export const config = {
+    matcher: ["/dashboard"],
+};
+
+```

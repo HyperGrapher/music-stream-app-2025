@@ -71,7 +71,7 @@ export function Navbar({ initialUser }: NavbarProps) {
     };
 
     return (
-        <nav className="flex items-center justify-between p-3 bg-black text-white border-b border-gray-800">
+        <nav className="flex items-center justify-between p-3 bg-black text-white border-b border-zinc-800/90">
             {/* Left section - Logo and navigation */}
             <div className="flex items-center space-x-6">
                 <Link href="/" className="flex items-center">
