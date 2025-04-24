@@ -10,6 +10,8 @@ export const env = createEnv({
     DATABASE_URL: z.string().url(),
     BETTER_AUTH_SECRET: z.string(),
     BETTER_AUTH_URL: z.string(),
+    GOOGLE_CLIENT_ID: z.string(),
+    GOOGLE_CLIENT_SECRET: z.string(),
     GOOGLE_GENERATIVE_AI_API_KEY: z.string(),
     JWT_PLAYBACK_SECRET: z.string(),
     NODE_ENV: z
@@ -34,6 +36,8 @@ export const env = createEnv({
     DATABASE_URL: process.env.DATABASE_URL,
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     GOOGLE_GENERATIVE_AI_API_KEY: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
     JWT_PLAYBACK_SECRET: process.env.JWT_PLAYBACK_SECRET,
     NODE_ENV: process.env.NODE_ENV,

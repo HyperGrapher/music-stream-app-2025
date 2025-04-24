@@ -16,11 +16,10 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { authClient } from "@/lib/auth-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUser } from "@/hooks/useUser";
-import { useEffect } from "react";
-import { useUserStore } from "@/store/user";
+import { useState } from "react";
+import { toast } from "sonner";
 
 type User = {
   id: string;
@@ -34,18 +33,42 @@ interface NavbarProps {
 }
 
 export function Navbar({ initialUser }: NavbarProps) {
-    const { user } = useUser();
-    const { setUser } = useUserStore();
-    
-    // Initialize with server-provided user on first render
-    useEffect(() => {
-      if (initialUser) {
-        setUser(initialUser);
-      }
-    }, [initialUser, setUser]);
+    const { user, signIn, signUp, signOut, authError } = useUser();
+    const [isAuthLoading, setIsAuthLoading] = useState(false);
     
     // Use initial user data for first render, then use store data after hydration
     const displayUser = user || initialUser;
+
+    const handleSignIn = async () => {
+      setIsAuthLoading(true);
+      try {
+        await signIn.google({
+          onError: (error) => {
+            toast.error(error.message);
+          }
+        });
+      } finally {
+        setIsAuthLoading(false);
+      }
+    };
+
+    const handleSignUp = async () => {
+      setIsAuthLoading(true);
+      try {
+        await signUp.google({
+          onError: (error) => {
+            toast.error(error.message);
+          }
+        });
+      } finally {
+        setIsAuthLoading(false);
+      }
+    };
+
+    const handleSignOut = async () => {
+      await signOut();
+      toast.success("Signed out successfully");
+    };
 
     return (
         <nav className="flex items-center justify-between p-3 bg-black text-white border-b border-gray-800">
@@ -107,7 +130,7 @@ export function Navbar({ initialUser }: NavbarProps) {
                                 <DropdownMenuItem className="hover:bg-gray-800">Profile</DropdownMenuItem>
                                 <DropdownMenuItem className="hover:bg-gray-800">Settings</DropdownMenuItem>
                                 <DropdownMenuItem className="hover:bg-gray-800"
-                                    onClick={() => authClient.signOut()}>
+                                    onClick={handleSignOut}>
                                     Sign out
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -125,12 +148,14 @@ export function Navbar({ initialUser }: NavbarProps) {
                     <div className="flex gap-2">
                         <Button variant="ghost" 
                             className="text-sm hover:text-orange-500"
-                            onClick={() => null}>
+                            onClick={handleSignIn}
+                            disabled={isAuthLoading}>
                             Sign in
                         </Button>
                         <Button 
                             className="text-sm bg-orange-500 hover:bg-orange-600"
-                            onClick={() => null}>
+                            onClick={handleSignUp}
+                            disabled={isAuthLoading}>
                             Sign up
                         </Button>
                     </div>
