@@ -2,6 +2,37 @@
 
 This file stores project-specific knowledge, conventions, and user preferences learned by the AI assistant.
 
+## Project Structure
+
+- **Type**: Next.js music player app similar to SoundCloud
+- **Root Directory**: `/apps/web/`
+- **Route Groups**:
+  - `(player)`: Contains the main music player experience routes
+
+## Technical Decisions
+
+- **Database**: PostgreSQL with Prisma ORM
+- **API Layer**: tRPC for type-safe APIs
+- **Authentication**: Auth module available at `@/lib/auth`
+- **UI Components**: Using shadcn/ui component library
+- **State Management**: Use React hooks and context where appropriate
+
+## Project Conventions
+
+- **Route Structure**:
+  - Artist profiles: `/(player)/[artist]`
+  - Song pages: `/(player)/[artist]/[song]`
+- **Data Fetching**: Use tRPC API routes with RSC (React Server Components)
+- **Layout**: Player layout includes NowPlayingCard and PlaybackControls components
+
+## Database Models
+
+- **User**: Represents an artist with profile info, tracks, albums, playlists
+- **Track**: Music tracks with metadata, stats, and relationships
+- **Album**: Collections of tracks with different types (album, EP, single, set)
+- **Playlist**: User-created track collections
+- **Social Features**: Follows, comments, likes, reposts
+
 ## Technical Decisions
 
 - **Player System**: The audio playback system uses a clean state management approach with Zustand in `apps/web/src/store/player.tsx`.
