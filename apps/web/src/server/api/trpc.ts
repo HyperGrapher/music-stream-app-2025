@@ -26,9 +26,13 @@ import { db } from "@/server/db";
  * @see https://trpc.io/docs/server/context
  */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
+  const start = performance.now();
   const session = await auth.api.getSession({
     headers: opts.headers,
   });
+  const end = performance.now();
+  const duration = (end - start).toFixed(2);
+  console.log(`🔋 [createTRPCContext] Session took ${duration}ms to fetch`);
 
   return {
     db,
@@ -86,9 +90,9 @@ export const createTRPCRouter = t.router;
  * network latency that would occur in production but not in local development.
  */
 const timingMiddleware = t.middleware(async ({ next, path, ctx }) => {
-  const start = Date.now();
+  const start = performance.now();
 
-  if (t._config.isDev) {
+  if (t._config.isDev && false) {
     // artificial delay in dev
     const waitMs = Math.floor(Math.random() * 400) + 100;
     await new Promise((resolve) => setTimeout(resolve, waitMs));
@@ -101,8 +105,9 @@ const timingMiddleware = t.middleware(async ({ next, path, ctx }) => {
     },
   });
 
-  const end = Date.now();
-  console.log(`🚩 [TRPC] ${path} took ${end - start}ms to execute`);
+  const end = performance.now();
+  const duration = (end - start).toFixed(2);
+  console.log(`🚩 [TRPC] ${path} took ${duration}ms to execute`);
 
   return result;
 });
