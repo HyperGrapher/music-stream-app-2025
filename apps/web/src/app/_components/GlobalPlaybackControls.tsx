@@ -16,11 +16,12 @@ import { usePlayerStore } from '@/store/player';
 import { formatDuration } from '@/lib/utils';
 import type { Track } from '@prisma/client';
 import { shallow } from 'zustand/shallow';
+import { usePathname } from 'next/navigation'
 
 // Using React.memo to prevent unnecessary re-renders
 const TrackInfo = memo(function TrackInfo() {
-  const { currentTrack } = usePlayerStore(state => ({ 
-    currentTrack: state.currentTrack 
+  const { currentTrack } = usePlayerStore(state => ({
+    currentTrack: state.currentTrack
   }), shallow);
 
   if (!currentTrack) return null;
@@ -67,7 +68,7 @@ const PlaybackButtons = memo(function PlaybackButtons() {
     nextTrack: state.nextTrack,
     togglePlay: state.togglePlay,
   }), shallow);
-  
+
   const isPlaying = status === 'playing';
 
   return (
@@ -125,7 +126,7 @@ const PlaybackButtons = memo(function PlaybackButtons() {
         disabled={!currentTrack}
         title="Repeat"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></svg>
       </Button>
     </div>
   );
@@ -174,7 +175,7 @@ const ProgressBar = memo(function ProgressBar() {
             width: `${progressPercentage}%`,
           }}
         >
-          <div className="absolute right-0 top-1/2 w-3 h-3 bg-white rounded-full -translate-y-1/2 translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-100"/>
+          <div className="absolute right-0 top-1/2 w-3 h-3 bg-white rounded-full -translate-y-1/2 translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-100" />
         </div>
       </div>
       <span className="text-xs tabular-nums text-gray-400 w-10 text-left pl-2">
@@ -186,9 +187,9 @@ const ProgressBar = memo(function ProgressBar() {
 
 // Using React.memo to prevent unnecessary re-renders
 const Volume = memo(function Volume() {
-  const { 
-    currentTrack, 
-    volume, 
+  const {
+    currentTrack,
+    volume,
     isMuted,
     setVolume,
     toggleMute
@@ -237,7 +238,7 @@ const Volume = memo(function Volume() {
           className="absolute top-0 left-0 h-full bg-neutral-400 rounded-full group-hover:bg-green-500 transition-colors duration-100"
           style={{ width: `${volume * 100}%` }}
         >
-          <div className="absolute right-0 top-1/2 w-3 h-3 bg-white rounded-full -translate-y-1/2 translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-100"/>
+          <div className="absolute right-0 top-1/2 w-3 h-3 bg-white rounded-full -translate-y-1/2 translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-100" />
         </div>
       </div>
     </div>
@@ -245,12 +246,17 @@ const Volume = memo(function Volume() {
 });
 
 export const PlaybackControls = memo(function PlaybackControls() {
+  // get current url
+  const pathname = usePathname()
+  if (pathname.startsWith('/upload')) return null;
+  
   return (
     <>
       <div className="h-[69px] fixed bottom-0 left-0 right-0 flex items-center justify-between p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] bg-[#181818] border-t border-[#282828] z-50">
         <div className="flex items-center justify-between w-full max-w-screen-xl mx-auto px-4 sm:px-8">
           <div className="w-1/3 flex justify-start">
             <TrackInfo />
+            {pathname}
           </div>
 
           <div className="flex flex-col items-center flex-grow min-w-[300px] max-w-lg">

@@ -1,4 +1,3 @@
-// app/api/upload/route.js
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { r2Client } from "@/lib/r2";
 import { NextResponse, NextRequest } from "next/server";

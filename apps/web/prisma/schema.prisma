@@ -20,7 +20,7 @@ model Post {
 }
 
 model User {
-  id                String         @id
+  id                String            @id
   name              String
   email             String
   bio               String?
@@ -38,17 +38,18 @@ model User {
   albums            Album[]
   playlists         Playlist[]
   // Social features
-  followers         Follow[]       @relation("follower")
-  following         Follow[]       @relation("following")
+  followers         Follow[]          @relation("follower")
+  following         Follow[]          @relation("following")
   comments          Comment[]
   likes             Like[]
   reposts           Repost[]
   // Activity and listening history
   playHistory       PlayHistory[]
-  notifications     Notification[] @relation("recipient")
-  sentNotifications Notification[] @relation("sender")
+  notifications     Notification[]    @relation("recipient")
+  sentNotifications Notification[]    @relation("sender")
   // User analytics
-  profileViews      Int            @default(0)
+  profileViews      Int               @default(0)
+  tempTrackUploads  TempTrackUpload[]
 
   @@unique([email])
   @@map("user")
@@ -388,4 +389,14 @@ model TrackError {
   @@unique([track_id])
   @@index([track_id])
   @@map("track_error")
+}
+
+model TempTrackUpload {
+  id         String  @id
+  userId     String
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isUploaded Boolean @default(false)
+
+  @@index([id])
+  @@map("temp_upload")
 }

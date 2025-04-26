@@ -2,6 +2,7 @@ import { postRouter } from "@/server/api/routers/post";
 import { streamRouter } from "@/server/api/routers/strream";
 import { artistRouter } from "./routers/artist";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
+import { uploadRouter } from "./routers/upload";
 
 /**
  * This is the primary router for your server.
@@ -12,6 +13,7 @@ export const appRouter = createTRPCRouter({
   post: postRouter,
   stream: streamRouter,
   artist: artistRouter,
+  upload: uploadRouter,
 });
 
 // export type definition of API
