@@ -1,4 +1,4 @@
-"use client";
+ "use client";
 
 import type { UseFormReturn } from "react-hook-form";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/radio-group";
 import { GENRES, PRIVACY_OPTIONS } from "./constants";
 import { type SingleTrackFormData } from "./schema";
-import { FileUploader } from "./FileUploader";
+import { ArtworkUpload } from "./ArtworkUpload";
 
 interface SingleTrackFormProps {
     form: UseFormReturn<SingleTrackFormData>;
@@ -72,17 +72,14 @@ export function SingleTrackForm({ form }: SingleTrackFormProps) {
                 name="artwork"
                 render={({ field }) => (
                     <FormItem>
-                        <FormLabel>Artwork (optional)</FormLabel>
                         <FormControl>
-                            <FileUploader 
-                                value={field.value}
-                                onChange={field.onChange}
-                                accept="image/*"
-                                maxSize={5}
+                            <ArtworkUpload 
+                                onArtworkUploaded={field.onChange}
+                                existingArtworkUrl={field.value}
                             />
                         </FormControl>
                         <FormDescription>
-                            Upload a square image (recommended: 1000x1000px, max 5MB)
+                            Upload a square image (recommended: 1000x1000px)
                         </FormDescription>
                         <FormMessage />
                     </FormItem>
@@ -198,4 +195,4 @@ export function SingleTrackForm({ form }: SingleTrackFormProps) {
             />
         </div>
     );
-} 
+}

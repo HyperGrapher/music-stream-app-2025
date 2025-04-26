@@ -8,6 +8,9 @@ import { Form } from "@/components/ui/form";
 import { singleTrackSchema, multipleTrackSchema, type SingleTrackFormData, type MultipleTrackFormData } from "./schema";
 import { SingleTrackForm } from "./SingleTrackForm";
 import { MultipleTrackForm } from "./MultipleTrackForm";
+import { useUploadStore } from "@/store/uploadStore";
+import { api } from "@/trpc/react";
+import { toast } from "sonner";
 
 interface DetailStepFormProps {
     files: File[];
@@ -27,6 +30,30 @@ export function DetailStepForm({
     setError
 }: DetailStepFormProps) {
     const isSingleTrack = files.length === 1;
+    const uploadingFiles = useUploadStore(state => state.uploadingFiles);
+    const clearFiles = useUploadStore(state => state.clearFiles);
+    const getFileByName = useUploadStore(state => state.getFileByName);
+    
+    // Get the right mutation based on the number of files
+    const createTrackMutation = api.upload.createTrack.useMutation({
+        onSuccess: () => {
+            toast.success("Track uploaded successfully!");
+            clearFiles();
+        },
+        onError: (error) => {
+            setError(error.message);
+        }
+    });
+    
+    const createAlbumMutation = api.upload.createAlbum.useMutation({
+        onSuccess: () => {
+            toast.success("Album uploaded successfully!");
+            clearFiles();
+        },
+        onError: (error) => {
+            setError(error.message);
+        }
+    });
     
     // Use the appropriate form schema based on file count
     const singleTrackForm = useForm<SingleTrackFormData>({
@@ -50,34 +77,80 @@ export function DetailStepForm({
 
     // Define type-specific handlers to avoid casting
     const handleSingleTrackSubmit = async (data: SingleTrackFormData) => {
-        await handleFormSubmit(data);
-    };
-    
-    const handleMultipleTrackSubmit = async (data: MultipleTrackFormData) => {
-        await handleFormSubmit(data);
-    };
-    
-    const handleFormSubmit = async (data: SingleTrackFormData | MultipleTrackFormData) => {
+        // Find the corresponding uploaded file
+        const uploadedFile = getFileByName(files[0]!.name);
+        
+        if (!uploadedFile || !uploadedFile.tempUploadId || !uploadedFile.fileKey || uploadedFile.status !== "completed") {
+            setError("Upload not completed. Please wait for the upload to finish.");
+            return;
+        }
+        
         setUploading(true);
         setError("");
 
         try {
-            // This is just a placeholder. Actual upload logic will be implemented later
-            console.log("Form data:", data);
-            console.log("Files to upload:", files);
+            // Submit to create the track
+            await createTrackMutation.mutateAsync({
+                title: data.title,
+                genre: data.genre,
+                privacy: data.privacy,
+                description: data.description,
+                tags: data.tags,
+                link: data.link,
+                // Use the fileKey and tempUploadId from the upload
+                fileKey: uploadedFile.fileKey,
+                tempUploadId: uploadedFile.tempUploadId,
+                // If artwork was uploaded, include its URL
+                artwork: undefined, // Would come from separate artwork upload
+            });
             
-            // Here you would upload files and form data to the server
-            // const formData = new FormData();
-            // formData.append("data", JSON.stringify(data));
-            // files.forEach(file => formData.append("files", file));
-            // const response = await fetch("/api/upload", { method: "POST", body: formData });
-            
-            // For now, just simulate a delay
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            alert("Upload simulated successfully!");
         } catch (err: unknown) {
-            setError((err as Error).message || "Upload failed");
+            // Error is handled in the mutation onError
+        } finally {
+            setUploading(false);
+        }
+    };
+    
+    const handleMultipleTrackSubmit = async (data: MultipleTrackFormData) => {
+        // Check if all files are properly uploaded
+        const trackInputs = files.map(file => {
+            const uploadedFile = getFileByName(file.name);
+            if (!uploadedFile || !uploadedFile.tempUploadId || !uploadedFile.fileKey || uploadedFile.status !== "completed") {
+                return null;
+            }
+            return {
+                title: file.name.replace(/\.[^/.]+$/, ""), // Use filename as default title
+                fileKey: uploadedFile.fileKey,
+                tempUploadId: uploadedFile.tempUploadId,
+            };
+        }).filter(Boolean);
+        
+        if (trackInputs.length !== files.length) {
+            setError("Not all uploads are completed. Please wait for all uploads to finish.");
+            return;
+        }
+        
+        setUploading(true);
+        setError("");
+
+        try {
+            // Submit to create the album with tracks
+            await createAlbumMutation.mutateAsync({
+                title: data.title,
+                genre: data.genre,
+                privacy: data.privacy,
+                albumType: data.albumType,
+                description: data.description,
+                tags: data.tags,
+                link: data.link,
+                // Use the prepared track inputs
+                tracks: trackInputs as any, // TypeScript limitation with the filter(Boolean)
+                // If artwork was uploaded, include its URL
+                artwork: undefined, // Would come from separate artwork upload
+            });
+            
+        } catch (err: unknown) {
+            // Error is handled in the mutation onError
         } finally {
             setUploading(false);
         }
@@ -119,7 +192,7 @@ export function DetailStepForm({
                             disabled={uploading}
                             className="w-full"
                         >
-                            {uploading ? "Uploading..." : "Upload Track"}
+                            {uploading ? "Creating Track..." : "Upload Track"}
                         </Button>
                     </form>
                 </Form>
@@ -133,7 +206,7 @@ export function DetailStepForm({
                             disabled={uploading}
                             className="w-full"
                         >
-                            {uploading ? "Uploading..." : "Upload Album"}
+                            {uploading ? "Creating Album..." : "Upload Album"}
                         </Button>
                     </form>
                 </Form>

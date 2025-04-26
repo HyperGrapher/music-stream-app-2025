@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/radio-group";
 import { GENRES, ALBUM_TYPES, ALBUM_PRIVACY_OPTIONS } from "./constants";
 import { type MultipleTrackFormData } from "./schema";
-import { FileUploader } from "./FileUploader";
+import { ArtworkUpload } from "./ArtworkUpload";
 
 interface MultipleTrackFormProps {
     form: UseFormReturn<MultipleTrackFormData>;
@@ -72,17 +72,14 @@ export function MultipleTrackForm({ form }: MultipleTrackFormProps) {
                 name="artwork"
                 render={({ field }) => (
                     <FormItem>
-                        <FormLabel>Album Artwork (optional)</FormLabel>
                         <FormControl>
-                            <FileUploader 
-                                value={field.value}
-                                onChange={field.onChange}
-                                accept="image/*"
-                                maxSize={5}
+                            <ArtworkUpload 
+                                onArtworkUploaded={field.onChange}
+                                existingArtworkUrl={field.value}
                             />
                         </FormControl>
                         <FormDescription>
-                            Upload a square image (recommended: 1000x1000px, max 5MB)
+                            Upload a square image (recommended: 1000x1000px)
                         </FormDescription>
                         <FormMessage />
                     </FormItem>

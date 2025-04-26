@@ -1,0 +1,93 @@
+import { create } from "zustand";
+
+export interface UploadingFile {
+  id: string;
+  file: File;
+  progress: number;
+  status: "uploading" | "completed" | "error";
+  tempUploadId?: string;
+  fileKey?: string;
+  error?: string;
+}
+
+interface UploadStore {
+  // Files being uploaded
+  uploadingFiles: UploadingFile[];
+  
+  // Add a file to the upload queue
+  addFile: (file: File) => UploadingFile;
+  
+  // Update file upload progress
+  updateProgress: (id: string, progress: number) => void;
+  
+  // Set upload completed
+  setCompleted: (id: string, tempUploadId: string, fileKey: string) => void;
+  
+  // Set upload error
+  setError: (id: string, error: string) => void;
+  
+  // Get file by id
+  getFile: (id: string) => UploadingFile | undefined;
+  
+  // Get file by filename
+  getFileByName: (filename: string) => UploadingFile | undefined;
+  
+  // Clear all files
+  clearFiles: () => void;
+}
+
+export const useUploadStore = create<UploadStore>((set, get) => ({
+  uploadingFiles: [],
+  
+  addFile: (file: File) => {
+    const id = crypto.randomUUID();
+    const newFile: UploadingFile = {
+      id,
+      file,
+      progress: 0,
+      status: "uploading",
+    };
+    
+    set((state) => ({
+      uploadingFiles: [...state.uploadingFiles, newFile],
+    }));
+    
+    return newFile;
+  },
+  
+  updateProgress: (id: string, progress: number) => {
+    set((state) => ({
+      uploadingFiles: state.uploadingFiles.map((file) =>
+        file.id === id ? { ...file, progress } : file
+      ),
+    }));
+  },
+  
+  setCompleted: (id: string, tempUploadId: string, fileKey: string) => {
+    set((state) => ({
+      uploadingFiles: state.uploadingFiles.map((file) =>
+        file.id === id ? { ...file, status: "completed", tempUploadId, fileKey } : file
+      ),
+    }));
+  },
+  
+  setError: (id: string, error: string) => {
+    set((state) => ({
+      uploadingFiles: state.uploadingFiles.map((file) =>
+        file.id === id ? { ...file, status: "error", error } : file
+      ),
+    }));
+  },
+  
+  getFile: (id: string) => {
+    return get().uploadingFiles.find(file => file.id === id);
+  },
+  
+  getFileByName: (filename: string) => {
+    return get().uploadingFiles.find(file => file.file.name === filename);
+  },
+  
+  clearFiles: () => {
+    set({ uploadingFiles: [] });
+  },
+})); 
