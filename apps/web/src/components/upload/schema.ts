@@ -16,7 +16,7 @@ export const multipleTrackSchema = z.object({
     link: z.string().optional(),
     artwork: z.any().optional(), // Will be proper file validation
     genre: z.string().min(1, "Genre is required"),
-    albumType: z.enum(["ALBUM", "EP"]).default("ALBUM"),
+    albumType: z.enum(["ALBUM", "EP"]),
     tags: z.string().optional(),
     description: z.string().optional(),
     privacy: z.enum(["public", "private"]),

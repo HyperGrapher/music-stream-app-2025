@@ -16,6 +16,11 @@ This file stores project-specific knowledge, conventions, and user preferences l
 - **Authentication**: Auth module available at `@/lib/auth`
 - **UI Components**: Using shadcn/ui component library
 - **State Management**: Use React hooks and context where appropriate
+- **Upload Component**: Implemented a two-step form process in `apps/web/src/components/upload/` to handle both single track and album uploads with appropriate fields for each.
+- **Form Structure**: Used react-hook-form with zod validation and shadcn components for the upload UI.
+- **Form Fields**:
+  - Single track: title, link, artwork, genre, tags, description, privacy settings
+  - Album: title, link, artwork, genre, album type, tags, description, privacy settings
 
 ## Project Conventions
 
