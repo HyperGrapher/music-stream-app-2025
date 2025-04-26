@@ -32,6 +32,9 @@ interface UploadStore {
   // Get file by filename
   getFileByName: (filename: string) => UploadingFile | undefined;
   
+  // Remove a file from the upload queue
+  removeFile: (id: string) => void;
+  
   // Clear all files
   clearFiles: () => void;
 }
@@ -85,6 +88,12 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
   
   getFileByName: (filename: string) => {
     return get().uploadingFiles.find(file => file.file.name === filename);
+  },
+  
+  removeFile: (id: string) => {
+    set((state) => ({
+      uploadingFiles: state.uploadingFiles.filter((file) => file.id !== id),
+    }));
   },
   
   clearFiles: () => {

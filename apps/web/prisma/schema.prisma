@@ -396,6 +396,7 @@ model TempTrackUpload {
   userId     String
   user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   isUploaded Boolean @default(false)
+  createdAt  DateTime @default(now())
 
   @@index([id])
   @@map("temp_upload")

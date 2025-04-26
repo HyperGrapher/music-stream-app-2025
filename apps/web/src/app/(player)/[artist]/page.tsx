@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { WaveformTrackItem } from "@/app/_components/WaveformTrackItem";
+import JsonInfo from "./json-info";
 
 export async function generateMetadata({
     params,
@@ -126,16 +127,16 @@ export default async function ArtistPage({
                             <TabsTrigger value="playlists" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-white">Playlists</TabsTrigger>
                             <TabsTrigger value="reposts" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-white">Reposts</TabsTrigger>
                         </TabsList>
-                        
+
                         <TabsContent value="all">
                             <div className="space-y-4">
                                 <h2 className="text-xl font-semibold mb-4">Recent Tracks</h2>
                                 {latestTracks.length > 0 ? (
                                     <div className="space-y-4">
                                         {latestTracks.map(track => (
-                                            <WaveformTrackItem 
-                                                key={track.id} 
-                                                waveformData={[0.002,0.0030,0.001]}
+                                            <WaveformTrackItem
+                                                key={track.id}
+                                                waveformData={[0.002, 0.0030, 0.001]}
                                                 track={{
                                                     ...track,
                                                     userId: artistData.id,
@@ -144,7 +145,6 @@ export default async function ArtistPage({
                                                     waveformData: null,
                                                     isOriginal: true,
                                                     isPrivate: false,
-                                                    subGenre: null,
                                                     bpm: null,
                                                     key: null,
                                                     tags: null,
@@ -157,7 +157,7 @@ export default async function ArtistPage({
                                                         name: artistData.name,
                                                         image: artistData.image
                                                     }
-                                                }} 
+                                                }}
                                             />
                                         ))}
                                     </div>
@@ -166,15 +166,15 @@ export default async function ArtistPage({
                                 )}
                             </div>
                         </TabsContent>
-                        
+
                         <TabsContent value="popular">
                             <div className="space-y-4">
                                 <h2 className="text-xl font-semibold mb-4">Popular Tracks</h2>
                                 {popularTracks.length > 0 ? (
                                     <div className="space-y-4">
                                         {popularTracks.map(track => (
-                                            <WaveformTrackItem 
-                                                key={track.id} 
+                                            <WaveformTrackItem
+                                                key={track.id}
                                                 track={{
                                                     ...track,
                                                     userId: artistData.id,
@@ -183,7 +183,6 @@ export default async function ArtistPage({
                                                     waveformData: null,
                                                     isOriginal: true,
                                                     isPrivate: false,
-                                                    subGenre: null,
                                                     bpm: null,
                                                     key: null,
                                                     tags: null,
@@ -196,7 +195,7 @@ export default async function ArtistPage({
                                                         name: artistData.name,
                                                         image: artistData.image
                                                     }
-                                                }} 
+                                                }}
                                             />
                                         ))}
                                     </div>
@@ -205,15 +204,15 @@ export default async function ArtistPage({
                                 )}
                             </div>
                         </TabsContent>
-                        
+
                         <TabsContent value="tracks">
                             <div className="space-y-4">
                                 <h2 className="text-xl font-semibold mb-4">All Tracks</h2>
                                 {latestTracks.length > 0 ? (
                                     <div className="space-y-4">
                                         {latestTracks.map(track => (
-                                            <WaveformTrackItem 
-                                                key={track.id} 
+                                            <WaveformTrackItem
+                                                key={track.id}
                                                 track={{
                                                     ...track,
                                                     userId: artistData.id,
@@ -222,7 +221,6 @@ export default async function ArtistPage({
                                                     waveformData: null,
                                                     isOriginal: true,
                                                     isPrivate: false,
-                                                    subGenre: null,
                                                     bpm: null,
                                                     key: null,
                                                     tags: null,
@@ -235,7 +233,7 @@ export default async function ArtistPage({
                                                         name: artistData.name,
                                                         image: artistData.image
                                                     }
-                                                }} 
+                                                }}
                                             />
                                         ))}
                                     </div>
@@ -244,20 +242,21 @@ export default async function ArtistPage({
                                 )}
                             </div>
                         </TabsContent>
-                        
+
                         <TabsContent value="albums">
                             <h1>Albums</h1>
                         </TabsContent>
-                        
+
                         <TabsContent value="playlists">
                             <h1>Playlists</h1>
                         </TabsContent>
-                        
+
                         <TabsContent value="reposts">
                             <h1>Reposts</h1>
                         </TabsContent>
                     </Tabs>
                 </div>
+                <JsonInfo artist={artistData.name} />
             </div>
         </HydrateClient>
     );

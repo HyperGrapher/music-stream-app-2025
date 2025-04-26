@@ -23,7 +23,7 @@ export default async function FeedPage() {
                             <Link href="/p/1">Playlist</Link>
                             <Link href="/Radiohead">Radiohead</Link>
 
-                            <FileUpload />
+                            {/* <FileUpload /> */}
                         </div>
                     </Suspense>
                 </div>
