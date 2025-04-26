@@ -5,6 +5,7 @@ import { api, HydrateClient } from "@/trpc/server";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
+import { WaveformTrackItem } from "@/app/_components/WaveformTrackItem";
 
 export async function generateMetadata({
     params,
@@ -14,7 +15,7 @@ export async function generateMetadata({
     const { artist } = await params;
     const artistData = await api.artist.getArtist({ artist: artist });
 
-    if (!artistData) {
+    if (!artist || !artistData) {
         return {
             title: "Artist Not Found",
         };
@@ -61,13 +62,10 @@ export default async function ArtistPage({
                 <div className="relative h-60 w-full bg-gradient-to-b from-zinc-800 to-black">
                     {artistData?.profileImage && (
                         <div className="absolute inset-0 opacity-40">
-                            {/* 1210x265  */}
                             <img
-                                src={/* artistData.profileImage ?? */ 'https://placehold.co/1280x250'}
+                                src={artistData.profileImage || 'https://placehold.co/1280x250'}
                                 alt={`${artistData.name}'s background`}
-                                // fill
-                                className="object-cover"
-                                // priority
+                                className="object-cover w-full h-full"
                             />
                         </div>
                     )}
@@ -128,27 +126,133 @@ export default async function ArtistPage({
                             <TabsTrigger value="playlists" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-white">Playlists</TabsTrigger>
                             <TabsTrigger value="reposts" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-white">Reposts</TabsTrigger>
                         </TabsList>
-
+                        
                         <TabsContent value="all">
-                            <h1>All</h1>
+                            <div className="space-y-4">
+                                <h2 className="text-xl font-semibold mb-4">Recent Tracks</h2>
+                                {latestTracks.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {latestTracks.map(track => (
+                                            <WaveformTrackItem 
+                                                key={track.id} 
+                                                waveformData={[0.002,0.0030,0.001]}
+                                                track={{
+                                                    ...track,
+                                                    userId: artistData.id,
+                                                    updatedAt: new Date(),
+                                                    duration: 240, // Default duration
+                                                    waveformData: null,
+                                                    isOriginal: true,
+                                                    isPrivate: false,
+                                                    subGenre: null,
+                                                    bpm: null,
+                                                    key: null,
+                                                    tags: null,
+                                                    releaseDate: null,
+                                                    recordLabel: null,
+                                                    downloadCount: 0,
+                                                    repostCount: 0,
+                                                    albumId: null,
+                                                    user: {
+                                                        name: artistData.name,
+                                                        image: artistData.image
+                                                    }
+                                                }} 
+                                            />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-zinc-400">No tracks found</p>
+                                )}
+                            </div>
                         </TabsContent>
-
+                        
                         <TabsContent value="popular">
-                            <h1>Popular tracks</h1>
+                            <div className="space-y-4">
+                                <h2 className="text-xl font-semibold mb-4">Popular Tracks</h2>
+                                {popularTracks.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {popularTracks.map(track => (
+                                            <WaveformTrackItem 
+                                                key={track.id} 
+                                                track={{
+                                                    ...track,
+                                                    userId: artistData.id,
+                                                    updatedAt: new Date(),
+                                                    duration: 240, // Default duration
+                                                    waveformData: null,
+                                                    isOriginal: true,
+                                                    isPrivate: false,
+                                                    subGenre: null,
+                                                    bpm: null,
+                                                    key: null,
+                                                    tags: null,
+                                                    releaseDate: null,
+                                                    recordLabel: null,
+                                                    downloadCount: 0,
+                                                    repostCount: 0,
+                                                    albumId: null,
+                                                    user: {
+                                                        name: artistData.name,
+                                                        image: artistData.image
+                                                    }
+                                                }} 
+                                            />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-zinc-400">No tracks found</p>
+                                )}
+                            </div>
                         </TabsContent>
-
+                        
                         <TabsContent value="tracks">
-                            <h1>Tracks</h1>
+                            <div className="space-y-4">
+                                <h2 className="text-xl font-semibold mb-4">All Tracks</h2>
+                                {latestTracks.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {latestTracks.map(track => (
+                                            <WaveformTrackItem 
+                                                key={track.id} 
+                                                track={{
+                                                    ...track,
+                                                    userId: artistData.id,
+                                                    updatedAt: new Date(),
+                                                    duration: 240, // Default duration
+                                                    waveformData: null,
+                                                    isOriginal: true,
+                                                    isPrivate: false,
+                                                    subGenre: null,
+                                                    bpm: null,
+                                                    key: null,
+                                                    tags: null,
+                                                    releaseDate: null,
+                                                    recordLabel: null,
+                                                    downloadCount: 0,
+                                                    repostCount: 0,
+                                                    albumId: null,
+                                                    user: {
+                                                        name: artistData.name,
+                                                        image: artistData.image
+                                                    }
+                                                }} 
+                                            />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-zinc-400">No tracks found</p>
+                                )}
+                            </div>
                         </TabsContent>
-
+                        
                         <TabsContent value="albums">
                             <h1>Albums</h1>
                         </TabsContent>
-
+                        
                         <TabsContent value="playlists">
                             <h1>Playlists</h1>
                         </TabsContent>
-
+                        
                         <TabsContent value="reposts">
                             <h1>Reposts</h1>
                         </TabsContent>

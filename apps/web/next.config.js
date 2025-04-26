@@ -7,7 +7,7 @@ import "./src/env.js";
 /** @type {import("next").NextConfig} */
 const config = {
     images: {
-        remotePatterns: [new URL('https://placehold.co/**'), new URL('https://loremflickr.com/')],
+        remotePatterns: [new URL('https://placehold.co/**'), new URL('https://loremflickr.com/**')],
       },
 };
 

@@ -9,11 +9,22 @@ export const auth = betterAuth({
     database: prismaAdapter(prisma, {
         provider: "postgresql",
     }),
-
-    emailAndPassword: {
-        enabled: true,
+    session: {
+        cookieCache: {
+            enabled: true,
+            maxAge: 5 * 60, // Cache duration in seconds
+        },
+        /**
+        * The age of the session to consider it fresh.
+        *
+        * This is used to check if the session is fresh
+        * for sensitive operations. (e.g. deleting an account)
+        *
+        * If the session is not fresh, the user should be prompted
+        * to sign in again.
+        */
+        freshAge: 60 * 60 * 24 // default 24 hours
     },
-
     socialProviders: {
         google: {
             clientId: env.GOOGLE_CLIENT_ID,
