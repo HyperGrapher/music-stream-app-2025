@@ -3,6 +3,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { api } from "@/trpc/server";
+import FileUpload from "@/components/upload";
 
 
 export default async function FeedPage() {
@@ -14,20 +15,20 @@ export default async function FeedPage() {
             <div className="h-[1px] bg-red-500 w-full absolute bottom-0 left-0 z-50"></div>
             <ScrollArea className="flex-1">
                 <div className="min-w-max">
-                <Suspense fallback={<div className="w-full" />}>
-                    <h1 className="text-2xl font-bold text-center">Feed</h1>
-                    <div className="flex flex-col gap-4 justify-center items-center mt-8">
-                        <Link href="/">Home</Link>
-                        <Link href="/discover">Discover</Link>
-                        <Link href="/p/1">Playlist</Link>
-                        <Link href="/Radiohead">Radiohead</Link>
+                    <Suspense fallback={<div className="w-full" />}>
+                        <h1 className="text-2xl font-bold text-center">Feed</h1>
+                        <div className="flex flex-col gap-4 justify-center items-center mt-8">
+                            <Link href="/">Home</Link>
+                            <Link href="/discover">Discover</Link>
+                            <Link href="/p/1">Playlist</Link>
+                            <Link href="/Radiohead">Radiohead</Link>
 
-                        <pre>{JSON.stringify(a, null, 2)}</pre>
-                    </div>
-                </Suspense>
-            </div>
-            <ScrollBar orientation="horizontal" />
-        </ScrollArea>
-    </div>
+                            <FileUpload />
+                        </div>
+                    </Suspense>
+                </div>
+                <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+        </div>
     );
 }

@@ -19,6 +19,7 @@
   "license": "ISC",
   "description": "Express server",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.797.0",
     "@prisma/client": "^6.6.0",
     "bcrypt": "^5.1.1",
     "body-parser": "^2.2.0",

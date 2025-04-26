@@ -22,6 +22,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.797.0",
+    "@aws-sdk/s3-request-presigner": "^3.797.0",
+    "@hookform/resolvers": "^5.0.1",
     "@prisma/client": "^6.6.0",
     "@radix-ui/react-avatar": "^1.1.6",
     "@radix-ui/react-checkbox": "^1.2.2",
@@ -36,6 +39,7 @@
     "@radix-ui/react-slot": "^1.2.0",
     "@radix-ui/react-switch": "^1.2.2",
     "@radix-ui/react-tabs": "^1.1.8",
+    "@radix-ui/react-toggle": "^1.1.6",
     "@radix-ui/react-tooltip": "^1.2.3",
     "@react-three/fiber": "^9.1.2",
     "@repo/ui": "workspace:*",

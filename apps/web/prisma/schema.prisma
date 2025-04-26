@@ -116,7 +116,6 @@ model Track {
 
   // Track metadata
   genre       String?
-  subGenre    String?
   bpm         Int?
   key         String? // Musical key
   tags        String? // Comma-separated tags
