@@ -25,12 +25,12 @@ dotenv.config();
 const app: Express = express();
 
 const port = process.env.PORT || '4000';
-
+const appDomain = process.env.APP_DOMAIN ?? '';
 // Middleware to protect against common vulnerabilities
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? ['https://yourdomain.com', 'phantomhud://desktop-app', 'http://localhost:3000']
-    : ['http://localhost:3000', 'http://localhost:3015', 'phantomhud://desktop-app', 'http://localhost:4000'],
+    ? [appDomain, 'http://localhost:3000']
+    : ['http://localhost:3000', 'http://localhost:4000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true
 }));
