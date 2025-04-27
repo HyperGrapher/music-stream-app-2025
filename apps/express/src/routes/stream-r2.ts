@@ -173,17 +173,12 @@ function setupStreamHandlers(
 // Handle OPTIONS requests for CORS preflight
 router.options('/stream/:trackId', (req, res) => {
     const headers: Record<string, string> = {
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': process.env.NEXT_URL ?? (process.env.APP_DOMAIN ?? '*'),
         'Access-Control-Allow-Methods': 'GET, OPTIONS',
         'Access-Control-Allow-Headers': 'Range, Content-Type, Authorization',
         'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Content-Type',
-        'Access-Control-Max-Age': '86400', // 24 hours
         'Content-Length': '0',
-        'Cross-Origin-Resource-Policy': 'cross-origin',
-        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
-        'Cross-Origin-Embedder-Policy': 'credentialless'
     };
-
     res.writeHead(204, headers);
     res.end();
 });
@@ -274,17 +269,6 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
         const { headers, start, end, contentLength } = calculateStreamHeaders(fileSize, range);
         headers['Content-Type'] = contentType;
 
-        // Add CORS headers explicitly to resolve browser issues
-        // Cast headers to Record<string, string> to avoid TypeScript errors
-        const responseHeaders = headers as Record<string, any>;
-        responseHeaders['Access-Control-Allow-Origin'] = '*'; // Simplify for testing
-        responseHeaders['Access-Control-Allow-Methods'] = 'GET, OPTIONS';
-        responseHeaders['Access-Control-Allow-Headers'] = 'Range, Content-Type, Authorization';
-        responseHeaders['Access-Control-Expose-Headers'] = 'Content-Range, Content-Length, Content-Type';
-        responseHeaders['Cross-Origin-Resource-Policy'] = 'cross-origin';
-        responseHeaders['Cross-Origin-Opener-Policy'] = 'same-origin-allow-popups';
-        responseHeaders['Cross-Origin-Embedder-Policy'] = 'credentialless';
-
         res.writeHead(206, headers);
 
         // 6. Get audio stream from R2
@@ -369,41 +353,18 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
 
 router.get('/stream/:trackId/waveform', validatePlaybackToken, async (req, res) => {
     const { trackId: jwtTrackId, userId: jwtUserId } = req.playbackData as PlaybackData;
-    const requestedTrackId = 'voodoo'// req.params.trackId ?? '';
-
+    const requestedTrackId = req.params.trackId ?? '';
     const filename = `${requestedTrackId}.json`;
     const waveform = path.resolve(__dirname, "..", '..', "audio", filename);
-
     if (!fs.existsSync(waveform)) {
-        console.error('⛔ Waveform file not found');
         return res.status(404).json({ error: 'Waveform file not found' });
     }
-
     const waveformData = JSON.parse(fs.readFileSync(waveform, 'utf8'));
-
     res.json(waveformData);
-
-
-
 });
+
 router.get('/:trackId', async (req, res) => {
     const requestedTrackId = req.params.trackId ?? '';
-
-    const r2Api = 'https://ebe85640e72ffd4fbf9267fdf7c27a8b.r2.cloudflarestorage.com/music-stream-app';
-
-    const headParams = {
-        Bucket: process.env.R2_BUCKET_NAME,
-        Key: 'uploads/QOkuR1qNbxDVPJhQU1Lo0V6um0Yh78Gt/1745700371982-message.mp3', // hardcoded an existing file for test
-        // Range: 'bytes=0-0',
-    };
-
-    console.log('Sending GetObjectCommand with params:', headParams);
-
-    const headResp = await r2Client.send(new GetObjectCommand(headParams));
-
-    console.log(headResp);
-
-
     const track = await prisma.track.findFirst({
         where: { id: requestedTrackId },
         select: { storageKey: true, id: true },
@@ -411,10 +372,7 @@ router.get('/:trackId', async (req, res) => {
     if (!track) {
         return res.status(404).json({ error: 'Track not found' });
     }
-
-    res.json({ track, headResp: headResp.ContentType });
-
-
-
+    res.json({ track });
 });
+
 export default router;
