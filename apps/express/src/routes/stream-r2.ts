@@ -190,8 +190,11 @@ router.options('/stream/:trackId', (req, res) => {
 
 // Main streaming endpoint
 router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
-    const { trackId: jwtTrackId, userId: jwtUserId } = req.playbackData as PlaybackData;
+    const { trackId: jwtTrackId, userId: jwtUserId, key: fileKey } = req.playbackData as PlaybackData;
     const requestedTrackId = req.params.trackId ?? '';
+
+    if (jwtTrackId !== requestedTrackId) return res.status(404).json({ error: 'Forbidden key' });
+
     // Generate session ID based on client IP and track ID
     const clientIp = req.socket.remoteAddress || req.ip || 'unknown';
     const currentSessionId = `${clientIp}-${requestedTrackId}`;
@@ -219,42 +222,16 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
         }
         // Update the current session for this IP
         ipToCurrentSessionId.set(clientIp, currentSessionId);
-        // ----------------------------- 
 
         // Add to active sessions *set* (used for global count)
         streamStats.activeSessions.add(currentSessionId);
 
-        // 1. Fetch track metadata from DB
-        const track = await prisma.track.findUnique({
-            where: { id: requestedTrackId },
-            select: { audioUrl: true, id: true },
-        });
-        if (!track || !track.audioUrl) {
+
+        if (!fileKey) {
             streamStats.activeSessions.delete(currentSessionId);
             ipToCurrentSessionId.delete(clientIp);
             return res.status(404).json({ error: 'Track not found' });
         }
-
-        console.log('Track found:', { id: track.id, audioUrl: track.audioUrl });
-
-        // 2. Extract key from audioUrl using URL parsing
-        const url = new URL(track.audioUrl);
-        console.log({ url });
-        
-        // Extract file key - simplify based on our working test approach
-        // Parse the pathname to get the upload path without leading slash
-        const filePath = url.pathname.startsWith('/') ? url.pathname.slice(1) : url.pathname;
-        
-        // Try to extract just the relevant path components
-        const pathComponents = filePath.split('/');
-        let fileKey = filePath;
-        
-        // If the URL contains the bucket name as a path component, remove it
-        if (pathComponents[0] === process.env.R2_BUCKET_NAME) {
-            fileKey = pathComponents.slice(1).join('/');
-        }
-        
-        console.log('Resolved fileKey:', fileKey);
 
         // 4. Check for range header
         if (!range) {
@@ -265,7 +242,7 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
         // 3. Get file size and content type directly from R2 - similar to your test code
         let fileSize = 0;
         let contentType = 'audio/mpeg';
-        
+
         try {
             // Get just the headers first to determine file size
             const headParams = {
@@ -273,10 +250,9 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
                 Key: fileKey,
                 Range: 'bytes=0-0'
             };
-            
-            console.log('Getting file info with params:', headParams);
+
             const headResp = await r2Client.send(new GetObjectCommand(headParams));
-            
+
             // Extract file size from Content-Range header (format: "bytes 0-0/TOTAL_SIZE")
             if (headResp.ContentRange) {
                 const totalSizeStr = headResp.ContentRange.split('/')[1];
@@ -285,9 +261,8 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
                 // Fallback if ContentRange isn't available
                 fileSize = headResp.ContentLength;
             }
-            
+
             contentType = headResp.ContentType || 'audio/mpeg';
-            console.log('File info received:', { fileSize, contentType });
         } catch (err) {
             console.error('Error getting file info:', err);
             streamStats.activeSessions.delete(currentSessionId);
@@ -298,7 +273,7 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
         // 5. Calculate range and headers
         const { headers, start, end, contentLength } = calculateStreamHeaders(fileSize, range);
         headers['Content-Type'] = contentType;
-        
+
         // Add CORS headers explicitly to resolve browser issues
         // Cast headers to Record<string, string> to avoid TypeScript errors
         const responseHeaders = headers as Record<string, any>;
@@ -309,30 +284,27 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
         responseHeaders['Cross-Origin-Resource-Policy'] = 'cross-origin';
         responseHeaders['Cross-Origin-Opener-Policy'] = 'same-origin-allow-popups';
         responseHeaders['Cross-Origin-Embedder-Policy'] = 'credentialless';
-        
-        res.writeHead(206, responseHeaders);
+
+        res.writeHead(206, headers);
 
         // 6. Get audio stream from R2
         let audioStream: Readable;
         try {
-            console.log('Streaming from R2 with range:', `bytes=${start}-${end}`);
-            
             const streamParams = {
                 Bucket: process.env.R2_BUCKET_NAME,
                 Key: fileKey,
                 Range: `bytes=${start}-${end}`,
             };
-            
-            console.log('Final streaming parameters:', streamParams);
+
             const streamResp = await r2Client.send(new GetObjectCommand(streamParams));
-            
+
             // Type guard for Readable stream
             if (!streamResp.Body || typeof (streamResp.Body as any).pipe !== 'function') {
                 throw new Error('Invalid R2 stream response');
             }
-            
+
             audioStream = streamResp.Body as unknown as Readable;
-            console.log('Successfully created R2 stream');
+
         } catch (err) {
             console.error('Error creating R2 stream:', err);
             streamStats.activeSessions.delete(currentSessionId);
@@ -345,7 +317,7 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
         if (!progress) {
             // Ensure fileSize is valid
             const validFileSize = fileSize > 0 ? fileSize : 1; // Use 1 as a minimum valid size
-            
+
             progress = {
                 totalBytes: 0,
                 startTime: process.hrtime(),
@@ -367,17 +339,17 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
             requestedTrackId,
             currentSessionId,
             process.hrtime(),
-            { 
-                start: start, 
-                end: end, 
-                contentLength: contentLength, 
-                fileSize: fileSize 
+            {
+                start: start,
+                end: end,
+                contentLength: contentLength,
+                fileSize: fileSize
             },
             res,
             req,
             cleanup
         );
-        
+
         audioStream.pipe(res);
     } catch (error) {
         cleanup();
@@ -434,7 +406,7 @@ router.get('/:trackId', async (req, res) => {
 
     const track = await prisma.track.findFirst({
         where: { id: requestedTrackId },
-        select: { audioUrl: true, id: true },
+        select: { storageKey: true, id: true },
     });
     if (!track) {
         return res.status(404).json({ error: 'Track not found' });

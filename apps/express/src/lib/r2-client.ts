@@ -50,7 +50,7 @@ export async function validateR2Connection() {
 }
 
 // Validate connection in development mode
-if (isDev) {
+if (isDev && false) {
     globalForR2Client.r2Client = r2Client;
     validateR2Connection().catch(console.error);
 } 

@@ -8,7 +8,8 @@ export interface AuthUser {
 export interface PlaybackData {
     trackId: string;
     userId: string;
-    timestamp: number;
+    key: string;
+    timestamp: number
 }
 
 // Extend Express's Request type definition

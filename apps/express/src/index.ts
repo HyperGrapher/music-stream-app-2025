@@ -7,7 +7,7 @@ import bodyParser from 'body-parser';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/user';
 import indexRoutes from './routes/index';
-import streamRoutes from './routes/stream';
+import streamRoutes from './routes/stream-file';
 import r2StreamRoutes from './routes/stream-r2';
 
 

@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { PlaybackData } from '../types/express';
 dotenv.config();
 
-const MINUTES_TO_EXPIRE = 1;
+const MINUTES_TO_EXPIRE = 10;
 // Playback token validation middleware
 export const validatePlaybackToken = (req: Request, res: Response, next: NextFunction) => {
     const playbackToken = req.query.token as string;

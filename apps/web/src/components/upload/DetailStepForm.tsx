@@ -11,6 +11,9 @@ import { MultipleTrackForm } from "./MultipleTrackForm";
 import { useUploadStore } from "@/store/uploadStore";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
+import { useRouter } from 'next/navigation';
+import { useUser } from "@/hooks/useUser";
+
 
 interface DetailStepFormProps {
     files: File[];
@@ -29,6 +32,8 @@ export function DetailStepForm({
     error,
     setError
 }: DetailStepFormProps) {
+    const router = useRouter();
+    const user = useUser();
     const isSingleTrack = files.length === 1;
     const uploadingFiles = useUploadStore(state => state.uploadingFiles);
     const clearFiles = useUploadStore(state => state.clearFiles);
@@ -36,8 +41,10 @@ export function DetailStepForm({
     
     // Get the right mutation based on the number of files
     const createTrackMutation = api.upload.createTrack.useMutation({
-        onSuccess: () => {
+        onSuccess: (data) => {
             toast.success("Track uploaded successfully!");
+            console.log('createTrack onSuccess');
+            
             clearFiles();
         },
         onError: (error) => {
@@ -48,6 +55,8 @@ export function DetailStepForm({
     const createAlbumMutation = api.upload.createAlbum.useMutation({
         onSuccess: () => {
             toast.success("Album uploaded successfully!");
+            console.log('createAlbum onSuccess');
+
             clearFiles();
         },
         onError: (error) => {

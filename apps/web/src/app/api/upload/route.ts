@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
         // Save the file URL to the database
         // await db.track.create({
         //     data: {
-        //         audioUrl: fileUrl,
+        //         storageKey: fileUrl,
         //         userId: "user-id", // Replace with actual user ID from your auth system
         //         // Add other fields as necessary
         //     },

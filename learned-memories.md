@@ -21,6 +21,10 @@ This file stores project-specific knowledge, conventions, and user preferences l
 - **Form Fields**:
   - Single track: title, link, artwork, genre, tags, description, privacy settings
   - Album: title, link, artwork, genre, album type, tags, description, privacy settings
+- **File Upload**: 
+  - Files uploaded to Cloudflare R2 storage using presigned URLs.
+  - Filenames are sanitized once at the source in `apps/web/src/components/upload/FileStepForm.tsx`
+
 
 ## Project Conventions
 

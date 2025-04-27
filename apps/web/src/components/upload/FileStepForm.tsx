@@ -10,9 +10,16 @@ import { useUploadStore } from "@/store/uploadStore";
 import { api } from "@/trpc/react";
 import { X, AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import sanitize from 'sanitize-filename'
+
 
 // Maximum file size in bytes (50MB)
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
+
+// Function to sanitize filenames - remove invalid chars and replace spaces with underscores
+export const sanitizeFilename = (filename: string): string => {
+    return sanitize(filename).replace(/\s+/g, '_');
+};
 
 // Allowed audio mime types
 const ALLOWED_AUDIO_TYPES = [
@@ -31,6 +38,7 @@ interface FileStepFormProps {
 }
 
 export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
+
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [error, setError] = useState("");
     const { addFile, updateProgress, setCompleted, setError: setFileError, removeFile } = useUploadStore();
@@ -79,16 +87,22 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
 
     const uploadFile = async (file: File) => {
         try {
-            // Add the file to the upload store
-            const uploadingFile = addFile(file);
+            // Sanitize filename - only do this once at the beginning
+            const sanitizedFilename = sanitizeFilename(file.name);
+            
+            // Add the file to the upload store (with sanitized filename)
+            const uploadingFile = addFile({
+                ...file,
+                name: sanitizedFilename // This will be used throughout the app
+            });
 
             // Update progress to show upload is starting
             updateProgress(uploadingFile.id, 0);
             
-            console.log("Getting presigned URL for file:", file.name);
-            // Get a presigned URL for upload
+            console.log("Getting presigned URL for file:", sanitizedFilename);
+            // Get a presigned URL for upload - use sanitized filename
             const { uploadUrl, fileKey, tempUploadId } = await uploadUrlMutation.mutateAsync({
-                filename: file.name,
+                filename: sanitizedFilename,
                 contentType: file.type,
                 fileSize: file.size,
             });
@@ -114,7 +128,9 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
             const uploadPromise = new Promise<void>((resolve, reject) => {
                 xhr.onload = async () => {
                     if (xhr.status >= 200 && xhr.status < 300) {
+                        console.log('uploadPromise xhr.onload onSuccess');
                         console.log("Upload successful, marking as complete");
+
                         try {
                             // Mark the upload as complete in the database
                             await markCompleteMutation.mutateAsync({
@@ -124,7 +140,7 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
                             
                             // Update local state
                             setCompleted(uploadingFile.id, tempUploadId, fileKey);
-                            toast.success(`${file.name} uploaded successfully`);
+                            toast.success(`${sanitizedFilename} uploaded successfully`);
                             resolve();
                         } catch (err) {
                             console.error("Error marking upload as complete:", err);

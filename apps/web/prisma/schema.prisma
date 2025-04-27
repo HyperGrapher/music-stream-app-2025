@@ -109,7 +109,9 @@ model Track {
   description String?  @db.Text
 
   // Audio file details
-  audioUrl     String
+  storageKey   String // userId + filename
+  storage      String // cloudflare - aws
+  bucket       String
   duration     Int // Duration in seconds
   waveformData String? @db.Text // JSON string of waveform data points
   isOriginal   Boolean @default(true)
@@ -393,10 +395,13 @@ model TrackError {
 }
 
 model TempTrackUpload {
-  id         String  @id
+  id         String   @id
   userId     String
-  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  isUploaded Boolean @default(false)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isUploaded Boolean  @default(false)
+  storageKey String // userId + filename
+  storage    String // cloudflare - aws
+  bucket     String
   createdAt  DateTime @default(now())
 
   @@index([id])

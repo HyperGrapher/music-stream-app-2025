@@ -169,7 +169,7 @@ function setupStreamHandlers(
     });
 }
 router.get('/stream/:trackId/waveform', validatePlaybackToken, async (req, res) => {
-    const { trackId: jwtTrackId, userId: jwtUserId } = req.playbackData as PlaybackData;
+    const { trackId: jwtTrackId, userId: jwtUserId, key: storageKey } = req.playbackData as PlaybackData;
     const requestedTrackId = req.params.trackId ?? '';
 
     const filename = `${requestedTrackId}.json`;

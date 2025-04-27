@@ -60,14 +60,14 @@ export const uploadRouter = createTRPCRouter({
             if (input.fileSize && input.fileSize > MAX_FILE_SIZE) {
                 throw new Error(`File size exceeds the maximum allowed size of ${MAX_FILE_SIZE / (1024 * 1024)}MB.`);
             }
-            
+
             // Generate a unique key for the file, with different paths for audio vs artwork
             const filePrefix = input.isArtwork ? 'artworks' : 'uploads';
             const fileKey = `${filePrefix}/${userId}/${Date.now()}-${input.filename}`;
-            
+
             // Only create temporary upload records for audio files, not artwork
             let tempUploadId = "";
-            
+
             if (!input.isArtwork) {
                 try {
                     // Create a new temporary upload record
@@ -76,6 +76,9 @@ export const uploadRouter = createTRPCRouter({
                             id: crypto.randomUUID(),
                             userId,
                             isUploaded: false,
+                            storage: 'cloudflare',
+                            storageKey: fileKey,
+                            bucket: env.R2_BUCKET_NAME
                         }
                     });
                     tempUploadId = tempUpload.id;
@@ -98,23 +101,20 @@ export const uploadRouter = createTRPCRouter({
                         uploadDate: new Date().toISOString(),
                     },
                 });
-                
+
                 const presignedUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
-                
-                const fileUrl = `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${fileKey}`;
-                
+
                 return {
                     uploadUrl: presignedUrl,
                     fileKey,
                     tempUploadId,
-                    fileUrl,
                 };
             } catch (error) {
                 console.error("Error generating presigned URL:", error);
                 throw new Error("Failed to generate upload URL");
             }
         }),
-        
+
     // Get a presigned URL for artwork upload
     getArtworkUploadUrl: protectedProcedure
         .input(z.object({
@@ -124,7 +124,7 @@ export const uploadRouter = createTRPCRouter({
         }))
         .mutation(async ({ ctx, input }) => {
             const userId = ctx.session.user.id;
-            
+
             // Validate the file type
             if (!ALLOWED_IMAGE_TYPES.includes(input.contentType)) {
                 throw new Error("Unsupported image format. Please upload JPEG, PNG or WebP files.");
@@ -138,7 +138,7 @@ export const uploadRouter = createTRPCRouter({
             try {
                 // Generate a unique key for the artwork file
                 const fileKey = `artworks/${userId}/${Date.now()}-${input.filename}`;
-                
+
                 // Create the presigned URL for upload
                 const command = new PutObjectCommand({
                     Bucket: env.R2_BUCKET_NAME,
@@ -152,11 +152,11 @@ export const uploadRouter = createTRPCRouter({
                         isArtwork: "true",
                     },
                 });
-                
+
                 const presignedUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
-                
+
                 const fileUrl = `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${fileKey}`;
-                
+
                 return {
                     uploadUrl: presignedUrl,
                     fileKey,
@@ -176,8 +176,16 @@ export const uploadRouter = createTRPCRouter({
         }))
         .mutation(async ({ ctx, input }) => {
             const userId = ctx.session.user.id;
-            
+
             try {
+                // Delete the file from R2
+                const deleteCommand = new DeleteObjectCommand({
+                    Bucket: env.R2_BUCKET_NAME,
+                    Key: input.fileKey,
+                });
+
+                await r2Client.send(deleteCommand);
+
                 // If there's a tempUploadId, delete the temporary upload record
                 if (input.tempUploadId) {
                     await db.tempTrackUpload.delete({
@@ -190,16 +198,8 @@ export const uploadRouter = createTRPCRouter({
                         console.warn("Could not delete temp upload record:", error);
                     });
                 }
-                
-                // Delete the file from R2
-                const deleteCommand = new DeleteObjectCommand({
-                    Bucket: env.R2_BUCKET_NAME,
-                    Key: input.fileKey,
-                });
-                
-                await r2Client.send(deleteCommand);
-                
-                return { 
+
+                return {
                     success: true,
                     message: "Upload canceled and file deleted",
                 };
@@ -208,7 +208,7 @@ export const uploadRouter = createTRPCRouter({
                 throw new Error("Failed to cancel upload");
             }
         }),
-        
+
     // Mark a temporary upload as completed
     markUploadComplete: protectedProcedure
         .input(z.object({
@@ -217,7 +217,7 @@ export const uploadRouter = createTRPCRouter({
         }))
         .mutation(async ({ ctx, input }) => {
             const userId = ctx.session.user.id;
-            
+
             try {
                 // Update the temporary upload record
                 await db.tempTrackUpload.update({
@@ -229,11 +229,11 @@ export const uploadRouter = createTRPCRouter({
                         isUploaded: true,
                     }
                 });
-                
+
                 // Generate the file URL
                 const fileUrl = `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${input.fileKey}`;
-                
-                return { 
+
+                return {
                     success: true,
                     fileUrl,
                 };
@@ -242,7 +242,7 @@ export const uploadRouter = createTRPCRouter({
                 throw new Error("Failed to mark upload as complete");
             }
         }),
-        
+
     // Get track waveform data
     getWaveformData: publicProcedure
         .input(z.object({
@@ -250,7 +250,7 @@ export const uploadRouter = createTRPCRouter({
         }))
         .query(async ({ input }) => {
             try {
-                // First get the track to ensure it exists and get the audioUrl
+                // First get the track to ensure it exists and get the storageKey
                 const track = await db.track.findUnique({
                     where: {
                         id: input.trackId,
@@ -260,23 +260,23 @@ export const uploadRouter = createTRPCRouter({
                         waveformData: true,
                     }
                 });
-                
+
                 if (!track) {
                     throw new Error("Track not found");
                 }
-                
+
                 // If waveform data already exists, return it
                 if (track.waveformData) {
                     return {
                         waveformData: JSON.parse(track.waveformData),
                     };
                 }
-                
+
                 // Otherwise, generate dummy waveform data
                 // In a real app, you'd analyze the audio file to generate real waveform data
                 // This could be done with a serverless function or external service
                 const dummyWaveformData = generateDummyWaveformData();
-                
+
                 // Update the track with the waveform data
                 await db.track.update({
                     where: {
@@ -286,7 +286,7 @@ export const uploadRouter = createTRPCRouter({
                         waveformData: JSON.stringify(dummyWaveformData),
                     }
                 });
-                
+
                 return {
                     waveformData: dummyWaveformData,
                 };
@@ -295,7 +295,7 @@ export const uploadRouter = createTRPCRouter({
                 throw new Error("Failed to get waveform data");
             }
         }),
-        
+
     // Create final track records from temporary uploads
     createTrack: protectedProcedure
         .input(z.object({
@@ -311,7 +311,7 @@ export const uploadRouter = createTRPCRouter({
         }))
         .mutation(async ({ ctx, input }) => {
             const userId = ctx.session.user.id;
-            
+
             try {
                 // Verify this is a valid temporary upload
                 const tempUpload = await db.tempTrackUpload.findUnique({
@@ -321,27 +321,29 @@ export const uploadRouter = createTRPCRouter({
                         isUploaded: true,
                     }
                 });
-                
+
                 if (!tempUpload) {
                     throw new Error("Invalid or incomplete upload");
                 }
-                
+
                 // Generate the file URL
-                const fileUrl = `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${input.fileKey}`;
-                
+                // const fileUrl = `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${input.fileKey}`;
+
                 // Extract audio metadata (like duration) - in a real implementation,
                 // this might be done by a serverless function or webhook after upload
                 // For now, we'll set a dummy duration
                 const dummyDuration = 180; // 3 minutes in seconds
-                
+
                 // Generate dummy waveform data
                 const dummyWaveformData = generateDummyWaveformData();
-                
+
                 // Create the track
                 const track = await db.track.create({
                     data: {
                         title: input.title,
-                        audioUrl: fileUrl,
+                        storageKey: input.fileKey,
+                        storage: 'cloudflare',
+                        bucket: env.R2_BUCKET_NAME,
                         genre: input.genre,
                         description: input.description,
                         isPrivate: input.privacy !== "public",
@@ -352,21 +354,21 @@ export const uploadRouter = createTRPCRouter({
                         userId,
                     }
                 });
-                
+
                 // Delete the temporary upload record
                 await db.tempTrackUpload.delete({
                     where: {
                         id: input.tempUploadId,
                     }
                 });
-                
+
                 return { track };
             } catch (error) {
                 console.error("Failed to create track:", error);
                 throw new Error(`Failed to create track record: ${(error as Error).message}`);
             }
         }),
-        
+
     // Create album with multiple tracks
     createAlbum: protectedProcedure
         .input(z.object({
@@ -386,7 +388,7 @@ export const uploadRouter = createTRPCRouter({
         }))
         .mutation(async ({ ctx, input }) => {
             const userId = ctx.session.user.id;
-            
+
             try {
                 // Create the album
                 const album = await db.album.create({
@@ -399,7 +401,7 @@ export const uploadRouter = createTRPCRouter({
                         userId,
                     }
                 });
-                
+
                 // Create each track
                 for (const trackInput of input.tracks) {
                     // Verify this is a valid temporary upload
@@ -410,26 +412,28 @@ export const uploadRouter = createTRPCRouter({
                             isUploaded: true,
                         }
                     });
-                    
+
                     if (!tempUpload) {
                         console.warn(`Skipping invalid upload: ${trackInput.tempUploadId}`);
                         continue; // Skip invalid uploads
                     }
-                    
+
                     // Generate the file URL
-                    const fileUrl = `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${trackInput.fileKey}`;
-                    
+                    // const fileUrl = `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${trackInput.fileKey}`;
+
                     // Generate dummy waveform data
                     const dummyWaveformData = generateDummyWaveformData();
-                    
+
                     // Create the track - in a real implementation,
                     // you'd extract metadata like duration from the audio file
                     const dummyDuration = 180; // 3 minutes in seconds
-                    
+
                     await db.track.create({
                         data: {
                             title: trackInput.title,
-                            audioUrl: fileUrl,
+                            storageKey: trackInput.fileKey,
+                            storage: 'cloudflare',
+                            bucket: env.R2_BUCKET_NAME,
                             genre: input.genre,
                             description: input.description,
                             isPrivate: input.privacy === "private",
@@ -441,7 +445,7 @@ export const uploadRouter = createTRPCRouter({
                             userId,
                         }
                     });
-                    
+
                     // Delete the temporary upload record
                     await db.tempTrackUpload.delete({
                         where: {
@@ -449,28 +453,28 @@ export const uploadRouter = createTRPCRouter({
                         }
                     });
                 }
-                
+
                 return { album };
             } catch (error) {
                 console.error("Failed to create album:", error);
                 throw new Error(`Failed to create album record: ${(error as Error).message}`);
             }
         }),
-        
+
     // Delete temporary uploads that are older than 24 hours
     cleanupTemporaryUploads: protectedProcedure
         .mutation(async ({ ctx }) => {
             const userId = ctx.session.user.id;
-            
+
             // Check if user is admin (you'd need to extend the user model for this)
             const isAdmin = false; // Replace with proper admin check
             if (!isAdmin) {
                 throw new Error("Not authorized to perform this action");
             }
-            
+
             const oneDayAgo = new Date();
             oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-            
+
             try {
                 // Get all expired temporary uploads
                 const expiredUploads = await db.tempTrackUpload.findMany({
@@ -480,9 +484,9 @@ export const uploadRouter = createTRPCRouter({
                         },
                     },
                 });
-                
+
                 let deletedCount = 0;
-                
+
                 // Delete each record and the corresponding file
                 for (const upload of expiredUploads) {
                     try {
@@ -491,16 +495,16 @@ export const uploadRouter = createTRPCRouter({
                                 id: upload.id,
                             },
                         });
-                        
+
                         // Note: We don't have fileKey stored in the tempTrackUpload model
                         // In a real app, you'd store this or have a way to find the file
-                        
+
                         deletedCount++;
                     } catch (error) {
                         console.error(`Failed to delete temporary upload ${upload.id}:`, error);
                     }
                 }
-                
+
                 return {
                     success: true,
                     deletedCount,
@@ -510,7 +514,7 @@ export const uploadRouter = createTRPCRouter({
                 throw new Error("Failed to clean up temporary uploads");
             }
         }),
-        
+
     // Get a download URL for an existing file
     getDownloadUrl: protectedProcedure
         .input(z.object({
@@ -522,9 +526,9 @@ export const uploadRouter = createTRPCRouter({
                     Bucket: env.R2_BUCKET_NAME,
                     Key: input.fileKey,
                 });
-                
+
                 const presignedUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
-                
+
                 return {
                     downloadUrl: presignedUrl,
                 };
@@ -541,16 +545,16 @@ function generateDummyWaveformData(points = 100): number[] {
     for (let i = 0; i < points; i++) {
         // Generate a value between 0.1 and 1.0 with some natural-looking variations
         const position = i / points;
-        
+
         // Create a base pattern that's louder in the middle
         let value = 0.2 + 0.6 * Math.sin(position * Math.PI);
-        
+
         // Add some random variation
         value += 0.2 * (Math.random() - 0.5);
-        
+
         // Ensure value is between 0.1 and 1.0
         value = Math.max(0.1, Math.min(1.0, value));
-        
+
         waveform.push(value);
     }
     return waveform;

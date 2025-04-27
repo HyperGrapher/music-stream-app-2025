@@ -57,7 +57,7 @@ model Track {
     description String?  @db.Text
 
     // Audio file details
-    audioUrl     String
+    storageKey     String
     duration     Int // Duration in seconds
     waveformData String? @db.Text // JSON string of waveform data points
     isOriginal   Boolean @default(true)

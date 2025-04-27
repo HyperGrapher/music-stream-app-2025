@@ -129,7 +129,7 @@ async function main() {
                     id: uuidv4(),
                     title,
                     description: faker.lorem.paragraph(),
-                    audioUrl: `https://example.com/audio/${titleSlug}.mp3`,
+                    storageKey: `https://example.com/audio/${titleSlug}.mp3`,
                     duration: faker.number.int({ min: 120, max: 420 }), // 2-7 minutes in seconds
                     waveformData: JSON.stringify(Array.from({ length: 100 }, () => faker.number.int({ min: 0, max: 100 }))),
                     isOriginal: true,
