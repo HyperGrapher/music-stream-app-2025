@@ -2,31 +2,31 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { api, HydrateClient } from "@/trpc/server";
 
-// export async function generateMetadata({
-//   params,
-// }: {
-//   params: { artist: string; song: string };
-// }): Promise<Metadata> {
-//   const artist = await api.artist.getArtist({ artist: params.artist });
+export async function generateMetadata({
+  params,
+}: {
+  params: { artist: string; song: string };
+}): Promise<Metadata> {
+  const artist = await api.artist.getArtist({ artist: params.artist });
   
-//   if (!artist) {
-//     return {
-//       title: "Song Not Found",
-//     };
-//   }
+  if (!artist) {
+    return {
+      title: "Song Not Found",
+    };
+  }
   
-//   // For now, we're just using the slug as the title
-//   // In a real implementation, we'd look up the actual track
-//   const formattedTitle = params.song
-//     .split('-')
-//     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-//     .join(' ');
+  // For now, we're just using the slug as the title
+  // In a real implementation, we'd look up the actual track
+  const formattedTitle = params.song
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
   
-//   return {
-//     title: `${formattedTitle} by ${artist.name} | Music Player`,
-//     description: `Listen to ${formattedTitle} by ${artist.name}`,
-//   };
-// }
+  return {
+    title: `${formattedTitle} by ${artist.name} | Music Player`,
+    description: `Listen to ${formattedTitle} by ${artist.name}`,
+  };
+}
 
 export default async function SongPage({
   params,

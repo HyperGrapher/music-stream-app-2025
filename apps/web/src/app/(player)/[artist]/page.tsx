@@ -1,11 +1,10 @@
-import type { Metadata } from "next";
-import Image from "next/image";
-import { notFound } from "next/navigation";
-import { api, HydrateClient } from "@/trpc/server";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { formatDistanceToNow } from "date-fns";
 import { WaveformTrackItem } from "@/app/_components/WaveformTrackItem";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { api, HydrateClient } from "@/trpc/server";
+import { formatDistanceToNow } from "date-fns";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import JsonInfo from "./json-info";
 
 export async function generateMetadata({
@@ -137,12 +136,15 @@ export default async function ArtistPage({
                                             <WaveformTrackItem
                                                 key={track.id}
                                                 waveformData={[0.002, 0.0030, 0.001]}
+                                                // @ts-ignore
                                                 track={{
                                                     ...track,
                                                     userId: artistData.id,
                                                     updatedAt: new Date(),
                                                     duration: 240, // Default duration
                                                     waveformData: null,
+                                                    storage: '',
+                                                    storageKey: '',
                                                     isOriginal: true,
                                                     isPrivate: false,
                                                     bpm: null,
@@ -175,6 +177,7 @@ export default async function ArtistPage({
                                         {popularTracks.map(track => (
                                             <WaveformTrackItem
                                                 key={track.id}
+                                                // @ts-ignore
                                                 track={{
                                                     ...track,
                                                     userId: artistData.id,
@@ -213,6 +216,7 @@ export default async function ArtistPage({
                                         {latestTracks.map(track => (
                                             <WaveformTrackItem
                                                 key={track.id}
+                                                // @ts-ignore
                                                 track={{
                                                     ...track,
                                                     userId: artistData.id,

@@ -1,11 +1,6 @@
 
-import React from 'react'
-import { cn } from "@/lib/utils";
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Suspense } from 'react';
-import Link from 'next/link';
-import { api } from "@/trpc/server";
 import FileUpload from "@/components/upload";
+import { Suspense } from 'react';
 
 
 const UploadPage = () => {
