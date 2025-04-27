@@ -29,7 +29,7 @@ const TrackInfo = memo(function TrackInfo() {
   return (
     <div className="flex items-center space-x-3 flex-shrink min-w-0">
       <img
-        src={currentTrack.artworkUrl || '/placeholder.svg'}
+        src={currentTrack.artworkUrl || '/placeholder-track.jpg'}
         alt="Now playing"
         className="w-10 h-10 object-cover rounded-sm flex-shrink-0"
       />

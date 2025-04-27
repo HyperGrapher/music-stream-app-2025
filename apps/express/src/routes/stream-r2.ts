@@ -170,6 +170,24 @@ function setupStreamHandlers(
         // console.log(`Chunk stream closed for session: ${sessionId}`);
     });
 }
+// Handle OPTIONS requests for CORS preflight
+router.options('/stream/:trackId', (req, res) => {
+    const headers: Record<string, string> = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Range, Content-Type, Authorization',
+        'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Content-Type',
+        'Access-Control-Max-Age': '86400', // 24 hours
+        'Content-Length': '0',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
+        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+        'Cross-Origin-Embedder-Policy': 'credentialless'
+    };
+
+    res.writeHead(204, headers);
+    res.end();
+});
+
 // Main streaming endpoint
 router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
     const { trackId: jwtTrackId, userId: jwtUserId } = req.playbackData as PlaybackData;
@@ -217,30 +235,26 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
             return res.status(404).json({ error: 'Track not found' });
         }
 
-        // 2. Extract R2 object key from audioUrl
-        // audioUrl example: https://<bucket>.r2.cloudflarestorage.com/uploads/userid/filename.mp3
-        const url = new URL(track.audioUrl);
-        // Remove leading slash from pathname
-        const fileKey = url.pathname.startsWith('/') ? url.pathname.slice(1) : url.pathname;
+        console.log('Track found:', { id: track.id, audioUrl: track.audioUrl });
 
-        // 3. Get file size and content type from R2 (HEAD via range 0-0)
-        let fileSize: number;
-        let contentType: string;
-        try {
-            const headParams = {
-                Bucket: process.env.R2_BUCKET_NAME,
-                Key: fileKey,
-                Range: 'bytes=0-0',
-            };
-            const headResp = await r2Client.send(new GetObjectCommand(headParams));
-            fileSize = Number(headResp.ContentRange?.split('/')[1] || headResp.ContentLength);
-            contentType = headResp.ContentType || 'audio/mpeg';
-        } catch (err) {
-            console.error('Error getting file info from R2:', err);
-            streamStats.activeSessions.delete(currentSessionId);
-            ipToCurrentSessionId.delete(clientIp);
-            return res.status(404).json({ error: 'Track file not found in storage' });
+        // 2. Extract key from audioUrl using URL parsing
+        const url = new URL(track.audioUrl);
+        console.log({ url });
+        
+        // Extract file key - simplify based on our working test approach
+        // Parse the pathname to get the upload path without leading slash
+        const filePath = url.pathname.startsWith('/') ? url.pathname.slice(1) : url.pathname;
+        
+        // Try to extract just the relevant path components
+        const pathComponents = filePath.split('/');
+        let fileKey = filePath;
+        
+        // If the URL contains the bucket name as a path component, remove it
+        if (pathComponents[0] === process.env.R2_BUCKET_NAME) {
+            fileKey = pathComponents.slice(1).join('/');
         }
+        
+        console.log('Resolved fileKey:', fileKey);
 
         // 4. Check for range header
         if (!range) {
@@ -248,25 +262,77 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
             return res.status(400).json({ error: 'Range header is required' });
         }
 
+        // 3. Get file size and content type directly from R2 - similar to your test code
+        let fileSize = 0;
+        let contentType = 'audio/mpeg';
+        
+        try {
+            // Get just the headers first to determine file size
+            const headParams = {
+                Bucket: process.env.R2_BUCKET_NAME,
+                Key: fileKey,
+                Range: 'bytes=0-0'
+            };
+            
+            console.log('Getting file info with params:', headParams);
+            const headResp = await r2Client.send(new GetObjectCommand(headParams));
+            
+            // Extract file size from Content-Range header (format: "bytes 0-0/TOTAL_SIZE")
+            if (headResp.ContentRange) {
+                const totalSizeStr = headResp.ContentRange.split('/')[1];
+                fileSize = parseInt((totalSizeStr ?? "0"), 10);
+            } else if (headResp.ContentLength) {
+                // Fallback if ContentRange isn't available
+                fileSize = headResp.ContentLength;
+            }
+            
+            contentType = headResp.ContentType || 'audio/mpeg';
+            console.log('File info received:', { fileSize, contentType });
+        } catch (err) {
+            console.error('Error getting file info:', err);
+            streamStats.activeSessions.delete(currentSessionId);
+            ipToCurrentSessionId.delete(clientIp);
+            return res.status(404).json({ error: 'Track file not found in storage' });
+        }
+
         // 5. Calculate range and headers
         const { headers, start, end, contentLength } = calculateStreamHeaders(fileSize, range);
         headers['Content-Type'] = contentType;
-        res.writeHead(206, headers);
+        
+        // Add CORS headers explicitly to resolve browser issues
+        // Cast headers to Record<string, string> to avoid TypeScript errors
+        const responseHeaders = headers as Record<string, any>;
+        responseHeaders['Access-Control-Allow-Origin'] = '*'; // Simplify for testing
+        responseHeaders['Access-Control-Allow-Methods'] = 'GET, OPTIONS';
+        responseHeaders['Access-Control-Allow-Headers'] = 'Range, Content-Type, Authorization';
+        responseHeaders['Access-Control-Expose-Headers'] = 'Content-Range, Content-Length, Content-Type';
+        responseHeaders['Cross-Origin-Resource-Policy'] = 'cross-origin';
+        responseHeaders['Cross-Origin-Opener-Policy'] = 'same-origin-allow-popups';
+        responseHeaders['Cross-Origin-Embedder-Policy'] = 'credentialless';
+        
+        res.writeHead(206, responseHeaders);
 
         // 6. Get audio stream from R2
         let audioStream: Readable;
         try {
+            console.log('Streaming from R2 with range:', `bytes=${start}-${end}`);
+            
             const streamParams = {
                 Bucket: process.env.R2_BUCKET_NAME,
                 Key: fileKey,
                 Range: `bytes=${start}-${end}`,
             };
+            
+            console.log('Final streaming parameters:', streamParams);
             const streamResp = await r2Client.send(new GetObjectCommand(streamParams));
+            
             // Type guard for Readable stream
             if (!streamResp.Body || typeof (streamResp.Body as any).pipe !== 'function') {
                 throw new Error('Invalid R2 stream response');
             }
+            
             audioStream = streamResp.Body as unknown as Readable;
+            console.log('Successfully created R2 stream');
         } catch (err) {
             console.error('Error creating R2 stream:', err);
             streamStats.activeSessions.delete(currentSessionId);
@@ -277,12 +343,15 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
         // 7. Session progress management
         let progress = streamProgress.get(currentSessionId);
         if (!progress) {
+            // Ensure fileSize is valid
+            const validFileSize = fileSize > 0 ? fileSize : 1; // Use 1 as a minimum valid size
+            
             progress = {
                 totalBytes: 0,
                 startTime: process.hrtime(),
                 lastActivityTime: Date.now(),
                 chunkCount: 1,
-                fileSize: fileSize,
+                fileSize: validFileSize, // Use the validated file size
                 trackId: requestedTrackId,
             };
             streamProgress.set(currentSessionId, progress);
@@ -298,11 +367,17 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
             requestedTrackId,
             currentSessionId,
             process.hrtime(),
-            { start, end, contentLength, fileSize },
+            { 
+                start: start, 
+                end: end, 
+                contentLength: contentLength, 
+                fileSize: fileSize 
+            },
             res,
             req,
             cleanup
         );
+        
         audioStream.pipe(res);
     } catch (error) {
         cleanup();
@@ -339,8 +414,23 @@ router.get('/stream/:trackId/waveform', validatePlaybackToken, async (req, res) 
 
 
 });
-router.get('/:trackId',  async (req, res) => {
+router.get('/:trackId', async (req, res) => {
     const requestedTrackId = req.params.trackId ?? '';
+
+    const r2Api = 'https://ebe85640e72ffd4fbf9267fdf7c27a8b.r2.cloudflarestorage.com/music-stream-app';
+
+    const headParams = {
+        Bucket: process.env.R2_BUCKET_NAME,
+        Key: 'uploads/QOkuR1qNbxDVPJhQU1Lo0V6um0Yh78Gt/1745700371982-message.mp3', // hardcoded an existing file for test
+        // Range: 'bytes=0-0',
+    };
+
+    console.log('Sending GetObjectCommand with params:', headParams);
+
+    const headResp = await r2Client.send(new GetObjectCommand(headParams));
+
+    console.log(headResp);
+
 
     const track = await prisma.track.findFirst({
         where: { id: requestedTrackId },
@@ -350,7 +440,7 @@ router.get('/:trackId',  async (req, res) => {
         return res.status(404).json({ error: 'Track not found' });
     }
 
-    res.json(track);
+    res.json({ track, headResp: headResp.ContentType });
 
 
 

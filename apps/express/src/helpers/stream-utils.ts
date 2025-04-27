@@ -93,6 +93,8 @@ export function calculateStreamHeaders(fileSize: number, range: string) {
     const end = Math.min(start + CHUNK_SIZE, fileSize - 1);
     const contentLength = end - start + 1;
 
+    console.log(`Range request: ${range} => Calculated Range: bytes ${start}-${end}/${fileSize}, Length: ${contentLength}`);
+
     return {
         headers: {
             'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -100,7 +102,7 @@ export function calculateStreamHeaders(fileSize: number, range: string) {
             'Content-Length': contentLength,
             'Content-Type': 'audio/mpeg',
             'Content-Disposition': 'inline',
-            'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+            'Cache-Control': 'public, max-age=3600',
             'Cross-Origin-Resource-Policy': 'cross-origin',
             'Access-Control-Allow-Origin': process.env.NEXT_URL ?? (process.env.APP_DOMAIN ?? '*')
         },

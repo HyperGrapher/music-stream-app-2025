@@ -29,28 +29,44 @@ const port = process.env.PORT || '4000';
 const appDomain = process.env.APP_DOMAIN ?? '';
 // Middleware to protect against common vulnerabilities
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? [appDomain, 'http://localhost:3000']
-    : ['http://localhost:3000', 'http://localhost:4000'],
+  origin: '*', // Allow all origins for testing
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  credentials: true
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'Range'],
+  exposedHeaders: ['Content-Range', 'Content-Length', 'Accept-Ranges', 'Content-Type']
 }));
 app.use(express.static("public"));
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+
+// Add a middleware that explicitly sets CORS headers for streaming routes
+app.use('/tracks/stream', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
+  res.header('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges, Content-Type');
+  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+});
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:"]
+      imgSrc: ["'self'", "data:", "blob:"],
+      mediaSrc: ["'self'", "blob:", "data:", "*"],
+      connectSrc: ["'self'", "blob:", "data:", "*"]
     }
   },
-  frameguard: { action: 'deny' },
+  frameguard: { action: 'sameorigin' },
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
   noSniff: true,
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false
 }));
 app.use(bodyParser.json());
 

@@ -21,7 +21,7 @@ export function NowPlayingCard() {
       <h2 className="mb-3 text-sm font-semibold text-gray-200">Now Playing</h2>
       <div className="relative w-full aspect-square mb-3 group">
         <img
-          src={currentImageUrl || '/placeholder.svg'}
+          src={currentImageUrl || '/placeholder-track.jpg'}
           alt={currentTrack.title}
           className="w-full h-full object-cover"
         />
