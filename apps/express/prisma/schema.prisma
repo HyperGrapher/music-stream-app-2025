@@ -1,8 +1,8 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
-  output   = "./generated/prisma"
 }
 
 datasource db {
@@ -10,7 +10,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// temp
 model Post {
   id        Int      @id @default(autoincrement())
   name      String
@@ -20,18 +19,37 @@ model Post {
   @@index([name])
 }
 
-// BetterAuth models
 model User {
-  id            String    @id
-  name          String
-  email         String
-  emailVerified Boolean
-  image         String?
-  createdAt     DateTime
-  updatedAt     DateTime
-  sessions      Session[]
-  accounts      Account[]
-  tracks        Track[]
+  id                String            @id
+  name              String
+  email             String
+  bio               String?
+  location          String?
+  website           String?
+  emailVerified     Boolean
+  image             String?
+  profileImage      String?
+  createdAt         DateTime
+  updatedAt         DateTime
+  sessions          Session[]
+  accounts          Account[]
+  // User content
+  tracks            Track[]
+  albums            Album[]
+  playlists         Playlist[]
+  // Social features
+  followers         Follow[]          @relation("follower")
+  following         Follow[]          @relation("following")
+  comments          Comment[]
+  likes             Like[]
+  reposts           Repost[]
+  // Activity and listening history
+  playHistory       PlayHistory[]
+  notifications     Notification[]    @relation("recipient")
+  sentNotifications Notification[]    @relation("sender")
+  // User analytics
+  profileViews      Int               @default(0)
+  tempTrackUploads  TempTrackUpload[]
 
   @@unique([email])
   @@map("user")
@@ -84,42 +102,280 @@ model Verification {
 
 // Music Track model
 model Track {
-  id            String    @id
-  title         String
-  description   String?   @db.Text
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  title       String
+  description String?  @db.Text
+
   // Audio file details
-  audioUrl      String
-  duration      Int // Duration in seconds
-  waveform      String?   @db.Text // JSON string of waveform data points
-  isOriginal    Boolean   @default(true)
-  isPrivate     Boolean   @default(false)
+  audioUrl     String
+  duration     Int // Duration in seconds
+  waveformData String? @db.Text // JSON string of waveform data points
+  isOriginal   Boolean @default(true)
+  isPrivate    Boolean @default(false)
+
   // Track metadata
-  genre         String?
-  subGenre      String?
-  bpm           Int?
-  key           String? // Musical key
-  tags          String? // Comma-separated tags
-  releaseDate   DateTime?
-  recordLabel   String?
+  genre       String?
+  bpm         Int?
+  key         String? // Musical key
+  tags        String? // Comma-separated tags
+  releaseDate DateTime?
+  recordLabel String?
+
   // Cover art
-  artworkUrl    String?
+  artworkUrl String?
+
   // Stats
-  playCount     Int       @default(0)
-  downloadCount Int       @default(0)
-  likeCount     Int       @default(0)
-  repostCount   Int       @default(0)
-  commentCount  Int       @default(0)
+  playCount     Int @default(0)
+  downloadCount Int @default(0)
+  likeCount     Int @default(0)
+  repostCount   Int @default(0)
+  commentCount  Int @default(0)
 
   // Relationships
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  userId  String
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  albumId String?
+  album   Album?  @relation(fields: [albumId], references: [id])
+
+  // Track features
+  comments    Comment[]
+  likes       Like[]
+  reposts     Repost[]
+  playHistory PlayHistory[]
+
+  // Track in playlists
+  playlistTracks PlaylistTrack[]
 
   @@index([userId])
   @@index([genre])
   @@index([isPrivate])
   @@map("track")
+}
+
+// Album/Set model
+model Album {
+  id          String    @id @default(uuid())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  title       String
+  description String?   @db.Text
+  artworkUrl  String?
+  releaseDate DateTime?
+  type        AlbumType @default(SET)
+  isPrivate   Boolean   @default(false)
+
+  // Stats
+  playCount   Int @default(0)
+  likeCount   Int @default(0)
+  repostCount Int @default(0)
+
+  // Relationships
+  userId String
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tracks Track[]
+
+  // Album features
+  likes   Like[]
+  reposts Repost[]
+
+  @@index([userId])
+  @@index([type])
+}
+
+enum AlbumType {
+  ALBUM
+  EP
+  SINGLE
+  SET
+  COMPILATION
+}
+
+// Playlist model
+model Playlist {
+  id              String   @id @default(uuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  title           String
+  description     String?  @db.Text
+  artworkUrl      String?
+  isPrivate       Boolean  @default(false)
+  isCollaborative Boolean  @default(false)
+
+  // Stats
+  playCount   Int @default(0)
+  likeCount   Int @default(0)
+  repostCount Int @default(0)
+
+  // Relationships
+  userId String
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tracks PlaylistTrack[]
+
+  // Playlist features
+  likes   Like[]
+  reposts Repost[]
+
+  @@index([userId])
+  @@index([isPrivate])
+}
+
+// Join table for playlists and tracks with position
+model PlaylistTrack {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  position  Int
+
+  // Relationships
+  playlistId String
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  trackId    String
+  track      Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, trackId])
+  @@index([playlistId])
+  @@index([trackId])
+}
+
+// Comment model
+model Comment {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  content   String   @db.Text
+
+  // Optional timestamp for track comments (in seconds)
+  timestampSeconds Int?
+
+  // Relationships
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trackId String
+  track   Track  @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  // Comment stats
+  likeCount Int @default(0)
+
+  @@index([userId])
+  @@index([trackId])
+}
+
+// Like model (polymorphic)
+model Like {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Polymorphic relationship
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Optional relationships - one must be set
+  trackId    String?
+  track      Track?    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  playlistId String?
+  playlist   Playlist? @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  albumId    String?
+  album      Album?    @relation(fields: [albumId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, trackId])
+  @@unique([userId, playlistId])
+  @@unique([userId, albumId])
+  @@index([userId])
+  @@index([trackId])
+  @@index([playlistId])
+  @@index([albumId])
+}
+
+// Repost model (polymorphic)
+model Repost {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Polymorphic relationship
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Optional relationships - one must be set
+  trackId    String?
+  track      Track?    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  playlistId String?
+  playlist   Playlist? @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  albumId    String?
+  album      Album?    @relation(fields: [albumId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, trackId])
+  @@unique([userId, playlistId])
+  @@unique([userId, albumId])
+  @@index([userId])
+  @@index([trackId])
+  @@index([playlistId])
+  @@index([albumId])
+}
+
+// Follow relationship
+model Follow {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Relationships
+  followerId  String
+  follower    User   @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String
+  following   User   @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+// PlayHistory model for listen history
+model PlayHistory {
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  completedPlay Boolean  @default(false) // Whether user listened to significant portion
+
+  // Relationships
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trackId String
+  track   Track  @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([trackId])
+  @@index([createdAt])
+}
+
+// Notification model
+model Notification {
+  id        String           @id @default(uuid())
+  createdAt DateTime         @default(now())
+  read      Boolean          @default(false)
+  type      NotificationType
+  message   String
+
+  // Optional link/reference
+  referenceId   String? // ID of the referenced object
+  referenceType String? // Type of referenced object (e.g., "track", "comment")
+
+  // Relationships
+  recipientId String
+  recipient   User    @relation("recipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  senderId    String?
+  sender      User?   @relation("sender", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId])
+  @@index([read])
+}
+
+enum NotificationType {
+  FOLLOW
+  LIKE
+  COMMENT
+  REPOST
+  PLAYLIST_ADD
+  DIRECT_MESSAGE
+  SYSTEM
 }
 
 model TrackError {
@@ -134,4 +390,15 @@ model TrackError {
   @@unique([track_id])
   @@index([track_id])
   @@map("track_error")
+}
+
+model TempTrackUpload {
+  id         String  @id
+  userId     String
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isUploaded Boolean @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([id])
+  @@map("temp_upload")
 }

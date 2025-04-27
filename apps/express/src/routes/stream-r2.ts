@@ -5,10 +5,6 @@ import { prisma } from '../lib/prisma';
 import { AuthUser, PlaybackData } from '../types/express';
 import { checkReferrer } from '../middlewares/check-referer';
 import { query, validationResult, param } from 'express-validator';
-import jwt from 'jsonwebtoken';
-import fs from "fs";
-import path from "path";
-import crypto from "crypto";
 import {
     logSessionStats,
     formatBytesToKB,
@@ -28,6 +24,8 @@ import { validatePlaybackToken } from '../middlewares/validate-playback-token';
 import { Readable } from "node:stream";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { r2Client } from "../lib/r2-client";
+import path from 'node:path';
+import fs from "fs";
 
 
 const router: Router = express.Router();
@@ -38,14 +36,14 @@ if (!JWT_PLAYBACK_SECRET) {
 }
 
 function setupStreamHandlers(
-    audioStream: fs.ReadStream,
+    audioStream: Readable,
     trackId: string,
     sessionId: string,
     startTime: [number, number], // This startTime is for the *chunk*, not the whole session
     streamDetails: { start: number; end: number; contentLength: number; fileSize: number },
     res: Response,
     req: Request, // Added req to get session key
-    cleanup: (audioStream?: fs.ReadStream) => void
+    cleanup: (audioStream?: Readable) => void
 ) {
     const { start, end, contentLength, fileSize } = streamDetails;
     let chunkRetries = 0;
@@ -172,27 +170,6 @@ function setupStreamHandlers(
         // console.log(`Chunk stream closed for session: ${sessionId}`);
     });
 }
-router.get('/stream/:trackId/waveform', validatePlaybackToken, async (req, res) => {
-    const { trackId: jwtTrackId, userId: jwtUserId } = req.playbackData as PlaybackData;
-    const requestedTrackId = req.params.trackId ?? '';
-
-    const filename = `${requestedTrackId}.json`;
-    const waveform = path.resolve(__dirname, "..", '..', "audio", filename);
-
-    if (!fs.existsSync(waveform)) {
-        console.error('⛔ Waveform file not found');
-        return res.status(404).json({ error: 'Waveform file not found' });
-    }
-
-    const waveformData = JSON.parse(fs.readFileSync(waveform, 'utf8'));
-
-    res.json(waveformData);
-
-
-
-});
-
-
 // Main streaming endpoint
 router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
     const { trackId: jwtTrackId, userId: jwtUserId } = req.playbackData as PlaybackData;
@@ -200,15 +177,12 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
     // Generate session ID based on client IP and track ID
     const clientIp = req.socket.remoteAddress || req.ip || 'unknown';
     const currentSessionId = `${clientIp}-${requestedTrackId}`;
-    const filename = `${requestedTrackId}.mp3`;
-    const trackPath = path.resolve(__dirname, "..", '..', "audio", filename);
     const range = req.headers.range; // Declare range header earlier
 
-    // Cleanup function (now mainly for destroying the specific chunk stream)
-    const cleanup = (audioStream?: fs.ReadStream) => {
+    // Cleanup function (for destroying the specific chunk stream)
+    const cleanup = (audioStream?: Readable) => {
         try {
-            // Don't remove from activeSessions here, let the handlers do it based on state
-            if (audioStream && !audioStream.destroyed) {
+            if (audioStream && typeof audioStream.destroy === 'function' && !audioStream.destroyed) {
                 audioStream.destroy();
             }
         } catch (error) {
@@ -232,82 +206,153 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
         // Add to active sessions *set* (used for global count)
         streamStats.activeSessions.add(currentSessionId);
 
-        // Get file size and initialize/update session progress
-        let progress = streamProgress.get(currentSessionId);
+        // 1. Fetch track metadata from DB
+        const track = await prisma.track.findUnique({
+            where: { id: requestedTrackId },
+            select: { audioUrl: true, id: true },
+        });
+        if (!track || !track.audioUrl) {
+            streamStats.activeSessions.delete(currentSessionId);
+            ipToCurrentSessionId.delete(clientIp);
+            return res.status(404).json({ error: 'Track not found' });
+        }
+
+        // 2. Extract R2 object key from audioUrl
+        // audioUrl example: https://<bucket>.r2.cloudflarestorage.com/uploads/userid/filename.mp3
+        const url = new URL(track.audioUrl);
+        // Remove leading slash from pathname
+        const fileKey = url.pathname.startsWith('/') ? url.pathname.slice(1) : url.pathname;
+
+        // 3. Get file size and content type from R2 (HEAD via range 0-0)
         let fileSize: number;
+        let contentType: string;
+        try {
+            const headParams = {
+                Bucket: process.env.R2_BUCKET_NAME,
+                Key: fileKey,
+                Range: 'bytes=0-0',
+            };
+            const headResp = await r2Client.send(new GetObjectCommand(headParams));
+            fileSize = Number(headResp.ContentRange?.split('/')[1] || headResp.ContentLength);
+            contentType = headResp.ContentType || 'audio/mpeg';
+        } catch (err) {
+            console.error('Error getting file info from R2:', err);
+            streamStats.activeSessions.delete(currentSessionId);
+            ipToCurrentSessionId.delete(clientIp);
+            return res.status(404).json({ error: 'Track file not found in storage' });
+        }
 
-        if (!progress) {
-            // New session: get file stats asynchronously
-            try {
-                const stats = await fs.promises.stat(trackPath);
-                if (!stats.isFile()) {
-                    throw new Error('Path is not a file');
-                }
-                fileSize = stats.size;
-            } catch (statError: any) {
-                console.error(`Error getting file stats for ${trackPath}:`, statError.message);
-                streamStats.activeSessions.delete(currentSessionId);
-                ipToCurrentSessionId.delete(clientIp);
-                // Determine appropriate status code (404 if not found, 500 otherwise)
-                const statusCode = statError.code === 'ENOENT' ? 404 : 500;
-                const errorMessage = statusCode === 404 ? 'Track not found' : 'Error accessing track';
-                return res.status(statusCode).json({ error: errorMessage });
+        // 4. Check for range header
+        if (!range) {
+            streamStats.activeSessions.delete(currentSessionId);
+            return res.status(400).json({ error: 'Range header is required' });
+        }
+
+        // 5. Calculate range and headers
+        const { headers, start, end, contentLength } = calculateStreamHeaders(fileSize, range);
+        headers['Content-Type'] = contentType;
+        res.writeHead(206, headers);
+
+        // 6. Get audio stream from R2
+        let audioStream: Readable;
+        try {
+            const streamParams = {
+                Bucket: process.env.R2_BUCKET_NAME,
+                Key: fileKey,
+                Range: `bytes=${start}-${end}`,
+            };
+            const streamResp = await r2Client.send(new GetObjectCommand(streamParams));
+            // Type guard for Readable stream
+            if (!streamResp.Body || typeof (streamResp.Body as any).pipe !== 'function') {
+                throw new Error('Invalid R2 stream response');
             }
+            audioStream = streamResp.Body as unknown as Readable;
+        } catch (err) {
+            console.error('Error creating R2 stream:', err);
+            streamStats.activeSessions.delete(currentSessionId);
+            ipToCurrentSessionId.delete(clientIp);
+            return res.status(500).json({ error: 'Error streaming from storage' });
+        }
 
-            // Initialize progress only after successful stat
+        // 7. Session progress management
+        let progress = streamProgress.get(currentSessionId);
+        if (!progress) {
             progress = {
                 totalBytes: 0,
                 startTime: process.hrtime(),
                 lastActivityTime: Date.now(),
-                chunkCount: 1, // First chunk for this session
-                fileSize: fileSize, // Store fileSize
-                trackId: requestedTrackId // Store trackId
+                chunkCount: 1,
+                fileSize: fileSize,
+                trackId: requestedTrackId,
             };
             streamProgress.set(currentSessionId, progress);
-            console.log(`Starting new stream session: ${currentSessionId}, File size: ${formatBytesToKB(fileSize)}`);
-            streamStats.streamCount++; // Increment global counter only for new sessions
+            streamStats.streamCount++;
         } else {
-            // Existing session: retrieve fileSize and update activity
-            fileSize = progress.fileSize;
             progress.chunkCount++;
             progress.lastActivityTime = Date.now();
         }
 
-        // Check for range header *after* confirming file exists and getting size
-        if (!range) {
-            cleanup();
-            streamStats.activeSessions.delete(currentSessionId);
-            // Don't log stats here, it's just a bad request, not a stream failure
-            return res.status(400).json({ error: 'Range header is required' });
-        }
-
-        // Now safe to use range here
-        const { headers, start, end, contentLength } = calculateStreamHeaders(fileSize, range);
-        res.writeHead(206, headers);
-
-        const audioStream = fs.createReadStream(trackPath, { start, end });
-        const chunkStartTime = process.hrtime(); // Time for this specific chunk request
-
-        setupStreamHandlers(audioStream, requestedTrackId, currentSessionId, chunkStartTime, { start, end, contentLength, fileSize }, res, req, cleanup);
-
+        // 8. Setup stream handlers and pipe
+        setupStreamHandlers(
+            audioStream,
+            requestedTrackId,
+            currentSessionId,
+            process.hrtime(),
+            { start, end, contentLength, fileSize },
+            res,
+            req,
+            cleanup
+        );
         audioStream.pipe(res);
-
     } catch (error) {
-        cleanup(); // Clean up potential stream
-        // Attempt to log stats if session exists, otherwise just log the setup error
+        cleanup();
         if (streamProgress.has(currentSessionId)) {
             logStreamError(requestedTrackId, currentSessionId, error as Error);
             logSessionStats(currentSessionId, SessionStatus.Error);
         } else {
             console.error(`Error during initial setup for track ${requestedTrackId} (IP: ${clientIp}):`, error);
-            streamStats.activeSessions.delete(currentSessionId); // Ensure cleanup if session wasn't fully created
-            ipToCurrentSessionId.delete(clientIp); // Clean up ip map too
+            streamStats.activeSessions.delete(currentSessionId);
+            ipToCurrentSessionId.delete(clientIp);
         }
-
         if (!res.headersSent) {
             res.status(500).json({ error: 'Internal server error' });
         }
     }
 });
 
+router.get('/stream/:trackId/waveform', validatePlaybackToken, async (req, res) => {
+    const { trackId: jwtTrackId, userId: jwtUserId } = req.playbackData as PlaybackData;
+    const requestedTrackId = 'voodoo'// req.params.trackId ?? '';
+
+    const filename = `${requestedTrackId}.json`;
+    const waveform = path.resolve(__dirname, "..", '..', "audio", filename);
+
+    if (!fs.existsSync(waveform)) {
+        console.error('⛔ Waveform file not found');
+        return res.status(404).json({ error: 'Waveform file not found' });
+    }
+
+    const waveformData = JSON.parse(fs.readFileSync(waveform, 'utf8'));
+
+    res.json(waveformData);
+
+
+
+});
+router.get('/:trackId',  async (req, res) => {
+    const requestedTrackId = req.params.trackId ?? '';
+
+    const track = await prisma.track.findFirst({
+        where: { id: requestedTrackId },
+        select: { audioUrl: true, id: true },
+    });
+    if (!track) {
+        return res.status(404).json({ error: 'Track not found' });
+    }
+
+    res.json(track);
+
+
+
+});
 export default router;

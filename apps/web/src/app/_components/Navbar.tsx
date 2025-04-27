@@ -109,9 +109,8 @@ export function Navbar({ initialUser }: NavbarProps) {
                     For Artists
                 </Link>
                 
-                <Button variant="ghost" className="hidden sm:flex items-center gap-1 hover:text-orange-500 transition-colors">
-                    <Upload className="h-4 w-4" />
-                    <span className="hidden md:inline">Upload</span>
+                <Button asChild variant="ghost" className="hidden sm:flex items-center gap-1 hover:text-orange-500 transition-colors">
+                    <Link href="/upload" className="font-medium hover:text-orange-500 transition-colors">Upload</Link>
                 </Button>
                 
                 {displayUser ? (

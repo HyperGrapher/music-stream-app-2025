@@ -9,7 +9,10 @@
     "lint": "eslint . --max-warnings 0",
     "db:generate": "prisma migrate dev",
     "db:migrate": "prisma migrate deploy",
+    "db:reset": "prisma migrate reset",
+    "db:validate": "prisma validate",
     "db:push": "prisma db push",
+    "db:pull": "prisma db pull",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate"
   },

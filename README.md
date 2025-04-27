@@ -44,7 +44,7 @@ pnpm dev
 ### Creating database and user
 
 Make sure .env file is set up correctly (place you own params): 
-` DATABASE_URL="postgresql://[my_user]:[password]@localhost:5432/[db_name]?schema=[schema_name]" `
+` DATABASE_URL="postgresql://[streamer]:[password]@localhost:5432/[streamapp]?schema=[stream]" `
 
 Based on the connection string above, adjust parameters and run commands:
 
@@ -53,12 +53,15 @@ sudo -u postgres psql
 ```
 
 ```sql
-CREATE DATABASE db_name;
-CREATE USER my_user WITH PASSWORD 'password';
-ALTER USER my_user CREATEDB;
-GRANT ALL PRIVILEGES ON DATABASE db_name TO my_user;
+CREATE DATABASE streamapp;
+CREATE USER streamer WITH PASSWORD 'password';
+ALTER USER streamer CREATEDB;
+GRANT ALL PRIVILEGES ON DATABASE sreamapp TO streamer;
 \q #quit command
 ```
+
+psql -h localhost -p 5432 -U streamer -d streamapp
+
 
 ```ts
 // middleware.ts
@@ -76,5 +79,34 @@ export async function middleware(request: NextRequest) {
 export const config = {
     matcher: ["/dashboard"],
 };
+
+```
+
+
+new one don't use this unless wanna use public schema:
+sudo -u postgres psql
+```sql
+
+-- Grant usage and create privileges on the public schema
+GRANT USAGE, CREATE ON SCHEMA public TO streamer;
+
+-- Grant permissions on all existing tables
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO streamer;
+
+-- Grant permissions on all sequences
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO streamer;
+
+-- Make future tables automatically accessible
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO streamer;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO streamer;
+
+-- If you're using the stream schema too
+CREATE SCHEMA IF NOT EXISTS stream;
+GRANT USAGE, CREATE ON SCHEMA stream TO streamer;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA stream TO streamer;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA stream TO streamer;
+ALTER DEFAULT PRIVILEGES IN SCHEMA stream GRANT ALL PRIVILEGES ON TABLES TO streamer;
+ALTER DEFAULT PRIVILEGES IN SCHEMA stream GRANT ALL PRIVILEGES ON SEQUENCES TO streamer;
+
 
 ```
