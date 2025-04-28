@@ -39,24 +39,23 @@ function setupStreamHandlers(
     audioStream: Readable,
     trackId: string,
     sessionId: string,
-    startTime: [number, number], // This startTime is for the *chunk*, not the whole session
+    startTime: [number, number],
     streamDetails: { start: number; end: number; contentLength: number; fileSize: number },
     res: Response,
-    req: Request, // Added req to get session key
+    req: Request,
     cleanup: (audioStream?: Readable) => void
 ) {
     const { start, end, contentLength, fileSize } = streamDetails;
     let chunkRetries = 0;
-    let bytesTransferredInChunk = 0; // Renamed from bytesTransferred for clarity
+    let bytesTransferredInChunk = 0;
     let streamTimeout: NodeJS.Timeout;
+    let isStreamEnded = false;
+    let keepaliveInterval: NodeJS.Timeout;
 
-    // Retrieve session progress - it MUST exist here as it's created/updated in the route handler
+    // Retrieve session progress
     let progress = streamProgress.get(sessionId);
     if (!progress) {
-        // This case should be extremely rare now
         console.error(`CRITICAL: Session progress not found for ${sessionId} in setupStreamHandlers.`);
-        // Avoid crashing, but log the error
-        logStreamError(trackId, sessionId, new Error("Session progress missing in setupStreamHandlers"));
         cleanup(audioStream);
         if (!res.headersSent) {
             res.status(500).json({ error: 'Internal server error during stream setup' });
@@ -65,20 +64,43 @@ function setupStreamHandlers(
         return;
     }
 
-    // Reset stream timeout
+    // Setup keepalive interval to prevent timeouts
+    // This works by writing an empty comment to the response periodically
+    // which keeps the connection alive but doesn't affect the media playback
+    keepaliveInterval = setInterval(() => {
+        if (isStreamEnded) {
+            clearInterval(keepaliveInterval);
+            return;
+        }
+        
+        try {
+            // Write a zero-length chunk to keep the connection alive
+            // This is invisible to the client but prevents timeouts
+            if (!res.writableEnded) {
+                res.write('');
+            }
+        } catch (error) {
+            console.error('Error writing keepalive:', error);
+            clearInterval(keepaliveInterval);
+        }
+    }, 60000); // Send a keepalive every 60 seconds
+
+    // Reset stream timeout with backoff
     const resetTimeout = () => {
         if (streamTimeout) clearTimeout(streamTimeout);
+        const timeoutDuration = Math.min(STREAM_TIMEOUT * (chunkRetries + 1), STREAM_TIMEOUT * 4);
         streamTimeout = setTimeout(() => {
+            if (isStreamEnded) return;
             console.error(`Stream timeout for track ${trackId}, session ${sessionId}`);
-            cleanup(audioStream); // Destroy the chunk stream
+            clearInterval(keepaliveInterval);
+            cleanup(audioStream);
             logStreamError(trackId, sessionId, new Error('Stream timeout'));
             logSessionStats(sessionId, SessionStatus.Timeout);
             if (!res.headersSent) {
                 res.status(408).json({ error: 'Stream timeout' });
             }
             res.end();
-            // No need to delete from maps here, logSessionStats handles it
-        }, STREAM_TIMEOUT);
+        }, timeoutDuration);
     };
 
     resetTimeout();
@@ -87,11 +109,11 @@ function setupStreamHandlers(
     audioStream.on('data', (chunk: string | Buffer) => {
         try {
             resetTimeout();
-            progress!.lastActivityTime = Date.now(); // Update last activity time
+            progress!.lastActivityTime = Date.now();
             const chunkSize = Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(chunk);
             bytesTransferredInChunk += chunkSize;
-            streamStats.totalBytes += chunkSize; // Global total bytes
-            progress!.totalBytes += chunkSize; // Session total bytes
+            streamStats.totalBytes += chunkSize;
+            progress!.totalBytes += chunkSize;
 
             if (bytesTransferredInChunk > contentLength) {
                 throw new Error('Stream exceeded expected content length');
@@ -101,6 +123,7 @@ function setupStreamHandlers(
             chunkRetries++;
 
             if (chunkRetries >= MAX_CHUNK_RETRIES) {
+                clearInterval(keepaliveInterval);
                 cleanup(audioStream);
                 logStreamError(trackId, sessionId, error as Error);
                 logSessionStats(sessionId, SessionStatus.Error);
@@ -108,13 +131,17 @@ function setupStreamHandlers(
                     res.status(500).json({ error: 'Maximum retry attempts exceeded' });
                 }
                 res.end();
-                // No need to delete from maps here, logSessionStats handles it
+            } else {
+                // Attempt recovery by requesting a new chunk
+                resetTimeout();
             }
         }
     });
 
     audioStream.on('error', (error: Error) => {
+        if (isStreamEnded) return;
         clearTimeout(streamTimeout);
+        clearInterval(keepaliveInterval);
         cleanup(audioStream);
         logStreamError(trackId, sessionId, error);
         logSessionStats(sessionId, SessionStatus.Error);
@@ -122,52 +149,37 @@ function setupStreamHandlers(
             res.status(500).json({ error: 'Streaming error occurred' });
         }
         res.end();
-        // No need to delete from maps here, logSessionStats handles it
     });
 
-    // Handle stream completion (for the *chunk*)
     audioStream.on('end', () => {
         try {
+            isStreamEnded = true;
             clearTimeout(streamTimeout);
+            clearInterval(keepaliveInterval);
 
-            // Check if the progress object still exists, might have been cleaned by timeout/error/switch
             const currentProgress = streamProgress.get(sessionId);
-            if (!currentProgress) {
-                // console.log(`Chunk ended for already cleaned session: ${sessionId}`);
-                return;
-            }
+            if (!currentProgress) return;
 
-            currentProgress.lastActivityTime = Date.now(); // Update last activity time on chunk end
-
-            // Check if the *entire file* has been streamed for this session
+            currentProgress.lastActivityTime = Date.now();
             const isFullFile = currentProgress.totalBytes >= currentProgress.fileSize;
 
             if (isFullFile) {
                 logSessionStats(sessionId, SessionStatus.Completed);
-            } else {
-                // Optional: Log chunk completion if needed for debugging
-                // console.log(`Chunk ended for session ${sessionId}. Bytes in chunk: ${bytesTransferredInChunk}. Total for session: ${formatBytesToKB(currentProgress.totalBytes)}/${formatBytesToKB(fileSize)}`);
             }
-
         } catch (error) {
-            // Log error in the handler itself, but attempt to log session state too
             console.error('Error in stream end handler:', error);
             logStreamError(trackId, sessionId, error as Error);
             logSessionStats(sessionId, SessionStatus.Error);
-        } finally {
-            // No cleanup needed here, handled by logSessionStats or res.on('close') for the chunk stream
         }
     });
-    // Handle client disconnect for the *chunk stream*
+
     res.on('close', () => {
+        isStreamEnded = true;
         clearTimeout(streamTimeout);
+        clearInterval(keepaliveInterval);
         if (!audioStream.destroyed) {
-            audioStream.destroy(); // Destroy the specific chunk stream
+            audioStream.destroy();
         }
-        // We don't log session stats here automatically, as closing one chunk
-        // doesn't mean the whole session is abandoned. Track switches, timeouts,
-        // completion, errors, or interval cleanup handle session logging.
-        // console.log(`Chunk stream closed for session: ${sessionId}`);
     });
 }
 // Handle OPTIONS requests for CORS preflight
@@ -192,7 +204,7 @@ router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
 
     // Generate session ID based on client IP and track ID
     const clientIp = req.socket.remoteAddress || req.ip || 'unknown';
-    const currentSessionId = `${clientIp}-${requestedTrackId}`;
+    const currentSessionId = `${jwtUserId}-${fileKey}`;
     const range = req.headers.range; // Declare range header earlier
 
     // Cleanup function (for destroying the specific chunk stream)

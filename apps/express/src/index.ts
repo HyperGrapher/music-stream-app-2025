@@ -1,4 +1,5 @@
 import express, { Express } from 'express';
+import http from 'http'; // Import http module
 import { rateLimit } from 'express-rate-limit'
 import dotenv from 'dotenv';
 import helmet from 'helmet';
@@ -21,7 +22,6 @@ const limiter = rateLimit({
 
 })
 
-// Apply the rate limiting middleware to all requests.
 dotenv.config();
 const app: Express = express();
 
@@ -36,8 +36,8 @@ app.use(cors({
   exposedHeaders: ['Content-Range', 'Content-Length', 'Accept-Ranges', 'Content-Type']
 }));
 app.use(express.static("public"));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 
 app.use(helmet({
@@ -66,12 +66,21 @@ app.use(bodyParser.json());
 // Auth routes for desktop app
 app.use('/tracks', r2StreamRoutes);
 // app.use('/tracks', streamRoutes);
-app.use(limiter);
+
+// Apply rate limiting to non-streaming routes
+app.use(['/auth', '/user', '/'], limiter);
+
 app.use('/', indexRoutes);
 app.use('/auth', authRoutes);
 app.use('/user', userRoutes);
 
-// Use httpServer instead of app.listen for Socket.IO
-app.listen(port, () => {
+// --- Server Creation and Start ---
+const server = http.createServer(app);
+
+// Set a longer server timeout (e.g., 15 minutes)
+// This prevents Node from closing idle connections too early, especially during pending chunk requests
+server.timeout = 15 * 60 * 1000; // 900000 ms = 15 minutes
+
+server.listen(port, () => {
   console.log(`Express server listening at http://localhost:${port}`);
 });

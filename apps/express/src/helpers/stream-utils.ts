@@ -1,12 +1,9 @@
 import { prisma } from "../lib/prisma";
-import fs from "fs"; // Need fs for ReadStream type in setupStreamHandlers if moved later
-import path from "path"; // Keep path if needed, e.g., for logStreamError filepath
-import crypto from "crypto"; // Keep crypto if needed
 
 // --- Constants ---
-export const STREAM_TIMEOUT = 30000; // 30 seconds
+export const STREAM_TIMEOUT = 120000 * 5; // 10 minutes
 export const MAX_CHUNK_RETRIES = 3;
-export const SESSION_CLEANUP_INTERVAL = STREAM_TIMEOUT * 2; // Check for inactive sessions every 60 seconds
+export const SESSION_CLEANUP_INTERVAL = 300000; // 5 minutes
 
 // --- State Variables ---
 
@@ -86,14 +83,25 @@ export async function logStreamError(trackId: string, sessionId: string, error: 
     }
 }
 
+/*
+there is a issue probably related to Cloudflare R2, if chunk size is set to (10 ** 6 / 10) 100kb
+in two minutes mark, a chunk on the client stuck in pending status.
+because of that adjust the chunk size to 500kb or 1mb to delay the track being paused.
+*/
+const isDev = process.env.APP_DOMAIN?.startsWith('http://localhost');
+
 export function calculateStreamHeaders(fileSize: number, range: string) {
-    const CHUNK_SIZE = Math.floor(10 ** 6 / 10); // 100kb chunks for optimal streaming
+    // Increase chunk size to reduce R2 requests, but not too large to cause buffering issues
+    const CHUNK_SIZE = Math.floor(10 ** 6 / 2); // 500KB chunks
     const parts = range.replace(/bytes=/, '').split('-');
     const start = parseInt(parts[0]!, 10);
     const end = Math.min(start + CHUNK_SIZE, fileSize - 1);
     const contentLength = end - start + 1;
 
-    console.log(`Range request: ${range} => Calculated Range: bytes ${start}-${end}/${fileSize}, Length: ${contentLength}`);
+    // Debug info only for development
+    if (isDev) {
+        console.log(`Range request: ${range} => Calculated Range: bytes ${start}-${end}/${fileSize}, Length: ${contentLength}`);
+    }
 
     return {
         headers: {
@@ -104,7 +112,9 @@ export function calculateStreamHeaders(fileSize: number, range: string) {
             'Content-Disposition': 'inline',
             'Cache-Control': 'public, max-age=3600',
             'Cross-Origin-Resource-Policy': 'cross-origin',
-            'Access-Control-Allow-Origin': process.env.NEXT_URL ?? (process.env.APP_DOMAIN ?? '*')
+            'Access-Control-Allow-Origin': process.env.NEXT_URL ?? (process.env.APP_DOMAIN ?? '*'),
+            // Add keepalive header to prevent proxy timeouts
+            'Connection': 'keep-alive'
         },
         fileSize,
         start,

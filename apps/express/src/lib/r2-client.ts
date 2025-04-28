@@ -22,7 +22,15 @@ export const r2Client = globalForR2Client.r2Client ?? new S3Client({
         accessKeyId: process.env.R2_ACCESS_KEY_ID!,
         secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
     },
-    forcePathStyle: true // Use path-style URLs for S3 compatibility
+    forcePathStyle: true, // Use path-style URLs for S3 compatibility
+    requestHandler: {
+        // Set explicit long timeouts for streaming usage
+        connectionTimeout: 10000, // 10 seconds to establish connection
+        socketTimeout: 600000,    // 10 minutes for socket inactivity
+    },
+    // Retry configuration
+    maxAttempts: 5, // Increase retry attempts
+    retryMode: "adaptive" // Use adaptive retry strategy
 });
 
 // Create a function to validate the R2 connection
@@ -34,7 +42,7 @@ export async function validateR2Connection() {
         // Use a test file path that we know exists based on earlier testing
         const testParams = {
             Bucket: process.env.R2_BUCKET_NAME,
-            Key: 'uploads/QOkuR1qNbxDVPJhQU1Lo0V6um0Yh78Gt/1745700371982-message.mp3', 
+            Key: 'connection-test.txt', 
             Range: 'bytes=0-0' // Just get the first byte to verify access
         };
         
@@ -50,7 +58,7 @@ export async function validateR2Connection() {
 }
 
 // Validate connection in development mode
-if (isDev && false) {
+if (isDev) {
     globalForR2Client.r2Client = r2Client;
     validateR2Connection().catch(console.error);
 } 
