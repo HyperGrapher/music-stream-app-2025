@@ -6,6 +6,7 @@ import { formatDistanceToNow } from "date-fns";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import JsonInfo from "./json-info";
+const numberArray: number[] = new Array(200).fill(1);
 
 export async function generateMetadata({
     params,
@@ -130,18 +131,18 @@ export default async function ArtistPage({
                         <TabsContent value="all">
                             <div className="space-y-4">
                                 <h2 className="text-xl font-semibold mb-4">Recent Tracks</h2>
-                                {latestTracks.length > 0 ? (
+                                {(latestTracks.length > 0) ? (
                                     <div className="space-y-4">
                                         {latestTracks.map(track => (
                                             <WaveformTrackItem
                                                 key={track.id}
-                                                waveformData={[0.002, 0.0030, 0.001]}
+                                                waveformData={JSON.parse(track.waveformData ?? '[]')}
                                                 // @ts-ignore
                                                 track={{
                                                     ...track,
                                                     userId: artistData.id,
                                                     updatedAt: new Date(),
-                                                    duration: 240, // Default duration
+                                                    duration: 410, // Default duration
                                                     waveformData: null,
                                                     storage: '',
                                                     storageKey: '',
@@ -177,6 +178,7 @@ export default async function ArtistPage({
                                         {popularTracks.map(track => (
                                             <WaveformTrackItem
                                                 key={track.id}
+                                                waveformData={numberArray}
                                                 // @ts-ignore
                                                 track={{
                                                     ...track,

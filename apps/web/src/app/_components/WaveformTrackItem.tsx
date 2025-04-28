@@ -10,6 +10,7 @@ import WaveformVisualizer from "./WaveformVisualizer";
 import { usePlayerStore } from "@/store/player";
 import type { Track } from "@prisma/client";
 import { formatDuration } from "@/lib/utils";
+import { shallow } from 'zustand/shallow';
 
 interface WaveformTrackItemProps {
   track: Track & {
@@ -60,7 +61,7 @@ export const WaveformTrackItem = ({
     togglePlay: state.togglePlay,
     playTrack: state.playTrack,
     seek: state.seek
-  }));
+  }), shallow);
 
   // Determine if this track is currently playing
   const isCurrentTrack = currentTrack?.id === track.id;
