@@ -19,7 +19,7 @@ import { shallow } from 'zustand/shallow';
 import { usePathname } from 'next/navigation'
 
 // Using React.memo to prevent unnecessary re-renders
-const TrackInfo = memo(function TrackInfo() {
+function TrackInfo() {
   const { currentTrack } = usePlayerStore(state => ({
     currentTrack: state.currentTrack
   }), shallow);
@@ -38,7 +38,7 @@ const TrackInfo = memo(function TrackInfo() {
           {currentTrack.title}
         </div>
         <div className="text-xs text-gray-400 truncate max-w-[120px] sm:max-w-[200px]">
-          {currentTrack.userId}
+          {currentTrack.title}
         </div>
       </div>
       <Button
@@ -51,7 +51,7 @@ const TrackInfo = memo(function TrackInfo() {
       </Button>
     </div>
   );
-});
+};
 
 // Using React.memo to prevent unnecessary re-renders
 const PlaybackButtons = memo(function PlaybackButtons() {
@@ -133,7 +133,7 @@ const PlaybackButtons = memo(function PlaybackButtons() {
 });
 
 // Using React.memo to prevent unnecessary re-renders
-const ProgressBar = memo(function ProgressBar() {
+function ProgressBar() {
   const {
     currentTime,
     duration,
@@ -183,7 +183,7 @@ const ProgressBar = memo(function ProgressBar() {
       </span>
     </div>
   );
-});
+};
 
 // Using React.memo to prevent unnecessary re-renders
 const Volume = memo(function Volume() {
@@ -245,7 +245,7 @@ const Volume = memo(function Volume() {
   );
 });
 
-export const PlaybackControls = memo(function PlaybackControls() {
+export function PlaybackControls() {
   // get current url
   const pathname = usePathname()
   if (pathname.startsWith('/upload')) return null;
@@ -256,7 +256,6 @@ export const PlaybackControls = memo(function PlaybackControls() {
         <div className="flex items-center justify-between w-full max-w-screen-xl mx-auto px-4 sm:px-8">
           <div className="w-1/3 flex justify-start">
             <TrackInfo />
-            {pathname}
           </div>
 
           <div className="flex flex-col items-center flex-grow min-w-[300px] max-w-lg">
@@ -271,4 +270,4 @@ export const PlaybackControls = memo(function PlaybackControls() {
       </div>
     </>
   );
-});
+};

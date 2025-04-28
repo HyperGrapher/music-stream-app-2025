@@ -18,7 +18,7 @@ export default async function Layout({
         <>
             <main className="bg-zinc-950 min-h-[calc(100vh-190px)] relative">
                 {children}
-                <NowPlayingCard />
+                {/* <NowPlayingCard /> */}
             </main>
             <PlaybackControls />
             <PlayerControllerWrapper initialUserId={userId} />
