@@ -8,6 +8,7 @@ export interface UploadingFile {
   tempUploadId?: string;
   fileKey?: string;
   error?: string;
+  originalName?: string;
 }
 
 interface UploadStore {
@@ -37,6 +38,9 @@ interface UploadStore {
   
   // Clear all files
   clearFiles: () => void;
+  
+  // Update file properties
+  updateFile: (id: string, props: Partial<UploadingFile>) => void;
 }
 
 export const useUploadStore = create<UploadStore>((set, get) => ({
@@ -49,6 +53,7 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
       file,
       progress: 0,
       status: "uploading",
+      originalName: file.name,
     };
     
     set((state) => ({
@@ -87,7 +92,9 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
   },
   
   getFileByName: (filename: string) => {
-    return get().uploadingFiles.find(file => file.file.name === filename);
+    return get().uploadingFiles.find(file => 
+      file.file.name === filename || file.originalName === filename
+    );
   },
   
   removeFile: (id: string) => {
@@ -98,5 +105,14 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
   
   clearFiles: () => {
     set({ uploadingFiles: [] });
+  },
+  
+  // New method to update file properties
+  updateFile: (id: string, props: Partial<UploadingFile>) => {
+    set((state) => ({
+      uploadingFiles: state.uploadingFiles.map((file) =>
+        file.id === id ? { ...file, ...props } : file
+      ),
+    }));
   },
 })); 

@@ -65,10 +65,14 @@ export const uploadRouter = createTRPCRouter({
             const filePrefix = input.isArtwork ? 'artworks' : 'uploads';
             const fileKey = `${filePrefix}/${userId}/${Date.now()}-${input.filename}`;
 
+
+
             // Only create temporary upload records for audio files, not artwork
             let tempUploadId = "";
 
             if (!input.isArtwork) {
+                console.log('Creating a new temporary upload record');
+                
                 try {
                     // Create a new temporary upload record
                     const tempUpload = await db.tempTrackUpload.create({
@@ -103,6 +107,7 @@ export const uploadRouter = createTRPCRouter({
                 });
 
                 const presignedUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
+                console.log({ fileKey, presignedUrl, tempUploadId });
 
                 return {
                     uploadUrl: presignedUrl,

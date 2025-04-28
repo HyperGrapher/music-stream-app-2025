@@ -41,7 +41,7 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
 
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [error, setError] = useState("");
-    const { addFile, updateProgress, setCompleted, setError: setFileError, removeFile } = useUploadStore();
+    const { addFile, updateProgress, setCompleted, setError: setFileError, removeFile, updateFile } = useUploadStore();
     const uploadUrlMutation = api.upload.getUploadUrl.useMutation();
     const markCompleteMutation = api.upload.markUploadComplete.useMutation();
     const cancelUploadMutation = api.upload.cancelUpload.useMutation();
@@ -89,12 +89,14 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
         try {
             // Sanitize filename - only do this once at the beginning
             const sanitizedFilename = sanitizeFilename(file.name);
+            console.log(`Original filename: ${file.name}, Sanitized filename: ${sanitizedFilename}`);
             
             // Add the file to the upload store (with sanitized filename)
             const uploadingFile = addFile({
                 ...file,
                 name: sanitizedFilename // This will be used throughout the app
             });
+            console.log(`Created uploadingFile:`, uploadingFile);
 
             // Update progress to show upload is starting
             updateProgress(uploadingFile.id, 0);
@@ -109,9 +111,9 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
             
             console.log("Got presigned URL:", { uploadUrl, fileKey, tempUploadId });
             
-            // Store the fileKey and tempUploadId in the uploadingFile for cancellation
-            uploadingFile.fileKey = fileKey;
-            uploadingFile.tempUploadId = tempUploadId;
+            // Update file with fileKey and tempUploadId using our new method
+            updateFile(uploadingFile.id, { fileKey, tempUploadId });
+            console.log(`Updated file with fileKey and tempUploadId:`, useUploadStore.getState().getFile(uploadingFile.id));
             
             // Upload the file directly to R2
             const xhr = new XMLHttpRequest();
@@ -133,13 +135,15 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
 
                         try {
                             // Mark the upload as complete in the database
-                            await markCompleteMutation.mutateAsync({
+                            const result = await markCompleteMutation.mutateAsync({
                                 tempUploadId,
                                 fileKey,
                             });
+                            console.log("Mark upload complete response:", result);
                             
                             // Update local state
                             setCompleted(uploadingFile.id, tempUploadId, fileKey);
+                            console.log(`Upload completed for file:`, useUploadStore.getState().getFile(uploadingFile.id));
                             toast.success(`${sanitizedFilename} uploaded successfully`);
                             resolve();
                         } catch (err) {
@@ -180,6 +184,9 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
             
             // Wait for upload to complete
             await uploadPromise;
+            
+            // Log final state of all uploads
+            console.log("All uploads state after completion:", useUploadStore.getState().uploadingFiles);
             
         } catch (err) {
             console.error("Upload file error:", err);
@@ -277,7 +284,12 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
                                 <ul className="space-y-3">
                                     {selectedFiles.map((file, index) => {
                                         // Find the upload progress for this file
-                                        const fileUpload = uploadingFiles.find(u => u.file.name === file.name);
+                                        // Look by both original name and sanitized name
+                                        const fileUpload = uploadingFiles.find(u => 
+                                            u.file.name === file.name || 
+                                            u.originalName === file.name ||
+                                            u.file.name === sanitizeFilename(file.name)
+                                        );
                                         
                                         return (
                                             <li key={index} className="bg-muted/50 rounded-md p-3">
