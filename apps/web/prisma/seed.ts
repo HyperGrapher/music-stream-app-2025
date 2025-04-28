@@ -129,13 +129,14 @@ async function main() {
                     id: uuidv4(),
                     title,
                     description: faker.lorem.paragraph(),
-                    storageKey: `https://example.com/audio/${titleSlug}.mp3`,
+                    storageKey: `/${titleSlug}.mp3`,
+                    storage: 'cloudflare',
+                    bucket: 'stream',
                     duration: faker.number.int({ min: 120, max: 420 }), // 2-7 minutes in seconds
                     waveformData: JSON.stringify(Array.from({ length: 100 }, () => faker.number.int({ min: 0, max: 100 }))),
                     isOriginal: true,
                     isPrivate: false,
                     genre,
-                    subGenre: faker.helpers.maybe(() => genreList[faker.number.int({ min: 0, max: genreList.length - 1 })], { probability: 0.3 }),
                     bpm: faker.number.int({ min: 60, max: 180 }),
                     key: ["C", "D", "E", "F", "G", "A", "B"][faker.number.int({ min: 0, max: 6 })] ?? "" +
                         (["", "m"][faker.number.int({ min: 0, max: 1 })] ?? ""),
