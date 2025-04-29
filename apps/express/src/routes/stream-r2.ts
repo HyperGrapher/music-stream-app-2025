@@ -72,7 +72,7 @@ function setupStreamHandlers(
             clearInterval(keepaliveInterval);
             return;
         }
-        
+
         try {
             // Write a zero-length chunk to keep the connection alive
             // This is invisible to the client but prevents timeouts
@@ -196,9 +196,19 @@ router.options('/stream/:trackId', (req, res) => {
 });
 
 // Main streaming endpoint
+// for more on stream security: https://grok.com/chat/9f5b7841-3e7f-4ba3-9156-3cb171ba1e84
 router.get('/stream/:trackId', validatePlaybackToken, async (req, res) => {
     const { trackId: jwtTrackId, userId: jwtUserId, key: fileKey } = req.playbackData as PlaybackData;
     const requestedTrackId = req.params.trackId ?? '';
+
+    try {
+        // const sessionData = req.cookies['better-auth.session_data'];
+        // console.log({ sessionData });
+
+    } catch (error) {
+        console.error("Cannot read session data");
+
+    }
 
     if (jwtTrackId !== requestedTrackId) return res.status(404).json({ error: 'Forbidden key' });
 

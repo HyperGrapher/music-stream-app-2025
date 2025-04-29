@@ -10,7 +10,7 @@ import userRoutes from './routes/user';
 import indexRoutes from './routes/index';
 import streamRoutes from './routes/stream-file';
 import r2StreamRoutes from './routes/stream-r2';
-
+import cookieParser from 'cookie-parser';
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -61,7 +61,7 @@ app.use(helmet({
 }));
 app.use(bodyParser.json());
 
-
+app.use(cookieParser());
 
 // Auth routes for desktop app
 app.use('/tracks', r2StreamRoutes);
