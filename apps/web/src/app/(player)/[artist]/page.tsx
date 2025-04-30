@@ -139,23 +139,19 @@ export default async function ArtistPage({
                                                 waveformData={JSON.parse(track.waveformData ?? '[]')}
                                                 // @ts-ignore
                                                 track={{
-                                                    ...track,
                                                     userId: artistData.id,
                                                     updatedAt: new Date(),
-                                                    duration: 410, // Default duration
-                                                    waveformData: null,
                                                     storage: '',
-                                                    storageKey: '',
                                                     isOriginal: true,
                                                     isPrivate: false,
                                                     bpm: null,
                                                     key: null,
                                                     tags: null,
-                                                    releaseDate: null,
                                                     recordLabel: null,
                                                     downloadCount: 0,
                                                     repostCount: 0,
                                                     albumId: null,
+                                                    ...track,
                                                     user: {
                                                         name: artistData.name,
                                                         image: artistData.image
