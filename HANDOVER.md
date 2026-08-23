@@ -33,6 +33,8 @@ Date: 2026-08-24
 - Express streaming resolves bucket/key through `Track.audioAsset` and only serves public tracks.
 - Artist queries map relational artwork to the existing `artworkUrl` UI DTO.
 - Player components now use `PlayerTrack`, a stable client DTO, rather than Prisma's persistence record.
+- Profile track items seed the player queue for All, Popular, Tracks, and Release tabs, enabling global Next/Previous and automatic queue advancement.
+- Artist profiles now expose public releases with ordered tracks through `artist.getReleases`; `/u/{userId}` is the stable profile route for names containing spaces or punctuation.
 - The starter `Post` router/pages and unused hardcoded auth demo were removed.
 - Better Auth now supports Google and email/password. The browser client uses same-origin auth endpoints.
 - Authenticated `/profile` redirects to the stable `/u/{userId}` route, so display names containing spaces or dots do not break navigation.

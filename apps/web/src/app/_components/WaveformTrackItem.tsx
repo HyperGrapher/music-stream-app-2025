@@ -26,6 +26,8 @@ interface WaveformTrackItemProps {
   };
   waveformData?: number[];
   compact?: boolean;
+  /** Queue to use for Next/Previous when this item starts playback. */
+  playlist?: Track[];
 }
 
 const createFallbackWaveform = () =>
@@ -188,6 +190,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
   track,
   waveformData = [],
   compact = false,
+  playlist,
 }: WaveformTrackItemProps) {
   // Parse waveform data from track if provided as string
   const parsedWaveformData = useMemo(() => {
@@ -207,18 +210,30 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
   }, [track.waveformData, waveformData]);
 
   // Only subscribe to the minimal state needed for this component
-  const { isCurrentTrack, isPlaying, togglePlay, playTrack, seek } =
-    usePlayerStore(
-      (state) => ({
-        isCurrentTrack: state.currentTrack?.id === track.id,
-        isPlaying:
-          state.currentTrack?.id === track.id && state.status === "playing",
-        togglePlay: state.togglePlay,
-        playTrack: state.playTrack,
-        seek: state.seek,
-      }),
-      shallow,
-    );
+  const {
+    isCurrentTrack,
+    isPlaying,
+    togglePlay,
+    playTrack,
+    setPlaylist,
+    seek,
+  } = usePlayerStore(
+    (state) => ({
+      isCurrentTrack: state.currentTrack?.id === track.id,
+      isPlaying:
+        state.currentTrack?.id === track.id && state.status === "playing",
+      togglePlay: state.togglePlay,
+      playTrack: state.playTrack,
+      setPlaylist: state.setPlaylist,
+      seek: state.seek,
+    }),
+    shallow,
+  );
+
+  const playFromQueue = useCallback(() => {
+    setPlaylist(playlist?.length ? playlist : [track]);
+    playTrack(track);
+  }, [playlist, playTrack, setPlaylist, track]);
 
   // Handle play/pause
   const handlePlayPause = useCallback(
@@ -226,12 +241,13 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
       e.stopPropagation();
 
       if (isCurrentTrack) {
+        setPlaylist(playlist?.length ? playlist : [track]);
         togglePlay();
       } else {
-        playTrack(track);
+        playFromQueue();
       }
     },
-    [isCurrentTrack, togglePlay, playTrack, track],
+    [isCurrentTrack, playFromQueue, playlist, setPlaylist, togglePlay, track],
   );
 
   // Handle seek on waveform
@@ -240,11 +256,11 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
       if (isCurrentTrack) {
         seek(position);
       } else {
-        playTrack(track);
+        playFromQueue();
         seek(position);
       }
     },
-    [isCurrentTrack, seek, playTrack, track],
+    [isCurrentTrack, playFromQueue, seek, track],
   );
 
   return (
