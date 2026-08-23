@@ -109,6 +109,23 @@ router.get("/stream/:trackId", async (req, res) => {
       throw new Error("Storage returned an invalid stream");
     }
 
+    // Count one play when playback starts from the beginning. Range requests
+    // are used for seeking/chunking, so counting every request would inflate
+    // popularity stats badly.
+    if (/^bytes=0-/.test(range.trim())) {
+      void prisma.track
+        .update({
+          where: { id: requestedTrackId },
+          data: { playCount: { increment: 1 } },
+        })
+        .catch((error) => {
+          console.error(
+            `Failed to record play for track ${requestedTrackId}`,
+            error,
+          );
+        });
+    }
+
     const audioStream = object.Body as Readable;
     let streamFinished = false;
 

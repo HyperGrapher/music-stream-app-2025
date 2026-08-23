@@ -46,7 +46,7 @@ export default async function ArtistPage({
   const latestTracksPromise = api.artist
     .getLatestTracks({
       artist: artist,
-      limit: 5,
+      limit: 100,
     })
     .catch(() => []);
 

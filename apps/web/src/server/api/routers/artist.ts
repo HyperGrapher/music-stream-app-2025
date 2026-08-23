@@ -60,7 +60,10 @@ export const artistRouter = createTRPCRouter({
 
   getLatestTracks: publicProcedure
     .input(
-      z.object({ artist: z.string(), limit: z.number().optional().default(5) }),
+      z.object({
+        artist: z.string(),
+        limit: z.number().int().min(1).max(100).optional().default(50),
+      }),
     )
     .query(async ({ input, ctx }) => {
       const artist = await ctx.db.user.findFirst({
@@ -110,7 +113,10 @@ export const artistRouter = createTRPCRouter({
 
   getPopularTracks: publicProcedure
     .input(
-      z.object({ artist: z.string(), limit: z.number().optional().default(5) }),
+      z.object({
+        artist: z.string(),
+        limit: z.number().int().min(1).max(100).optional().default(5),
+      }),
     )
     .query(async ({ input, ctx }) => {
       const artist = await ctx.db.user.findFirst({
@@ -127,7 +133,13 @@ export const artistRouter = createTRPCRouter({
           creatorId: artist.id,
           visibility: "PUBLIC",
         },
-        orderBy: { playCount: "desc" },
+        orderBy: [
+          { playCount: "desc" },
+          { likeCount: "desc" },
+          { repostCount: "desc" },
+          { commentCount: "desc" },
+          { createdAt: "desc" },
+        ],
         take: input.limit,
         select: {
           id: true,
