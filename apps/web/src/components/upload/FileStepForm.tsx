@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,16 +10,10 @@ import { useUploadStore } from "@/store/uploadStore";
 import { api } from "@/trpc/react";
 import { X, AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import sanitize from 'sanitize-filename'
 
 
 // Maximum file size in bytes (50MB)
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
-
-// Function to sanitize filenames - remove invalid chars and replace spaces with underscores
-export const sanitizeFilename = (filename: string): string => {
-    return sanitize(filename).replace(/\s+/g, '_');
-};
 
 // Allowed audio mime types
 const ALLOWED_AUDIO_TYPES = [
@@ -39,7 +33,6 @@ interface FileStepFormProps {
 
 export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
 
-    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [error, setError] = useState("");
     const { addFile, updateProgress, setCompleted, setError: setFileError, removeFile, updateFile } = useUploadStore();
     const uploadUrlMutation = api.upload.getUploadUrl.useMutation();
@@ -65,8 +58,13 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
                     setError(`Some files exceed the maximum allowed size of ${MAX_FILE_SIZE / (1024 * 1024)}MB.`);
                     return;
                 }
+
+                const emptyFiles = filesArray.filter(file => file.size === 0);
+                if (emptyFiles.length > 0) {
+                    setError("Empty audio files cannot be uploaded.");
+                    return;
+                }
                 
-                setSelectedFiles(prev => [...prev, ...filesArray]);
                 setError("");
                 
                 // Begin uploading each file
@@ -86,34 +84,24 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
     };
 
     const uploadFile = async (file: File) => {
+        const uploadingFile = addFile(file);
+
         try {
-            // Sanitize filename - only do this once at the beginning
-            const sanitizedFilename = sanitizeFilename(file.name);
-            console.log(`Original filename: ${file.name}, Sanitized filename: ${sanitizedFilename}`);
-            
-            // Add the file to the upload store (with sanitized filename)
-            const uploadingFile = addFile({
-                ...file,
-                name: sanitizedFilename // This will be used throughout the app
-            });
             console.log(`Created uploadingFile:`, uploadingFile);
 
             // Update progress to show upload is starting
             updateProgress(uploadingFile.id, 0);
             
-            console.log("Getting presigned URL for file:", sanitizedFilename);
-            // Get a presigned URL for upload - use sanitized filename
-            const { uploadUrl, fileKey, tempUploadId } = await uploadUrlMutation.mutateAsync({
-                filename: sanitizedFilename,
+            console.log("Getting presigned URL for file:", file.name);
+            const { uploadUrl, tempUploadId } = await uploadUrlMutation.mutateAsync({
+                filename: file.name,
                 contentType: file.type,
                 fileSize: file.size,
             });
             
-            console.log("Got presigned URL:", { uploadUrl, fileKey, tempUploadId });
+            console.log("Got presigned URL for upload", { tempUploadId });
             
-            // Update file with fileKey and tempUploadId using our new method
-            updateFile(uploadingFile.id, { fileKey, tempUploadId });
-            console.log(`Updated file with fileKey and tempUploadId:`, useUploadStore.getState().getFile(uploadingFile.id));
+            updateFile(uploadingFile.id, { tempUploadId });
             
             // Upload the file directly to R2
             const xhr = new XMLHttpRequest();
@@ -137,14 +125,13 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
                             // Mark the upload as complete in the database
                             const result = await markCompleteMutation.mutateAsync({
                                 tempUploadId,
-                                fileKey,
                             });
                             console.log("Mark upload complete response:", result);
                             
                             // Update local state
-                            setCompleted(uploadingFile.id, tempUploadId, fileKey);
+                            setCompleted(uploadingFile.id, tempUploadId);
                             console.log(`Upload completed for file:`, useUploadStore.getState().getFile(uploadingFile.id));
-                            toast.success(`${sanitizedFilename} uploaded successfully`);
+                            toast.success(`${file.name} uploaded successfully`);
                             resolve();
                         } catch (err) {
                             console.error("Error marking upload as complete:", err);
@@ -191,6 +178,7 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
         } catch (err) {
             console.error("Upload file error:", err);
             const errorMessage = `Upload failed: ${(err as Error).message}`;
+            setFileError(uploadingFile.id, errorMessage);
             setError(errorMessage);
             throw err; // Re-throw to handle in the caller
         }
@@ -198,26 +186,26 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
 
     const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (selectedFiles.length === 0) {
+        const completedFiles = uploadingFiles.map((upload) => upload.file);
+        if (completedFiles.length === 0) {
             setError("Please select at least one file.");
             return;
         }
         
-        onFilesSelected(selectedFiles);
+        onFilesSelected(completedFiles);
     };
 
-    const handleRemoveFile = async (index: number, fileUploadId?: string, fileKey?: string) => {
+    const handleRemoveFile = async (fileUploadId?: string) => {
         // If file was uploaded to R2, try to delete it
-        if (fileUploadId && fileKey) {
+        if (fileUploadId) {
             try {
                 // Get the uploadingFile from store
                 const uploadingFile = useUploadStore.getState().uploadingFiles.find(f => f.id === fileUploadId);
                 
                 if (uploadingFile) {
                     // If file was uploaded to R2, delete it
-                    if (uploadingFile.fileKey && uploadingFile.tempUploadId) {
+                    if (uploadingFile.tempUploadId) {
                         await cancelUploadMutation.mutateAsync({
-                            fileKey: uploadingFile.fileKey,
                             tempUploadId: uploadingFile.tempUploadId,
                         });
                     }
@@ -231,11 +219,6 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
                 toast.error(`Error removing file: ${(err as Error).message}`);
             }
         }
-        
-        // Remove from local state
-        const newFiles = [...selectedFiles];
-        newFiles.splice(index, 1);
-        setSelectedFiles(newFiles);
     };
 
     // Check if all uploads are completed
@@ -278,21 +261,15 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
                             </p>
                         )}
                         
-                        {selectedFiles.length > 0 && (
+                        {uploadingFiles.length > 0 && (
                             <div className="mt-4 space-y-4">
                                 <p className="text-sm font-medium mb-2">Selected files:</p>
                                 <ul className="space-y-3">
-                                    {selectedFiles.map((file, index) => {
-                                        // Find the upload progress for this file
-                                        // Look by both original name and sanitized name
-                                        const fileUpload = uploadingFiles.find(u => 
-                                            u.file.name === file.name || 
-                                            u.originalName === file.name ||
-                                            u.file.name === sanitizeFilename(file.name)
-                                        );
-                                        
+                                    {uploadingFiles.map((fileUpload) => {
+                                        const file = fileUpload.file;
+
                                         return (
-                                            <li key={index} className="bg-muted/50 rounded-md p-3">
+                                            <li key={fileUpload.id} className="bg-muted/50 rounded-md p-3">
                                                 <div className="flex justify-between items-center mb-2">
                                                     <span className="text-sm font-medium">
                                                         {file.name}
@@ -303,7 +280,7 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
                                                                 type="button"
                                                                 variant="destructive"
                                                                 size="sm"
-                                                                onClick={() => handleRemoveFile(index, fileUpload.id, fileUpload.fileKey)}
+                                                                onClick={() => handleRemoveFile(fileUpload.id)}
                                                                 title="Remove file"
                                                             >
                                                                 <Trash2 className="h-4 w-4" />
@@ -313,8 +290,8 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
                                                             type="button"
                                                             variant="ghost"
                                                             size="sm"
-                                                            onClick={() => handleRemoveFile(index, fileUpload?.id, fileUpload?.fileKey)}
-                                                            disabled={fileUpload?.status === "uploading"}
+                                                            onClick={() => handleRemoveFile(fileUpload.id)}
+                                                            disabled={fileUpload.status === "uploading"}
                                                             title="Remove file"
                                                         >
                                                             <X className="h-4 w-4" />
@@ -326,8 +303,7 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
                                                     {(file.size / (1024 * 1024)).toFixed(2)} MB
                                                 </div>
                                                 
-                                                {fileUpload && (
-                                                    <div className="space-y-1">
+                                                <div className="space-y-1">
                                                         <div className="flex items-center justify-between text-xs">
                                                             <div className="flex items-center">
                                                                 {fileUpload.status === "uploading" && (
@@ -352,8 +328,7 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
                                                             value={fileUpload.progress} 
                                                             className={fileUpload.status === "error" ? "bg-destructive" : ""} 
                                                         />
-                                                    </div>
-                                                )}
+                                                </div>
                                             </li>
                                         );
                                     })}
@@ -364,10 +339,10 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
 
                     <Button 
                         type="submit" 
-                        disabled={selectedFiles.length === 0 || !allUploadsCompleted || hasErrors}
+                        disabled={uploadingFiles.length === 0 || !allUploadsCompleted || hasErrors}
                         className="w-full mt-4"
                     >
-                        {!allUploadsCompleted && selectedFiles.length > 0
+                        {!allUploadsCompleted && uploadingFiles.length > 0
                             ? "Waiting for uploads to complete..."
                             : "Continue to Details"
                         }

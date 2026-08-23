@@ -58,10 +58,29 @@ Date: 2026-08-24
 - `apps/web/src/app/_components/GlobalPlaybackControls.tsx`
   - Clamps progress width and includes small player-related cleanup.
 
+### Upload ownership and consistency hardening
+
+- `apps/web/src/server/api/routers/upload.ts`
+  - Audio storage keys are randomized and sanitized on the server; the browser no longer supplies a storage key when completing, canceling, or creating a track.
+  - `markUploadComplete` resolves an authenticated user's temporary upload and verifies the R2 object exists, is non-empty, is at most 50 MB, and has an allowed audio MIME type.
+  - `createTrack` atomically claims one owned completed temporary upload and creates the track from its server-side storage fields.
+  - `createAlbum` rejects duplicate temporary IDs and atomically claims every owned completed upload, preventing partial albums or cross-user adoption.
+  - `cancelUpload` claims only the caller's temporary row before deleting R2 data, preventing finalize/cancel races. It restores the row if storage deletion fails so cancellation can be retried.
+  - `getDownloadUrl` accepts an owned track ID instead of signing an arbitrary caller-supplied R2 key.
+  - Artwork URLs now require an explicit `R2_PUBLIC_BASE_URL`; the previous generated `*.r2.cloudflarestorage.com` hostname was not a valid R2 public URL.
+- Upload UI/store
+  - Presign failures now enter a removable error state instead of remaining stuck as “uploading”.
+  - The store keeps real browser `File` instances and no longer keeps or trusts R2 storage keys.
+  - Duplicate filenames and Back-to-file-step navigation no longer disconnect the displayed file from its temporary upload.
+  - Artwork requests include file size, and successful artwork URLs are now submitted with tracks/albums.
+  - Removed the custom-link and scheduled-release controls because neither behavior is represented or persisted by the current data model.
+
 ## Verification completed
 
 - `GET http://localhost:3000/Hypergraph` returned `200` after the final edits.
 - `GET http://localhost:3000/p/1` returned `200` after the final edits.
+- `GET http://localhost:3000/upload` returned `200` after the upload edits.
+- `GET http://localhost:4000/` and `/api/version` both returned `200`.
 - `Range: bytes=0-99` against a real public track returned `206`, `Content-Range: bytes 0-99/1145001`, and 100 bytes.
 - An out-of-bounds range returned `416` with `Content-Range: bytes */1145001`.
 - The removed key-based stream route returned `404`.
@@ -71,38 +90,36 @@ Date: 2026-08-24
 - The edited player files parsed successfully through Prettier. The repository's existing formatting differs from current Prettier output, so `--write` was intentionally not used to avoid large unrelated churn.
 - Focused ESLint could not complete because the installed dependency tree is missing `eslint-plugin-react-hooks`.
 - Type checking was intentionally skipped at the user's request.
-- The in-app browser failed to initialize under the previous Windows sandbox, so real click/audio interaction was not automated. Perform a manual browser playback pass in the new unrestricted session.
+- The Browser integration reported no available browser instance even in the unrestricted session, so real click/audio/upload interaction was not automated.
+- The edited upload sources parsed successfully through Prettier. Existing repository formatting still differs from current Prettier output, so `--write` was not used.
 
 ## Current worktree
 
-Nine implementation files are modified, plus this handover file is new:
+The current uncommitted diff is the upload hardening across these 11 files, plus this handover update:
 
-- `apps/express/src/helpers/stream-utils.ts`
-- `apps/express/src/routes/index.ts`
-- `apps/express/src/routes/stream-r2.ts`
-- `apps/web/src/app/(player)/p/[id]/page.tsx`
-- `apps/web/src/app/(player)/p/[id]/track-table.tsx`
-- `apps/web/src/app/_components/GlobalPlaybackControls.tsx`
-- `apps/web/src/app/_components/WaveformTrackItem.tsx`
-- `apps/web/src/server/api/routers/artist.ts`
-- `apps/web/src/store/player.tsx`
-- `HANDOVER.md`
+- `apps/web/.env.example`
+- `apps/web/src/components/upload/ArtworkUpload.tsx`
+- `apps/web/src/components/upload/DetailStepForm.tsx`
+- `apps/web/src/components/upload/FileStepForm.tsx`
+- `apps/web/src/components/upload/MultipleTrackForm.tsx`
+- `apps/web/src/components/upload/SingleTrackForm.tsx`
+- `apps/web/src/components/upload/index.tsx`
+- `apps/web/src/components/upload/schema.ts`
+- `apps/web/src/env.js`
+- `apps/web/src/server/api/routers/upload.ts`
+- `apps/web/src/store/uploadStore.ts`
 
 Do not discard or overwrite these edits. Review the diff before building on them.
 
 ## Recommended next work
 
-1. Manually exercise play, pause, waveform seek on a newly selected track, rapid track switching, mute then volume adjustment, Previous, Next, automatic queue advancement, final-track replay, and Media Session controls.
-2. Harden upload ownership in `apps/web/src/server/api/routers/upload.ts`:
-   - `cancelUpload` must prove the pending upload belongs to the authenticated user.
-   - `createTrack` must bind the submitted storage key to that user's completed temporary upload.
-   - `getDownloadUrl` must not sign arbitrary keys.
-   - Use transactions/cleanup so database and R2 state cannot drift.
-3. Add authenticated owner access for private-track playback. The current safe baseline deliberately returns `404` for every private track.
-4. Move waveform and authoritative duration extraction into background media processing after upload. `TODO.md` mentions `audiowaveform` and the existing R2 chunk workaround.
-5. Replace placeholder feed/discover/library/for-artists surfaces and hard-coded playlist data with database-backed features.
-6. Consolidate duplicated Prisma schemas/migrations and add focused tests for range parsing, stream authorization, player transitions, and upload ownership.
+1. Add the bucket's Cloudflare public development URL or custom domain as `R2_PUBLIC_BASE_URL` in `apps/web/.env`, restart `turbo dev`, then manually test single-track and multi-track upload, artwork, removal, Back/Continue, and a deliberately failed upload. Cloudflare's S3 API endpoint is not a public object URL.
+2. Manually exercise play, pause, waveform seek on a newly selected track, rapid track switching, mute then volume adjustment, Previous, Next, automatic queue advancement, final-track replay, and Media Session controls.
+3. Replace the dead `cleanupTemporaryUploads` admin stub with a scheduled cleanup job that deletes both stale database rows and their R2 objects. Artwork also needs a temporary ownership record/cancellation path to avoid orphaned images.
+4. Add authenticated owner access for private-track playback. The current safe baseline deliberately returns `404` for every private track.
+5. Move waveform and authoritative duration extraction into background media processing after upload. `TODO.md` mentions `audiowaveform` and the existing R2 chunk workaround.
+6. Add focused tests for range parsing, stream authorization, player transitions, upload ownership/races, and album rollback, then consolidate the duplicated Prisma schemas/migrations.
 
 ## Suggested fresh-session prompt
 
-> Read `HANDOVER.md`, `learned-memories.md`, and the current Git diff. Do not run typecheck. Verify the running servers without starting duplicates, manually test the player in the browser, fix any confirmed regressions, then start hardening upload ownership in `apps/web/src/server/api/routers/upload.ts`. Preserve all existing uncommitted changes.
+> Read `HANDOVER.md`, `learned-memories.md`, and the current Git diff. Do not run typecheck. Preserve all existing uncommitted changes. Configure `R2_PUBLIC_BASE_URL`, restart the existing `turbo dev` process, manually exercise the upload flow and player in a browser, and fix confirmed regressions. Then implement stale R2/temp-upload cleanup and authenticated owner playback for private tracks.

@@ -22,7 +22,7 @@ import {
     RadioGroup,
     RadioGroupItem
 } from "@/components/ui/radio-group";
-import { GENRES, PRIVACY_OPTIONS } from "./constants";
+import { GENRES } from "./constants";
 import { type SingleTrackFormData } from "./schema";
 import { ArtworkUpload } from "./ArtworkUpload";
 
@@ -43,24 +43,6 @@ export function SingleTrackForm({ form }: SingleTrackFormProps) {
                         <FormControl>
                             <Input placeholder="Enter track title" {...field} />
                         </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )}
-            />
-            
-            {/* Track Link (optional) */}
-            <FormField
-                control={form.control}
-                name="link"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Custom Link (optional)</FormLabel>
-                        <FormControl>
-                            <Input placeholder="your-track-link" {...field} />
-                        </FormControl>
-                        <FormDescription>
-                            Create a custom URL (e.g., yourdomain.com/your-track-link)
-                        </FormDescription>
                         <FormMessage />
                     </FormItem>
                 )}
@@ -177,14 +159,6 @@ export function SingleTrackForm({ form }: SingleTrackFormProps) {
                                     </FormControl>
                                     <FormLabel className="font-normal">
                                         Private
-                                    </FormLabel>
-                                </FormItem>
-                                <FormItem className="flex items-center space-x-3 space-y-0">
-                                    <FormControl>
-                                        <RadioGroupItem value="schedule" />
-                                    </FormControl>
-                                    <FormLabel className="font-normal">
-                                        Schedule for later
                                     </FormLabel>
                                 </FormItem>
                             </RadioGroup>

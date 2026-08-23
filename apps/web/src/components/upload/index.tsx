@@ -16,7 +16,6 @@ export default function FileUpload() {
 
     const handleBack = () => {
         setCurrentStep(1);
-        setFiles([]);
     };
 
     return (

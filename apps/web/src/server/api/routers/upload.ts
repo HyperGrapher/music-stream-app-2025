@@ -1,6 +1,13 @@
 import { z } from "zod";
-import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import {
+    DeleteObjectCommand,
+    GetObjectCommand,
+    HeadObjectCommand,
+    PutObjectCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { TRPCError } from "@trpc/server";
+import sanitizeFilename from "sanitize-filename";
 import { r2Client } from "@/lib/r2";
 import { db } from "@/server/db";
 import { env } from "@/env";
@@ -33,67 +40,81 @@ const ALLOWED_IMAGE_TYPES = [
     'image/webp',
 ];
 
+const optionalUrl = z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().url().optional(),
+);
+
+function createStorageKey(prefix: "uploads" | "artworks", userId: string, filename: string) {
+    const safeFilename = sanitizeFilename(filename).replace(/\s+/g, "_").slice(0, 180);
+    if (!safeFilename) {
+        throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Filename must contain at least one valid character",
+        });
+    }
+
+    return `${prefix}/${userId}/${crypto.randomUUID()}-${safeFilename}`;
+}
+
+async function verifyUploadedAudio(bucket: string, storageKey: string) {
+    try {
+        const object = await r2Client.send(new HeadObjectCommand({
+            Bucket: bucket,
+            Key: storageKey,
+        }));
+
+        if (!object.ContentLength || object.ContentLength > MAX_FILE_SIZE) {
+            throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Uploaded file is empty or exceeds the maximum size",
+            });
+        }
+
+        const contentType = object.ContentType
+            ?.split(";", 1)[0]
+            ?.trim()
+            .toLowerCase();
+
+        if (!contentType || !ALLOWED_AUDIO_TYPES.includes(contentType)) {
+            throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Uploaded file has an unsupported audio type",
+            });
+        }
+    } catch (error) {
+        if (error instanceof TRPCError) throw error;
+
+        console.error("Unable to verify uploaded audio object:", error);
+        throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Uploaded audio file could not be verified",
+            cause: error,
+        });
+    }
+}
+
 export const uploadRouter = createTRPCRouter({
     // Get a presigned URL for direct upload to R2
     getUploadUrl: protectedProcedure
         .input(z.object({
-            filename: z.string(),
+            filename: z.string().trim().min(1).max(255),
             contentType: z.string(),
-            fileSize: z.number().optional(),
-            isArtwork: z.boolean().optional(),
+            fileSize: z.number().int().positive().max(MAX_FILE_SIZE),
         }))
         .mutation(async ({ ctx, input }) => {
             const userId = ctx.session.user.id;
 
-            // Validate the file type
-            if (input.isArtwork) {
-                if (!ALLOWED_IMAGE_TYPES.includes(input.contentType)) {
-                    throw new Error("Unsupported image format. Please upload JPEG, PNG or WebP files.");
-                }
-            } else {
-                if (!ALLOWED_AUDIO_TYPES.includes(input.contentType)) {
-                    throw new Error("Unsupported audio format. Please upload MP3, WAV, OGG, FLAC, or AAC files.");
-                }
+            if (!ALLOWED_AUDIO_TYPES.includes(input.contentType)) {
+                throw new TRPCError({
+                    code: "BAD_REQUEST",
+                    message: "Unsupported audio format. Please upload MP3, WAV, OGG, FLAC, or AAC files.",
+                });
             }
 
-            // Validate file size if provided
-            if (input.fileSize && input.fileSize > MAX_FILE_SIZE) {
-                throw new Error(`File size exceeds the maximum allowed size of ${MAX_FILE_SIZE / (1024 * 1024)}MB.`);
-            }
-
-            // Generate a unique key for the file, with different paths for audio vs artwork
-            const filePrefix = input.isArtwork ? 'artworks' : 'uploads';
-            const fileKey = `${filePrefix}/${userId}/${Date.now()}-${input.filename}`;
-
-
-
-            // Only create temporary upload records for audio files, not artwork
-            let tempUploadId = "";
-
-            if (!input.isArtwork) {
-                console.log('Creating a new temporary upload record');
-                
-                try {
-                    // Create a new temporary upload record
-                    const tempUpload = await db.tempTrackUpload.create({
-                        data: {
-                            id: crypto.randomUUID(),
-                            userId,
-                            isUploaded: false,
-                            storage: 'cloudflare',
-                            storageKey: fileKey,
-                            bucket: env.R2_BUCKET_NAME
-                        }
-                    });
-                    tempUploadId = tempUpload.id;
-                } catch (error) {
-                    console.error("Error creating temp upload record:", error);
-                    throw new Error("Failed to create temporary upload record");
-                }
-            }
+            const fileKey = createStorageKey('uploads', userId, input.filename);
 
             try {
-                // Create the presigned URL for upload
                 const command = new PutObjectCommand({
                     Bucket: env.R2_BUCKET_NAME,
                     Key: fileKey,
@@ -107,42 +128,60 @@ export const uploadRouter = createTRPCRouter({
                 });
 
                 const presignedUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
-                console.log({ fileKey, presignedUrl, tempUploadId });
+                const tempUpload = await db.tempTrackUpload.create({
+                    data: {
+                        id: crypto.randomUUID(),
+                        userId,
+                        isUploaded: false,
+                        storage: 'cloudflare',
+                        storageKey: fileKey,
+                        bucket: env.R2_BUCKET_NAME,
+                    },
+                });
 
                 return {
                     uploadUrl: presignedUrl,
-                    fileKey,
-                    tempUploadId,
+                    tempUploadId: tempUpload.id,
                 };
             } catch (error) {
+                if (error instanceof TRPCError) throw error;
                 console.error("Error generating presigned URL:", error);
-                throw new Error("Failed to generate upload URL");
+                throw new TRPCError({
+                    code: "INTERNAL_SERVER_ERROR",
+                    message: "Failed to prepare upload",
+                    cause: error,
+                });
             }
         }),
 
     // Get a presigned URL for artwork upload
     getArtworkUploadUrl: protectedProcedure
         .input(z.object({
-            filename: z.string(),
+            filename: z.string().trim().min(1).max(255),
             contentType: z.string(),
-            fileSize: z.number().optional(),
+            fileSize: z.number().int().positive().max(MAX_FILE_SIZE),
         }))
         .mutation(async ({ ctx, input }) => {
             const userId = ctx.session.user.id;
 
-            // Validate the file type
-            if (!ALLOWED_IMAGE_TYPES.includes(input.contentType)) {
-                throw new Error("Unsupported image format. Please upload JPEG, PNG or WebP files.");
+            if (!env.R2_PUBLIC_BASE_URL) {
+                throw new TRPCError({
+                    code: "PRECONDITION_FAILED",
+                    message: "Artwork uploads require R2_PUBLIC_BASE_URL to be configured",
+                });
             }
 
-            // Validate file size if provided
-            if (input.fileSize && input.fileSize > MAX_FILE_SIZE) {
-                throw new Error(`File size exceeds the maximum allowed size of ${MAX_FILE_SIZE / (1024 * 1024)}MB.`);
+            // Validate the file type
+            if (!ALLOWED_IMAGE_TYPES.includes(input.contentType)) {
+                throw new TRPCError({
+                    code: "BAD_REQUEST",
+                    message: "Unsupported image format. Please upload JPEG, PNG or WebP files.",
+                });
             }
 
             try {
                 // Generate a unique key for the artwork file
-                const fileKey = `artworks/${userId}/${Date.now()}-${input.filename}`;
+                const fileKey = createStorageKey('artworks', userId, input.filename);
 
                 // Create the presigned URL for upload
                 const command = new PutObjectCommand({
@@ -160,48 +199,96 @@ export const uploadRouter = createTRPCRouter({
 
                 const presignedUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
 
-                const fileUrl = `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${fileKey}`;
+                const publicBaseUrl = env.R2_PUBLIC_BASE_URL.endsWith("/")
+                    ? env.R2_PUBLIC_BASE_URL
+                    : `${env.R2_PUBLIC_BASE_URL}/`;
+                const publicPath = fileKey
+                    .split("/")
+                    .map(encodeURIComponent)
+                    .join("/");
+                const fileUrl = new URL(publicPath, publicBaseUrl).toString();
 
                 return {
                     uploadUrl: presignedUrl,
-                    fileKey,
                     fileUrl,
                 };
             } catch (error) {
+                if (error instanceof TRPCError) throw error;
                 console.error("Error generating artwork upload URL:", error);
-                throw new Error("Failed to generate artwork upload URL");
+                throw new TRPCError({
+                    code: "INTERNAL_SERVER_ERROR",
+                    message: "Failed to generate artwork upload URL",
+                    cause: error,
+                });
             }
         }),
 
     // Cancel an upload and delete the file from R2 if it was uploaded
     cancelUpload: protectedProcedure
         .input(z.object({
-            tempUploadId: z.string().optional(),
-            fileKey: z.string(),
+            tempUploadId: z.string().uuid(),
         }))
         .mutation(async ({ ctx, input }) => {
             const userId = ctx.session.user.id;
 
             try {
-                // Delete the file from R2
-                const deleteCommand = new DeleteObjectCommand({
-                    Bucket: env.R2_BUCKET_NAME,
-                    Key: input.fileKey,
+                const tempUpload = await db.tempTrackUpload.findFirst({
+                    where: {
+                        id: input.tempUploadId,
+                        userId,
+                    },
                 });
 
-                await r2Client.send(deleteCommand);
-
-                // If there's a tempUploadId, delete the temporary upload record
-                if (input.tempUploadId) {
-                    await db.tempTrackUpload.delete({
-                        where: {
-                            id: input.tempUploadId,
-                            userId, // Ensure the user owns this upload
-                        },
-                    }).catch(error => {
-                        // Ignore error if record doesn't exist
-                        console.warn("Could not delete temp upload record:", error);
+                if (!tempUpload) {
+                    throw new TRPCError({
+                        code: "NOT_FOUND",
+                        message: "Upload not found",
                     });
+                }
+
+                // Claim the temporary row before touching storage. This prevents a
+                // concurrent createTrack/createAlbum request from adopting the file.
+                const claimed = await db.tempTrackUpload.deleteMany({
+                    where: {
+                        id: input.tempUploadId,
+                        userId,
+                    },
+                });
+
+                if (claimed.count !== 1) {
+                    throw new TRPCError({
+                        code: "CONFLICT",
+                        message: "Upload is already being finalized or canceled",
+                    });
+                }
+
+                const deleteCommand = new DeleteObjectCommand({
+                    Bucket: tempUpload.bucket,
+                    Key: tempUpload.storageKey,
+                });
+
+                try {
+                    await r2Client.send(deleteCommand);
+                } catch (storageError) {
+                    // Restore the claim so the user can retry cancellation instead
+                    // of leaving the UI with an upload that can never be addressed.
+                    try {
+                        await db.tempTrackUpload.create({
+                            data: {
+                                id: tempUpload.id,
+                                userId: tempUpload.userId,
+                                isUploaded: tempUpload.isUploaded,
+                                storageKey: tempUpload.storageKey,
+                                storage: tempUpload.storage,
+                                bucket: tempUpload.bucket,
+                                createdAt: tempUpload.createdAt,
+                            },
+                        });
+                    } catch (restoreError) {
+                        console.error("Failed to restore upload after storage deletion error:", restoreError);
+                    }
+
+                    throw storageError;
                 }
 
                 return {
@@ -209,42 +296,73 @@ export const uploadRouter = createTRPCRouter({
                     message: "Upload canceled and file deleted",
                 };
             } catch (error) {
+                if (error instanceof TRPCError) throw error;
                 console.error("Error canceling upload:", error);
-                throw new Error("Failed to cancel upload");
+                throw new TRPCError({
+                    code: "INTERNAL_SERVER_ERROR",
+                    message: "Failed to cancel upload",
+                    cause: error,
+                });
             }
         }),
 
     // Mark a temporary upload as completed
     markUploadComplete: protectedProcedure
         .input(z.object({
-            tempUploadId: z.string(),
-            fileKey: z.string(),
+            tempUploadId: z.string().uuid(),
         }))
         .mutation(async ({ ctx, input }) => {
             const userId = ctx.session.user.id;
 
             try {
-                // Update the temporary upload record
-                await db.tempTrackUpload.update({
+                const tempUpload = await db.tempTrackUpload.findFirst({
                     where: {
                         id: input.tempUploadId,
-                        userId, // Ensure the user owns this upload
+                        userId,
+                    },
+                    select: {
+                        storageKey: true,
+                        bucket: true,
+                    },
+                });
+
+                if (!tempUpload) {
+                    throw new TRPCError({
+                        code: "NOT_FOUND",
+                        message: "Upload not found",
+                    });
+                }
+
+                await verifyUploadedAudio(tempUpload.bucket, tempUpload.storageKey);
+
+                const updated = await db.tempTrackUpload.updateMany({
+                    where: {
+                        id: input.tempUploadId,
+                        userId,
                     },
                     data: {
                         isUploaded: true,
-                    }
+                    },
                 });
 
-                // Generate the file URL
-                const fileUrl = `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${input.fileKey}`;
+                if (updated.count !== 1) {
+                    throw new TRPCError({
+                        code: "CONFLICT",
+                        message: "Upload is no longer available",
+                    });
+                }
 
                 return {
                     success: true,
-                    fileUrl,
                 };
             } catch (error) {
+                if (error instanceof TRPCError) throw error;
                 console.error("Error marking upload as complete:", error);
-                throw new Error("Failed to mark upload as complete");
+                throw new TRPCError({
+                    code: "INTERNAL_SERVER_ERROR",
+                    message: "Failed to mark upload as complete",
+                    cause: error,
+                });
             }
         }),
 
@@ -304,36 +422,18 @@ export const uploadRouter = createTRPCRouter({
     // Create final track records from temporary uploads
     createTrack: protectedProcedure
         .input(z.object({
-            title: z.string(),
-            fileKey: z.string(),
-            tempUploadId: z.string(),
-            genre: z.string(),
-            description: z.string().optional(),
-            privacy: z.enum(["public", "private", "schedule"]),
-            tags: z.string().optional(),
-            artwork: z.string().optional(), // URL of uploaded artwork
-            link: z.string().optional(),
+            title: z.string().trim().min(1).max(200),
+            tempUploadId: z.string().uuid(),
+            genre: z.string().trim().min(1).max(100),
+            description: z.string().max(5000).optional(),
+            privacy: z.enum(["public", "private"]),
+            tags: z.string().max(1000).optional(),
+            artwork: optionalUrl, // URL of uploaded artwork
         }))
         .mutation(async ({ ctx, input }) => {
             const userId = ctx.session.user.id;
 
             try {
-                // Verify this is a valid temporary upload
-                const tempUpload = await db.tempTrackUpload.findUnique({
-                    where: {
-                        id: input.tempUploadId,
-                        userId,
-                        isUploaded: true,
-                    }
-                });
-
-                if (!tempUpload) {
-                    throw new Error("Invalid or incomplete upload");
-                }
-
-                // Generate the file URL
-                // const fileUrl = `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${input.fileKey}`;
-
                 // Extract audio metadata (like duration) - in a real implementation,
                 // this might be done by a serverless function or webhook after upload
                 // For now, we'll set a dummy duration
@@ -342,127 +442,173 @@ export const uploadRouter = createTRPCRouter({
                 // Generate dummy waveform data
                 const dummyWaveformData = generateDummyWaveformData();
 
-                // Create the track
-                const track = await db.track.create({
-                    data: {
-                        title: input.title,
-                        storageKey: input.fileKey,
-                        storage: 'cloudflare',
-                        bucket: env.R2_BUCKET_NAME,
-                        genre: input.genre,
-                        description: input.description,
-                        isPrivate: input.privacy !== "public",
-                        tags: input.tags,
-                        artworkUrl: input.artwork,
-                        duration: dummyDuration, // Would be extracted from the file
-                        waveformData: JSON.stringify(dummyWaveformData), // Would be generated from the audio
-                        userId,
-                    }
-                });
+                const track = await db.$transaction(async (transaction) => {
+                    const tempUpload = await transaction.tempTrackUpload.findFirst({
+                        where: {
+                            id: input.tempUploadId,
+                            userId,
+                            isUploaded: true,
+                        },
+                    });
 
-                // Delete the temporary upload record
-                await db.tempTrackUpload.delete({
-                    where: {
-                        id: input.tempUploadId,
+                    if (!tempUpload) {
+                        throw new TRPCError({
+                            code: "NOT_FOUND",
+                            message: "Completed upload not found",
+                        });
                     }
+
+                    const claimed = await transaction.tempTrackUpload.deleteMany({
+                        where: {
+                            id: input.tempUploadId,
+                            userId,
+                            isUploaded: true,
+                        },
+                    });
+
+                    if (claimed.count !== 1) {
+                        throw new TRPCError({
+                            code: "CONFLICT",
+                            message: "Upload is already being finalized or canceled",
+                        });
+                    }
+
+                    return transaction.track.create({
+                        data: {
+                            title: input.title,
+                            storageKey: tempUpload.storageKey,
+                            storage: tempUpload.storage,
+                            bucket: tempUpload.bucket,
+                            genre: input.genre,
+                            description: input.description,
+                            isPrivate: input.privacy !== "public",
+                            tags: input.tags,
+                            artworkUrl: input.artwork,
+                            duration: dummyDuration,
+                            waveformData: JSON.stringify(dummyWaveformData),
+                            userId,
+                        },
+                    });
                 });
 
                 return { track };
             } catch (error) {
+                if (error instanceof TRPCError) throw error;
                 console.error("Failed to create track:", error);
-                throw new Error(`Failed to create track record: ${(error as Error).message}`);
+                throw new TRPCError({
+                    code: "INTERNAL_SERVER_ERROR",
+                    message: "Failed to create track record",
+                    cause: error,
+                });
             }
         }),
 
     // Create album with multiple tracks
     createAlbum: protectedProcedure
         .input(z.object({
-            title: z.string(),
+            title: z.string().trim().min(1).max(200),
             tracks: z.array(z.object({
-                fileKey: z.string(),
-                tempUploadId: z.string(),
-                title: z.string(),
-            })),
-            genre: z.string(),
-            description: z.string().optional(),
+                tempUploadId: z.string().uuid(),
+                title: z.string().trim().min(1).max(200),
+            })).min(1).max(50),
+            genre: z.string().trim().min(1).max(100),
+            description: z.string().max(5000).optional(),
             privacy: z.enum(["public", "private"]),
             albumType: z.enum(["ALBUM", "EP"]),
-            tags: z.string().optional(),
-            artwork: z.string().optional(), // URL of uploaded artwork
-            link: z.string().optional(),
+            tags: z.string().max(1000).optional(),
+            artwork: optionalUrl, // URL of uploaded artwork
         }))
         .mutation(async ({ ctx, input }) => {
             const userId = ctx.session.user.id;
 
             try {
-                // Create the album
-                const album = await db.album.create({
-                    data: {
-                        title: input.title,
-                        description: input.description,
-                        type: input.albumType,
-                        isPrivate: input.privacy === "private",
-                        artworkUrl: input.artwork,
-                        userId,
-                    }
-                });
-
-                // Create each track
-                for (const trackInput of input.tracks) {
-                    // Verify this is a valid temporary upload
-                    const tempUpload = await db.tempTrackUpload.findUnique({
-                        where: {
-                            id: trackInput.tempUploadId,
-                            userId,
-                            isUploaded: true,
-                        }
-                    });
-
-                    if (!tempUpload) {
-                        console.warn(`Skipping invalid upload: ${trackInput.tempUploadId}`);
-                        continue; // Skip invalid uploads
-                    }
-
-                    // Generate the file URL
-                    // const fileUrl = `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${trackInput.fileKey}`;
-
-                    // Generate dummy waveform data
-                    const dummyWaveformData = generateDummyWaveformData();
-
-                    // Create the track - in a real implementation,
-                    // you'd extract metadata like duration from the audio file
-                    const dummyDuration = 180; // 3 minutes in seconds
-
-                    await db.track.create({
-                        data: {
-                            title: trackInput.title,
-                            storageKey: trackInput.fileKey,
-                            storage: 'cloudflare',
-                            bucket: env.R2_BUCKET_NAME,
-                            genre: input.genre,
-                            description: input.description,
-                            isPrivate: input.privacy === "private",
-                            tags: input.tags,
-                            artworkUrl: input.artwork,
-                            duration: dummyDuration, // Would be extracted from the file
-                            waveformData: JSON.stringify(dummyWaveformData), // Would be generated from the audio
-                            albumId: album.id,
-                            userId,
-                        }
-                    });
-
-                    // Delete the temporary upload record
-                    await db.tempTrackUpload.delete({
-                        where: {
-                            id: trackInput.tempUploadId,
-                        }
+                const tempUploadIds = input.tracks.map((track) => track.tempUploadId);
+                if (new Set(tempUploadIds).size !== tempUploadIds.length) {
+                    throw new TRPCError({
+                        code: "BAD_REQUEST",
+                        message: "Each uploaded file can only appear once in an album",
                     });
                 }
 
+                const album = await db.$transaction(async (transaction) => {
+                    const tempUploads = await transaction.tempTrackUpload.findMany({
+                        where: {
+                            id: { in: tempUploadIds },
+                            userId,
+                            isUploaded: true,
+                        },
+                    });
+
+                    if (tempUploads.length !== input.tracks.length) {
+                        throw new TRPCError({
+                            code: "NOT_FOUND",
+                            message: "One or more completed uploads were not found",
+                        });
+                    }
+
+                    const claimed = await transaction.tempTrackUpload.deleteMany({
+                        where: {
+                            id: { in: tempUploadIds },
+                            userId,
+                            isUploaded: true,
+                        },
+                    });
+
+                    if (claimed.count !== input.tracks.length) {
+                        throw new TRPCError({
+                            code: "CONFLICT",
+                            message: "One or more uploads are already being finalized or canceled",
+                        });
+                    }
+
+                    const createdAlbum = await transaction.album.create({
+                        data: {
+                            title: input.title,
+                            description: input.description,
+                            type: input.albumType,
+                            isPrivate: input.privacy === "private",
+                            artworkUrl: input.artwork,
+                            userId,
+                        },
+                    });
+
+                    const uploadsById = new Map(
+                        tempUploads.map((upload) => [upload.id, upload]),
+                    );
+
+                    for (const trackInput of input.tracks) {
+                        const tempUpload = uploadsById.get(trackInput.tempUploadId)!;
+                        await transaction.track.create({
+                            data: {
+                                title: trackInput.title,
+                                storageKey: tempUpload.storageKey,
+                                storage: tempUpload.storage,
+                                bucket: tempUpload.bucket,
+                                genre: input.genre,
+                                description: input.description,
+                                isPrivate: input.privacy === "private",
+                                tags: input.tags,
+                                artworkUrl: input.artwork,
+                                duration: 180,
+                                waveformData: JSON.stringify(generateDummyWaveformData()),
+                                albumId: createdAlbum.id,
+                                userId,
+                            },
+                        });
+                    }
+
+                    return createdAlbum;
+                });
+
                 return { album };
             } catch (error) {
+                if (error instanceof TRPCError) throw error;
                 console.error("Failed to create album:", error);
-                throw new Error(`Failed to create album record: ${(error as Error).message}`);
+                throw new TRPCError({
+                    code: "INTERNAL_SERVER_ERROR",
+                    message: "Failed to create album record",
+                    cause: error,
+                });
             }
         }),
 
@@ -523,13 +669,33 @@ export const uploadRouter = createTRPCRouter({
     // Get a download URL for an existing file
     getDownloadUrl: protectedProcedure
         .input(z.object({
-            fileKey: z.string(),
+            trackId: z.string().uuid(),
         }))
-        .query(async ({ input }) => {
+        .query(async ({ ctx, input }) => {
+            const userId = ctx.session.user.id;
+
             try {
+                const track = await db.track.findFirst({
+                    where: {
+                        id: input.trackId,
+                        userId,
+                    },
+                    select: {
+                        storageKey: true,
+                        bucket: true,
+                    },
+                });
+
+                if (!track) {
+                    throw new TRPCError({
+                        code: "NOT_FOUND",
+                        message: "Track not found",
+                    });
+                }
+
                 const command = new GetObjectCommand({
-                    Bucket: env.R2_BUCKET_NAME,
-                    Key: input.fileKey,
+                    Bucket: track.bucket,
+                    Key: track.storageKey,
                 });
 
                 const presignedUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
@@ -538,8 +704,13 @@ export const uploadRouter = createTRPCRouter({
                     downloadUrl: presignedUrl,
                 };
             } catch (error) {
+                if (error instanceof TRPCError) throw error;
                 console.error("Error generating download URL:", error);
-                throw new Error("Failed to generate download URL");
+                throw new TRPCError({
+                    code: "INTERNAL_SERVER_ERROR",
+                    message: "Failed to generate download URL",
+                    cause: error,
+                });
             }
         }),
 });

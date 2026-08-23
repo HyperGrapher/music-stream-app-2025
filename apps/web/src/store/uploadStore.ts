@@ -6,9 +6,7 @@ export interface UploadingFile {
   progress: number;
   status: "uploading" | "completed" | "error";
   tempUploadId?: string;
-  fileKey?: string;
   error?: string;
-  originalName?: string;
 }
 
 interface UploadStore {
@@ -22,16 +20,13 @@ interface UploadStore {
   updateProgress: (id: string, progress: number) => void;
   
   // Set upload completed
-  setCompleted: (id: string, tempUploadId: string, fileKey: string) => void;
+  setCompleted: (id: string, tempUploadId: string) => void;
   
   // Set upload error
   setError: (id: string, error: string) => void;
   
   // Get file by id
   getFile: (id: string) => UploadingFile | undefined;
-  
-  // Get file by filename
-  getFileByName: (filename: string) => UploadingFile | undefined;
   
   // Remove a file from the upload queue
   removeFile: (id: string) => void;
@@ -53,7 +48,6 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
       file,
       progress: 0,
       status: "uploading",
-      originalName: file.name,
     };
     
     set((state) => ({
@@ -71,10 +65,10 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
     }));
   },
   
-  setCompleted: (id: string, tempUploadId: string, fileKey: string) => {
+  setCompleted: (id: string, tempUploadId: string) => {
     set((state) => ({
       uploadingFiles: state.uploadingFiles.map((file) =>
-        file.id === id ? { ...file, status: "completed", tempUploadId, fileKey } : file
+        file.id === id ? { ...file, status: "completed", tempUploadId } : file
       ),
     }));
   },
@@ -89,12 +83,6 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
   
   getFile: (id: string) => {
     return get().uploadingFiles.find(file => file.id === id);
-  },
-  
-  getFileByName: (filename: string) => {
-    return get().uploadingFiles.find(file => 
-      file.file.name === filename || file.originalName === filename
-    );
   },
   
   removeFile: (id: string) => {
@@ -115,4 +103,4 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
       ),
     }));
   },
-})); 
+}));

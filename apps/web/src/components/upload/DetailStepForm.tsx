@@ -12,7 +12,6 @@ import { useUploadStore } from "@/store/uploadStore";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
 import { useRouter } from 'next/navigation';
-import { useUser } from "@/hooks/useUser";
 
 
 interface DetailStepFormProps {
@@ -33,11 +32,8 @@ export function DetailStepForm({
     setError
 }: DetailStepFormProps) {
     const router = useRouter();
-    const user = useUser();
     const isSingleTrack = files.length === 1;
-    const uploadingFiles = useUploadStore(state => state.uploadingFiles);
     const clearFiles = useUploadStore(state => state.clearFiles);
-    const getFileByName = useUploadStore(state => state.getFileByName);
 
     // Get the right mutation based on the number of files
     const createTrackMutation = api.upload.createTrack.useMutation({
@@ -98,10 +94,9 @@ export function DetailStepForm({
         const uploadedFile = uploadingFiles.length > 0 ? uploadingFiles[0] : null;
         console.log('Selected uploadedFile:', uploadedFile);
 
-        if (!uploadedFile || !uploadedFile.tempUploadId || !uploadedFile.fileKey || uploadedFile.status !== "completed") {
+        if (!uploadedFile || !uploadedFile.tempUploadId || uploadedFile.status !== "completed") {
             const reason = !uploadedFile ? "No upload found" : 
                            !uploadedFile.tempUploadId ? "Missing tempUploadId" :
-                           !uploadedFile.fileKey ? "Missing fileKey" :
                            uploadedFile.status !== "completed" ? `Status is ${uploadedFile.status}` : "Unknown reason";
             console.error(`Upload validation failed: ${reason}`);
             setError(`Upload not completed. Please wait for the upload to finish. (${reason})`);
@@ -114,7 +109,6 @@ export function DetailStepForm({
         try {
             console.log('Submitting track with:', {
                 title: data.title,
-                fileKey: uploadedFile.fileKey,
                 tempUploadId: uploadedFile.tempUploadId
             });
             
@@ -125,18 +119,12 @@ export function DetailStepForm({
                 privacy: data.privacy,
                 description: data.description,
                 tags: data.tags,
-                link: data.link,
-                // Use the fileKey and tempUploadId from the upload
-                fileKey: uploadedFile.fileKey,
                 tempUploadId: uploadedFile.tempUploadId,
-                // If artwork was uploaded, include its URL
-                artwork: undefined, // Would come from separate artwork upload
+                artwork: data.artwork,
             });
 
             // Add redirect after successful submission
-            if (!createTrackMutation.isError) {
-                router.push('/');
-            }
+            router.push('/');
         } catch (err: unknown) {
             // Error is handled in the mutation onError
             console.error('Track creation error:', err);
@@ -160,25 +148,25 @@ export function DetailStepForm({
         }
 
         // Check if all files are properly uploaded and create trackInputs
-        const trackInputs = uploadingFiles.map((uploadedFile, index) => {
-            if (!uploadedFile || !uploadedFile.tempUploadId || !uploadedFile.fileKey || uploadedFile.status !== "completed") {
+        const trackInputs = uploadingFiles.flatMap((uploadedFile, index) => {
+            if (!uploadedFile || !uploadedFile.tempUploadId || uploadedFile.status !== "completed") {
                 const reason = !uploadedFile ? "No upload found" : 
                                !uploadedFile.tempUploadId ? "Missing tempUploadId" :
-                               !uploadedFile.fileKey ? "Missing fileKey" :
                                uploadedFile.status !== "completed" ? `Status is ${uploadedFile.status}` : "Unknown reason";
                 console.error(`Upload validation failed for file ${index}: ${reason}`);
-                return null;
+                return [];
             }
             
             // Use the file object from `files` array to get the filename
             const file = files[index];
             
-            return {
-                title: file?.name.replace(/\.[^/.]+$/, ""), // Use filename as default title
-                fileKey: uploadedFile.fileKey,
+            if (!file) return [];
+
+            return [{
+                title: file.name.replace(/\.[^/.]+$/, ""), // Use filename as default title
                 tempUploadId: uploadedFile.tempUploadId,
-            };
-        }).filter(Boolean);
+            }];
+        });
 
         console.log('trackInputs: ', trackInputs);
 
@@ -204,17 +192,13 @@ export function DetailStepForm({
                 albumType: data.albumType,
                 description: data.description,
                 tags: data.tags,
-                link: data.link,
                 // Use the prepared track inputs
-                tracks: trackInputs as any, // TypeScript limitation with the filter(Boolean)
-                // If artwork was uploaded, include its URL
-                artwork: undefined, // Would come from separate artwork upload
+                tracks: trackInputs,
+                artwork: data.artwork,
             });
 
             // Add redirect after successful submission
-            if (!createAlbumMutation.isError) {
-                router.push('/');
-            }
+            router.push('/');
         } catch (err: unknown) {
             // Error is handled in the mutation onError
             console.error('Album creation error:', err);
@@ -280,4 +264,4 @@ export function DetailStepForm({
             )}
         </Card>
     );
-} 
+}

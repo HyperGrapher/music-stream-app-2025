@@ -45,9 +45,10 @@ export function ArtworkUpload({ onArtworkUploaded, existingArtworkUrl }: Artwork
       setProgress(0);
 
       // Get a presigned URL for uploading
-      const { uploadUrl, fileKey, fileUrl } = await getArtworkUrlMutation.mutateAsync({
+      const { uploadUrl, fileUrl } = await getArtworkUrlMutation.mutateAsync({
         filename: selectedFile.name,
         contentType: selectedFile.type,
+        fileSize: selectedFile.size,
       });
 
       // Upload directly to R2 using the presigned URL
@@ -179,4 +180,4 @@ export function ArtworkUpload({ onArtworkUploaded, existingArtworkUrl }: Artwork
       )}
     </div>
   );
-} 
+}

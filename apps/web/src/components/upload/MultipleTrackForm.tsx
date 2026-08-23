@@ -22,7 +22,7 @@ import {
     RadioGroup,
     RadioGroupItem
 } from "@/components/ui/radio-group";
-import { GENRES, ALBUM_TYPES, ALBUM_PRIVACY_OPTIONS } from "./constants";
+import { GENRES, ALBUM_TYPES } from "./constants";
 import { type MultipleTrackFormData } from "./schema";
 import { ArtworkUpload } from "./ArtworkUpload";
 
@@ -43,24 +43,6 @@ export function MultipleTrackForm({ form }: MultipleTrackFormProps) {
                         <FormControl>
                             <Input placeholder="Enter album title" {...field} />
                         </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )}
-            />
-            
-            {/* Album Link (optional) */}
-            <FormField
-                control={form.control}
-                name="link"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Custom Link (optional)</FormLabel>
-                        <FormControl>
-                            <Input placeholder="your-album-link" {...field} />
-                        </FormControl>
-                        <FormDescription>
-                            Create a custom URL (e.g., yourdomain.com/your-album-link)
-                        </FormDescription>
                         <FormMessage />
                     </FormItem>
                 )}
@@ -214,4 +196,4 @@ export function MultipleTrackForm({ form }: MultipleTrackFormProps) {
             />
         </div>
     );
-} 
+}
