@@ -1,579 +1,205 @@
-import express, { Router, Request, Response } from 'express';
-import { verifyToken } from '../middlewares/auth';
-import { unauthorizedResponse, successResponse } from '../helpers/responses';
-import { prisma } from '../lib/prisma';
-import { AuthUser, PlaybackData } from '../types/express';
-import { checkReferrer } from '../middlewares/check-referer';
-import { query, validationResult, param } from 'express-validator';
-import {
-    logSessionStats,
-    formatBytesToKB,
-    streamProgress,
-    StreamStats,
-    SessionProgress,
-    SessionStatus,
-    calculateStreamHeaders,
-    logStreamError,
-    streamStats,
-    ipToCurrentSessionId,
-    STREAM_TIMEOUT,
-    MAX_CHUNK_RETRIES,
-    SESSION_CLEANUP_INTERVAL
-} from '../helpers/stream-utils';
-import { validatePlaybackToken } from '../middlewares/validate-playback-token';
+import express, { type Response, type Router } from "express";
+import { GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import fs from "node:fs";
+import path from "node:path";
 import { Readable } from "node:stream";
-import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { r2Client } from "../lib/r2-client";
-import path from 'node:path';
-import fs from "fs";
+import { randomUUID } from "node:crypto";
 
+import {
+  calculateStreamHeaders,
+  logStreamError,
+  RangeNotSatisfiableError,
+} from "../helpers/stream-utils";
+import { r2Client } from "../lib/r2-client";
+import { prisma } from "../lib/prisma";
+import { validatePlaybackToken } from "../middlewares/validate-playback-token";
 
 const router: Router = express.Router();
+const TRACK_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const JWT_PLAYBACK_SECRET = process.env.JWT_PLAYBACK_SECRET as string;
-if (!JWT_PLAYBACK_SECRET) {
-    throw new Error('JWT_PLAYBACK_SECRET is not defined');
+function isTrackId(value: string | undefined): value is string {
+  return typeof value === "string" && TRACK_ID_PATTERN.test(value);
 }
 
-function setupStreamHandlers(
-    audioStream: Readable,
-    trackId: string,
-    sessionId: string,
-    startTime: [number, number],
-    streamDetails: { start: number; end: number; contentLength: number; fileSize: number },
-    res: Response,
-    req: Request,
-    cleanup: (audioStream?: Readable) => void
-) {
-    const { start, end, contentLength, fileSize } = streamDetails;
-    let chunkRetries = 0;
-    let bytesTransferredInChunk = 0;
-    let streamTimeout: NodeJS.Timeout;
-    let isStreamEnded = false;
-    let keepaliveInterval: NodeJS.Timeout;
+function endStreamWithError(res: Response, status: number, message: string) {
+  if (!res.headersSent) {
+    res.status(status).json({ error: message });
+    return;
+  }
 
-    // Retrieve session progress
-    let progress = streamProgress.get(sessionId);
-    if (!progress) {
-        console.error(`CRITICAL: Session progress not found for ${sessionId} in setupStreamHandlers.`);
-        cleanup(audioStream);
-        if (!res.headersSent) {
-            res.status(500).json({ error: 'Internal server error during stream setup' });
-        }
-        res.end();
-        return;
-    }
-
-    // Setup keepalive interval to prevent timeouts
-    // This works by writing an empty comment to the response periodically
-    // which keeps the connection alive but doesn't affect the media playback
-    keepaliveInterval = setInterval(() => {
-        if (isStreamEnded) {
-            clearInterval(keepaliveInterval);
-            return;
-        }
-
-        try {
-            // Write a zero-length chunk to keep the connection alive
-            // This is invisible to the client but prevents timeouts
-            if (!res.writableEnded) {
-                res.write('');
-            }
-        } catch (error) {
-            console.error('Error writing keepalive:', error);
-            clearInterval(keepaliveInterval);
-        }
-    }, 60000); // Send a keepalive every 60 seconds
-
-    // Reset stream timeout with backoff
-    const resetTimeout = () => {
-        if (streamTimeout) clearTimeout(streamTimeout);
-        const timeoutDuration = Math.min(STREAM_TIMEOUT * (chunkRetries + 1), STREAM_TIMEOUT * 4);
-        streamTimeout = setTimeout(() => {
-            if (isStreamEnded) return;
-            console.error(`Stream timeout for track ${trackId}, session ${sessionId}`);
-            clearInterval(keepaliveInterval);
-            cleanup(audioStream);
-            logStreamError(trackId, sessionId, new Error('Stream timeout'));
-            logSessionStats(sessionId, SessionStatus.Timeout);
-            if (!res.headersSent) {
-                res.status(408).json({ error: 'Stream timeout' });
-            }
-            res.end();
-        }, timeoutDuration);
-    };
-
-    resetTimeout();
-
-    // Handle data chunks
-    audioStream.on('data', (chunk: string | Buffer) => {
-        try {
-            resetTimeout();
-            progress!.lastActivityTime = Date.now();
-            const chunkSize = Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(chunk);
-            bytesTransferredInChunk += chunkSize;
-            streamStats.totalBytes += chunkSize;
-            progress!.totalBytes += chunkSize;
-
-            if (bytesTransferredInChunk > contentLength) {
-                throw new Error('Stream exceeded expected content length');
-            }
-        } catch (error) {
-            console.error('Error processing chunk:', error);
-            chunkRetries++;
-
-            if (chunkRetries >= MAX_CHUNK_RETRIES) {
-                clearInterval(keepaliveInterval);
-                cleanup(audioStream);
-                logStreamError(trackId, sessionId, error as Error);
-                logSessionStats(sessionId, SessionStatus.Error);
-                if (!res.headersSent) {
-                    res.status(500).json({ error: 'Maximum retry attempts exceeded' });
-                }
-                res.end();
-            } else {
-                // Attempt recovery by requesting a new chunk
-                resetTimeout();
-            }
-        }
-    });
-
-    audioStream.on('error', (error: Error) => {
-        if (isStreamEnded) return;
-        clearTimeout(streamTimeout);
-        clearInterval(keepaliveInterval);
-        cleanup(audioStream);
-        logStreamError(trackId, sessionId, error);
-        logSessionStats(sessionId, SessionStatus.Error);
-        if (!res.headersSent) {
-            res.status(500).json({ error: 'Streaming error occurred' });
-        }
-        res.end();
-    });
-
-    audioStream.on('end', () => {
-        try {
-            isStreamEnded = true;
-            clearTimeout(streamTimeout);
-            clearInterval(keepaliveInterval);
-
-            const currentProgress = streamProgress.get(sessionId);
-            if (!currentProgress) return;
-
-            currentProgress.lastActivityTime = Date.now();
-            const isFullFile = currentProgress.totalBytes >= currentProgress.fileSize;
-
-            if (isFullFile) {
-                logSessionStats(sessionId, SessionStatus.Completed);
-            }
-        } catch (error) {
-            console.error('Error in stream end handler:', error);
-            logStreamError(trackId, sessionId, error as Error);
-            logSessionStats(sessionId, SessionStatus.Error);
-        }
-    });
-
-    res.on('close', () => {
-        isStreamEnded = true;
-        clearTimeout(streamTimeout);
-        clearInterval(keepaliveInterval);
-        if (!audioStream.destroyed) {
-            audioStream.destroy();
-        }
-    });
+  res.destroy();
 }
-// Handle OPTIONS requests for CORS preflight
-router.options('/stream/:trackId', (req, res) => {
-    const headers: Record<string, string> = {
-        'Access-Control-Allow-Origin': process.env.NEXT_URL ?? (process.env.APP_DOMAIN ?? '*'),
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Range, Content-Type, Authorization',
-        'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Content-Type',
-        'Content-Length': '0',
-    };
-    res.writeHead(204, headers);
-    res.end();
-});
 
-// Handle OPTIONS requests for CORS preflight on the key-based endpoint
-router.options('/stream', (req, res) => {
-    const headers: Record<string, string> = {
-        'Access-Control-Allow-Origin': process.env.NEXT_URL ?? (process.env.APP_DOMAIN ?? '*'),
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Range, Content-Type, Authorization',
-        'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Content-Type',
-        'Content-Length': '0',
-    };
-    res.writeHead(204, headers);
-    res.end();
-});
+router.get("/stream/:trackId", async (req, res) => {
+  const requestedTrackId = req.params.trackId;
+  const range = req.headers.range;
 
-// Main streaming endpoint
-// for more on stream security: https://grok.com/chat/9f5b7841-3e7f-4ba3-9156-3cb171ba1e84
-router.get('/stream/:trackId', async (req, res) => {
-    // const { trackId: jwtTrackId, userId: jwtUserId, key: fileKey } = req.playbackData as PlaybackData;
-    const requestedTrackId = req.params.trackId ?? '';
-    console.log({ requestedTrackId });
+  if (!isTrackId(requestedTrackId)) {
+    return res.status(404).json({ error: "Track not found" });
+  }
 
+  if (!range) {
+    return res
+      .status(400)
+      .set("Accept-Ranges", "bytes")
+      .json({ error: "Range header is required" });
+  }
 
-    try {
-        // const sessionData = req.cookies['better-auth.session_data'];
-        // console.log({ sessionData });
+  const requestId = randomUUID();
 
-    } catch (error) {
-        console.error("Cannot read session data");
-
-    }
-
-    // if (jwtTrackId !== requestedTrackId) return res.status(404).json({ error: 'Forbidden key' });
-
-    // Generate session ID based on client IP and track ID
-    const clientIp = req.socket.remoteAddress || req.ip || 'unknown';
-    const currentSessionId = `${clientIp}-${requestedTrackId}`;
-    const range = req.headers.range; // Declare range header earlier
-
-    // Cleanup function (for destroying the specific chunk stream)
-    const cleanup = (audioStream?: Readable) => {
-        try {
-            if (audioStream && typeof audioStream.destroy === 'function' && !audioStream.destroyed) {
-                audioStream.destroy();
-            }
-        } catch (error) {
-            console.error('Error in cleanup:', error);
-        }
-    };
-
-    try {
-        // --- Track Switch Detection ---
-        const previousSessionId = ipToCurrentSessionId.get(clientIp);
-        if (previousSessionId && previousSessionId !== currentSessionId) {
-            // User likely switched tracks
-            console.log(`Track switch detected for IP ${clientIp}: ${previousSessionId} -> ${currentSessionId}`);
-            logSessionStats(previousSessionId, SessionStatus.Switched);
-            // Note: logSessionStats handles cleanup of previousSessionId
-        }
-        // Update the current session for this IP
-        ipToCurrentSessionId.set(clientIp, currentSessionId);
-
-        // Add to active sessions *set* (used for global count)
-        streamStats.activeSessions.add(currentSessionId);
-
-
-        if (!requestedTrackId) {
-            streamStats.activeSessions.delete(currentSessionId);
-            ipToCurrentSessionId.delete(clientIp);
-            return res.status(404).json({ error: 'Track not found' });
-        }
-
-        // 4. Check for range header
-        if (!range) {
-            streamStats.activeSessions.delete(currentSessionId);
-            return res.status(400).json({ error: 'Range header is required' });
-        }
-
-        // 3. Get file size and content type directly from R2 - similar to your test code
-        let fileSize = 0;
-        let contentType = 'audio/mpeg';
-
-        try {
-            // Get just the headers first to determine file size
-            const headParams = {
-                Bucket: process.env.R2_BUCKET_NAME,
-                Key: requestedTrackId,
-                Range: 'bytes=0-0'
-            };
-
-            const headResp = await r2Client.send(new GetObjectCommand(headParams));
-
-            // Extract file size from Content-Range header (format: "bytes 0-0/TOTAL_SIZE")
-            if (headResp.ContentRange) {
-                const totalSizeStr = headResp.ContentRange.split('/')[1];
-                fileSize = parseInt((totalSizeStr ?? "0"), 10);
-            } else if (headResp.ContentLength) {
-                // Fallback if ContentRange isn't available
-                fileSize = headResp.ContentLength;
-            }
-
-            contentType = headResp.ContentType || 'audio/mpeg';
-        } catch (err) {
-            console.error('Error getting file info:', err);
-            streamStats.activeSessions.delete(currentSessionId);
-            ipToCurrentSessionId.delete(clientIp);
-            return res.status(404).json({ error: 'Track file not found in storage' });
-        }
-
-        // 5. Calculate range and headers
-        const { headers, start, end, contentLength } = calculateStreamHeaders(fileSize, range);
-        headers['Content-Type'] = contentType;
-
-        res.writeHead(206, headers);
-
-        // 6. Get audio stream from R2
-        let audioStream: Readable;
-        try {
-            const streamParams = {
-                Bucket: process.env.R2_BUCKET_NAME,
-                Key: requestedTrackId,
-                Range: `bytes=${start}-${end}`,
-            };
-
-            const streamResp = await r2Client.send(new GetObjectCommand(streamParams));
-
-            // Type guard for Readable stream
-            if (!streamResp.Body || typeof (streamResp.Body as any).pipe !== 'function') {
-                throw new Error('Invalid R2 stream response');
-            }
-
-            audioStream = streamResp.Body as unknown as Readable;
-
-        } catch (err) {
-            console.error('Error creating R2 stream:', err);
-            streamStats.activeSessions.delete(currentSessionId);
-            ipToCurrentSessionId.delete(clientIp);
-            return res.status(500).json({ error: 'Error streaming from storage' });
-        }
-
-        // 7. Session progress management
-        let progress = streamProgress.get(currentSessionId);
-        if (!progress) {
-            // Ensure fileSize is valid
-            const validFileSize = fileSize > 0 ? fileSize : 1; // Use 1 as a minimum valid size
-
-            progress = {
-                totalBytes: 0,
-                startTime: process.hrtime(),
-                lastActivityTime: Date.now(),
-                chunkCount: 1,
-                fileSize: validFileSize, // Use the validated file size
-                trackId: requestedTrackId,
-            };
-            streamProgress.set(currentSessionId, progress);
-            streamStats.streamCount++;
-        } else {
-            progress.chunkCount++;
-            progress.lastActivityTime = Date.now();
-        }
-
-        // 8. Setup stream handlers and pipe
-        setupStreamHandlers(
-            audioStream,
-            requestedTrackId,
-            currentSessionId,
-            process.hrtime(),
-            {
-                start: start,
-                end: end,
-                contentLength: contentLength,
-                fileSize: fileSize
-            },
-            res,
-            req,
-            cleanup
-        );
-
-        audioStream.pipe(res);
-    } catch (error) {
-        cleanup();
-        if (streamProgress.has(currentSessionId)) {
-            logStreamError(requestedTrackId, currentSessionId, error as Error);
-            logSessionStats(currentSessionId, SessionStatus.Error);
-        } else {
-            console.error(`Error during initial setup for track ${requestedTrackId} (IP: ${clientIp}):`, error);
-            streamStats.activeSessions.delete(currentSessionId);
-            ipToCurrentSessionId.delete(clientIp);
-        }
-        if (!res.headersSent) {
-            res.status(500).json({ error: 'Internal server error' });
-        }
-    }
-});
-
-// New endpoint that accepts storage key via query parameter
-router.get('/stream', async (req, res) => {
-    const storageKey = req.query.key as string;
-    
-    if (!storageKey) {
-        return res.status(400).json({ error: 'Storage key is required' });
-    }
-    
-    console.log({ streamingByKey: storageKey });
-
-    // Generate session ID based on client IP and storage key
-    const clientIp = req.socket.remoteAddress || req.ip || 'unknown';
-    const currentSessionId = `${clientIp}-${storageKey}`;
-    const range = req.headers.range; // Declare range header earlier
-
-    // Cleanup function (for destroying the specific chunk stream)
-    const cleanup = (audioStream?: Readable) => {
-        try {
-            if (audioStream && typeof audioStream.destroy === 'function' && !audioStream.destroyed) {
-                audioStream.destroy();
-            }
-        } catch (error) {
-            console.error('Error in cleanup:', error);
-        }
-    };
-
-    try {
-        // --- Track Switch Detection ---
-        const previousSessionId = ipToCurrentSessionId.get(clientIp);
-        if (previousSessionId && previousSessionId !== currentSessionId) {
-            // User likely switched tracks
-            console.log(`Track switch detected for IP ${clientIp}: ${previousSessionId} -> ${currentSessionId}`);
-            logSessionStats(previousSessionId, SessionStatus.Switched);
-            // Note: logSessionStats handles cleanup of previousSessionId
-        }
-        // Update the current session for this IP
-        ipToCurrentSessionId.set(clientIp, currentSessionId);
-
-        // Add to active sessions *set* (used for global count)
-        streamStats.activeSessions.add(currentSessionId);
-
-        // 4. Check for range header
-        if (!range) {
-            streamStats.activeSessions.delete(currentSessionId);
-            return res.status(400).json({ error: 'Range header is required' });
-        }
-
-        // 3. Get file size and content type directly from R2 - similar to your test code
-        let fileSize = 0;
-        let contentType = 'audio/mpeg';
-
-        try {
-            // Get just the headers first to determine file size
-            const headParams = {
-                Bucket: process.env.R2_BUCKET_NAME,
-                Key: storageKey,
-                Range: 'bytes=0-0'
-            };
-
-            const headResp = await r2Client.send(new GetObjectCommand(headParams));
-
-            // Extract file size from Content-Range header (format: "bytes 0-0/TOTAL_SIZE")
-            if (headResp.ContentRange) {
-                const totalSizeStr = headResp.ContentRange.split('/')[1];
-                fileSize = parseInt((totalSizeStr ?? "0"), 10);
-            } else if (headResp.ContentLength) {
-                // Fallback if ContentRange isn't available
-                fileSize = headResp.ContentLength;
-            }
-
-            contentType = headResp.ContentType || 'audio/mpeg';
-        } catch (err) {
-            console.error('Error getting file info:', err);
-            streamStats.activeSessions.delete(currentSessionId);
-            ipToCurrentSessionId.delete(clientIp);
-            return res.status(404).json({ error: 'Track file not found in storage' });
-        }
-
-        // 5. Calculate range and headers
-        const { headers, start, end, contentLength } = calculateStreamHeaders(fileSize, range);
-        headers['Content-Type'] = contentType;
-
-        res.writeHead(206, headers);
-
-        // 6. Get audio stream from R2
-        let audioStream: Readable;
-        try {
-            const streamParams = {
-                Bucket: process.env.R2_BUCKET_NAME,
-                Key: storageKey,
-                Range: `bytes=${start}-${end}`,
-            };
-
-            const streamResp = await r2Client.send(new GetObjectCommand(streamParams));
-
-            // Type guard for Readable stream
-            if (!streamResp.Body || typeof (streamResp.Body as any).pipe !== 'function') {
-                throw new Error('Invalid R2 stream response');
-            }
-
-            audioStream = streamResp.Body as unknown as Readable;
-
-        } catch (err) {
-            console.error('Error creating R2 stream:', err);
-            streamStats.activeSessions.delete(currentSessionId);
-            ipToCurrentSessionId.delete(clientIp);
-            return res.status(500).json({ error: 'Error streaming from storage' });
-        }
-
-        // 7. Session progress management
-        let progress = streamProgress.get(currentSessionId);
-        if (!progress) {
-            // Ensure fileSize is valid
-            const validFileSize = fileSize > 0 ? fileSize : 1; // Use 1 as a minimum valid size
-
-            progress = {
-                totalBytes: 0,
-                startTime: process.hrtime(),
-                lastActivityTime: Date.now(),
-                chunkCount: 1,
-                fileSize: validFileSize, // Use the validated file size
-                trackId: storageKey,
-            };
-            streamProgress.set(currentSessionId, progress);
-            streamStats.streamCount++;
-        } else {
-            progress.chunkCount++;
-            progress.lastActivityTime = Date.now();
-        }
-
-        // 8. Setup stream handlers and pipe
-        setupStreamHandlers(
-            audioStream,
-            storageKey,
-            currentSessionId,
-            process.hrtime(),
-            {
-                start: start,
-                end: end,
-                contentLength: contentLength,
-                fileSize: fileSize
-            },
-            res,
-            req,
-            cleanup
-        );
-
-        audioStream.pipe(res);
-    } catch (error) {
-        cleanup();
-        if (streamProgress.has(currentSessionId)) {
-            logStreamError(storageKey, currentSessionId, error as Error);
-            logSessionStats(currentSessionId, SessionStatus.Error);
-        } else {
-            console.error(`Error during initial setup for track with key ${storageKey} (IP: ${clientIp}):`, error);
-            streamStats.activeSessions.delete(currentSessionId);
-            ipToCurrentSessionId.delete(clientIp);
-        }
-        if (!res.headersSent) {
-            res.status(500).json({ error: 'Internal server error' });
-        }
-    }
-});
-
-router.get('/stream/:trackId/waveform', validatePlaybackToken, async (req, res) => {
-    const { trackId: jwtTrackId, userId: jwtUserId } = req.playbackData as PlaybackData;
-    const requestedTrackId = req.params.trackId ?? '';
-    const filename = `${requestedTrackId}.json`;
-    const waveform = path.resolve(__dirname, "..", '..', "audio", filename);
-    if (!fs.existsSync(waveform)) {
-        return res.status(404).json({ error: 'Waveform file not found' });
-    }
-    const waveformData = JSON.parse(fs.readFileSync(waveform, 'utf8'));
-    res.json(waveformData);
-});
-
-router.get('/:trackId', async (req, res) => {
-    const requestedTrackId = req.params.trackId ?? '';
+  try {
     const track = await prisma.track.findFirst({
-        where: { id: requestedTrackId },
-        select: { storageKey: true, id: true },
+      where: {
+        id: requestedTrackId,
+        isPrivate: false,
+      },
+      select: {
+        storageKey: true,
+      },
     });
+
     if (!track) {
-        return res.status(404).json({ error: 'Track not found' });
+      return res.status(404).json({ error: "Track not found" });
     }
-    res.json({ track });
+
+    const bucket = process.env.R2_BUCKET_NAME;
+    if (!bucket) {
+      console.error("R2_BUCKET_NAME is not configured");
+      return res
+        .status(500)
+        .json({ error: "Streaming service is not configured" });
+    }
+
+    const objectMetadata = await r2Client.send(
+      new HeadObjectCommand({
+        Bucket: bucket,
+        Key: track.storageKey,
+      }),
+    );
+    const fileSize = objectMetadata.ContentLength;
+
+    if (!fileSize) {
+      throw new Error("Storage returned an invalid content length");
+    }
+
+    let streamDetails;
+    try {
+      streamDetails = calculateStreamHeaders(fileSize, range);
+    } catch (error) {
+      if (error instanceof RangeNotSatisfiableError) {
+        return res
+          .status(416)
+          .set("Content-Range", `bytes */${fileSize}`)
+          .set("Accept-Ranges", "bytes")
+          .json({ error: "Requested range is not satisfiable" });
+      }
+      throw error;
+    }
+
+    const { headers, start, end } = streamDetails;
+    headers["Content-Type"] = objectMetadata.ContentType ?? "audio/mpeg";
+
+    const object = await r2Client.send(
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: track.storageKey,
+        Range: `bytes=${start}-${end}`,
+      }),
+    );
+
+    if (
+      !object.Body ||
+      typeof (object.Body as { pipe?: unknown }).pipe !== "function"
+    ) {
+      throw new Error("Storage returned an invalid stream");
+    }
+
+    const audioStream = object.Body as Readable;
+    let streamFinished = false;
+
+    audioStream.once("end", () => {
+      streamFinished = true;
+    });
+    audioStream.once("error", (error) => {
+      console.error(
+        `Stream ${requestId} failed for track ${requestedTrackId}`,
+        error,
+      );
+      void logStreamError(requestedTrackId, requestId, error);
+      endStreamWithError(res, 502, "Unable to stream track");
+    });
+    res.once("close", () => {
+      if (!streamFinished && !audioStream.destroyed) {
+        audioStream.destroy();
+      }
+    });
+
+    res.writeHead(206, headers);
+    audioStream.pipe(res);
+  } catch (error) {
+    const streamError =
+      error instanceof Error ? error : new Error("Unknown streaming error");
+    console.error(
+      `Stream ${requestId} failed for track ${requestedTrackId}`,
+      streamError,
+    );
+    void logStreamError(requestedTrackId, requestId, streamError);
+    return endStreamWithError(res, 502, "Unable to stream track");
+  }
+});
+
+router.get(
+  "/stream/:trackId/waveform",
+  validatePlaybackToken,
+  async (req, res) => {
+    const requestedTrackId = req.params.trackId;
+    if (!isTrackId(requestedTrackId)) {
+      return res.status(404).json({ error: "Track not found" });
+    }
+
+    const waveformPath = path.resolve(
+      __dirname,
+      "..",
+      "..",
+      "audio",
+      `${requestedTrackId}.json`,
+    );
+
+    if (!fs.existsSync(waveformPath)) {
+      return res.status(404).json({ error: "Waveform file not found" });
+    }
+
+    const waveformData = JSON.parse(fs.readFileSync(waveformPath, "utf8"));
+    return res.json(waveformData);
+  },
+);
+
+router.get("/:trackId", async (req, res) => {
+  const requestedTrackId = req.params.trackId;
+  if (!isTrackId(requestedTrackId)) {
+    return res.status(404).json({ error: "Track not found" });
+  }
+
+  const track = await prisma.track.findFirst({
+    where: {
+      id: requestedTrackId,
+      isPrivate: false,
+    },
+    select: {
+      id: true,
+      title: true,
+      duration: true,
+      artworkUrl: true,
+      waveformData: true,
+    },
+  });
+
+  if (!track) {
+    return res.status(404).json({ error: "Track not found" });
+  }
+
+  return res.json({ track });
 });
 
 export default router;

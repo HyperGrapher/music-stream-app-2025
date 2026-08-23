@@ -55,6 +55,13 @@ export interface SessionProgress {
     trackId: string;
 }
 
+export class RangeNotSatisfiableError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'RangeNotSatisfiableError';
+    }
+}
+
 // --- Utility Functions ---
 
 export async function logStreamError(trackId: string, sessionId: string, error: Error) { // Removed streamStats param, use exported const
@@ -91,11 +98,42 @@ because of that adjust the chunk size to 500kb or 1mb to delay the track being p
 const isDev = process.env.APP_DOMAIN?.startsWith('http://localhost');
 
 export function calculateStreamHeaders(fileSize: number, range: string) {
-    // Increase chunk size to reduce R2 requests, but not too large to cause buffering issues
-    const CHUNK_SIZE = Math.floor(10 ** 6 / 2); // 500KB chunks
-    const parts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(parts[0]!, 10);
-    const end = Math.min(start + CHUNK_SIZE, fileSize - 1);
+    const CHUNK_SIZE = 500_000;
+
+    if (!Number.isSafeInteger(fileSize) || fileSize <= 0) {
+        throw new RangeNotSatisfiableError('Invalid file size');
+    }
+
+    const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+    if (!match || (!match[1] && !match[2])) {
+        throw new RangeNotSatisfiableError('Malformed range header');
+    }
+
+    let start: number;
+    let requestedEnd: number | undefined;
+
+    if (!match[1]) {
+        const suffixLength = Number.parseInt(match[2]!, 10);
+        if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) {
+            throw new RangeNotSatisfiableError('Invalid suffix range');
+        }
+        start = Math.max(fileSize - suffixLength, 0);
+    } else {
+        start = Number.parseInt(match[1], 10);
+        if (!Number.isSafeInteger(start) || start < 0 || start >= fileSize) {
+            throw new RangeNotSatisfiableError('Range starts outside the file');
+        }
+
+        if (match[2]) {
+            requestedEnd = Number.parseInt(match[2], 10);
+            if (!Number.isSafeInteger(requestedEnd) || requestedEnd < start) {
+                throw new RangeNotSatisfiableError('Invalid range end');
+            }
+        }
+    }
+
+    const chunkEnd = start + CHUNK_SIZE - 1;
+    const end = Math.min(requestedEnd ?? chunkEnd, chunkEnd, fileSize - 1);
     const contentLength = end - start + 1;
 
     // Debug info only for development

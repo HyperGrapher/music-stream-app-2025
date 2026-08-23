@@ -3,7 +3,8 @@
 import { create } from 'zustand';
 import type { Track } from '@prisma/client';
 import { toast } from 'sonner';
-import { useRef, useEffect } from 'react';
+import { useEffect } from 'react';
+import { shallow } from 'zustand/shallow';
 
 // Defined playback states for clear control flow
 type PlaybackStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
@@ -18,9 +19,9 @@ interface PlayerState {
   isMuted: boolean;
   currentTime: number;
   duration: number;
+  pendingSeekTime: number | null;
 
   // Actions
-  loadTrack: (track: Track) => void;
   playTrack: (track: Track) => void;
   togglePlay: () => void;
   pause: () => void;
@@ -36,18 +37,54 @@ interface PlayerState {
 // Create a persistent audio element outside of React lifecycle
 let audioElement: HTMLAudioElement | null = null;
 
+const clampVolume = (volume: number) => Math.max(0, Math.min(1, volume));
+
+const getStoredVolume = (): number | null => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const storedVolume = localStorage.getItem('playerVolume');
+    if (storedVolume === null) return null;
+
+    const parsedVolume = Number.parseFloat(storedVolume);
+    return Number.isFinite(parsedVolume) ? clampVolume(parsedVolume) : null;
+  } catch {
+    return null;
+  }
+};
+
+const isAbortError = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  'name' in error &&
+  error.name === 'AbortError';
+
 // Function to get/create the global audio element
 const getAudioElement = (): HTMLAudioElement => {
   if (!audioElement && typeof window !== 'undefined') {
     audioElement = new Audio();
     audioElement.preload = 'auto';
-    // Initialize with stored volume or default
-    const storedVolume = localStorage.getItem('playerVolume');
-    if (storedVolume) {
-      audioElement.volume = parseFloat(storedVolume);
-    }
+    audioElement.volume = getStoredVolume() ?? 1;
   }
-  return audioElement as HTMLAudioElement;
+  return audioElement!;
+};
+
+const streamApiUrl = (
+  process.env.NEXT_PUBLIC_STREAM_API_URL ?? 'http://localhost:4000'
+).replace(/\/+$/, '');
+
+const getTrackStreamUrl = (trackId: string) =>
+  `${streamApiUrl}/tracks/stream/${encodeURIComponent(trackId)}`;
+
+const isCurrentAudioSource = (audio: HTMLAudioElement) => {
+  const currentTrack = usePlayerStore.getState().currentTrack;
+  if (!currentTrack || typeof window === 'undefined') return false;
+
+  const expectedSource = new URL(
+    getTrackStreamUrl(currentTrack.id),
+    window.location.href
+  ).href;
+  return audio.src === expectedSource;
 };
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -59,45 +96,41 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   isMuted: false,
   currentTime: 0,
   duration: 0,
+  pendingSeekTime: null,
 
-  // Load a track without auto-playing
-  loadTrack: (track) => {
-    const { status } = get();
-    const audio = getAudioElement();
+  // Load and play a track
+  playTrack: (track) => {
+    const { currentTrack, status } = get();
 
-    // Stop current playback if any
-    if (status === 'playing' || status === 'paused') {
-      audio.pause();
+    if (currentTrack?.id === track.id) {
+      if (
+        status === 'loading' ||
+        status === 'playing' ||
+        status === 'paused'
+      ) {
+        get().togglePlay();
+        return;
+      }
     }
+
+    const audio = getAudioElement();
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
 
     set({
       currentTrack: track,
       status: 'loading',
       currentTime: 0,
-      duration: 0
+      duration: 0,
+      pendingSeekTime: null,
     });
-  },
-
-  // Load and play a track
-  playTrack: (track) => {
-    const { loadTrack, currentTrack } = get();
-
-    // Skip if we're already playing this track
-    if (currentTrack?.id === track.id) {
-      // If we're already playing this track, just toggle play/pause
-      get().togglePlay();
-      return;
-    }
-
-    // Load and start playing the new track
-    loadTrack(track);
-    get().play();
   },
 
   // Toggle between play and pause
   togglePlay: () => {
     const { status, play, pause } = get();
-    if (status === 'playing') {
+    if (status === 'playing' || status === 'loading') {
       pause();
     } else {
       play();
@@ -119,84 +152,129 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     // Already playing - do nothing
     if (status === 'playing') return;
 
-    // Set loading state while we prepare
-    if (status !== 'paused') {
-      set({ status: 'loading' });
-    }
-
-    // If we're resuming from paused state, just play
-    if (status === 'paused') {
-      const audio = getAudioElement();
+    const audio = getAudioElement();
+    if (status === 'paused' && audio.src && !audio.ended) {
+      const requestedTrackId = currentTrack.id;
       audio.play()
-        .then(() => {
-          set({ status: 'playing' });
-        })
         .catch((error) => {
+          if (
+            isAbortError(error) ||
+            get().currentTrack?.id !== requestedTrackId
+          ) {
+            return;
+          }
+
           console.error('Error resuming playback:', error);
-          set({ status: 'error' });
+          if (get().status !== 'error') {
+            set({ status: 'error' });
+            toast.error('Failed to resume track');
+          }
         });
       return;
     }
 
-    // For all other states, we need to request a token
-    // but we'll let the controller component handle that
+    set({ status: 'loading' });
   },
 
   // Seek to specific time
   seek: (time) => {
+    if (!Number.isFinite(time) || time < 0) return;
+
     const audio = getAudioElement();
-    if (isFinite(time) && time >= 0) {
-      audio.currentTime = Math.min(time, audio.duration || 0);
-      set({ currentTime: audio.currentTime });
+    if (get().status === 'loading') {
+      set({ currentTime: time, pendingSeekTime: time });
+      return;
     }
+
+    const mediaDuration =
+      Number.isFinite(audio.duration) && audio.duration > 0
+        ? audio.duration
+        : null;
+
+    if (mediaDuration === null) {
+      set({ currentTime: time, pendingSeekTime: time });
+      return;
+    }
+
+    const targetTime = Math.min(time, mediaDuration);
+    audio.currentTime = targetTime;
+    set({ currentTime: targetTime, pendingSeekTime: null });
   },
 
   // Play next track in playlist
   nextTrack: () => {
-    const { currentTrack, playlist, playTrack } = get();
-    if (!currentTrack || playlist.length === 0) return;
+    const { currentTrack, playlist, duration } = get();
+    const audio = getAudioElement();
+
+    if (!currentTrack || playlist.length === 0) {
+      if (audio.ended) {
+        set({ status: 'paused', currentTime: duration });
+      }
+      return;
+    }
 
     const currentIndex = playlist.findIndex(track => track.id === currentTrack.id);
-    if (currentIndex === -1 || currentIndex === playlist.length - 1) {
-      // Play first track if at end or not found
-      if (playlist.length > 0) {
-        playTrack(playlist[0]!);
+    if (currentIndex < 0 || currentIndex >= playlist.length - 1) {
+      if (audio.ended) {
+        set({ status: 'paused', currentTime: duration });
       }
-    } else {
-      playTrack(playlist[currentIndex + 1]!);
+      return;
     }
+
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+    set({
+      currentTrack: playlist[currentIndex + 1]!,
+      status: 'loading',
+      currentTime: 0,
+      duration: 0,
+      pendingSeekTime: null,
+    });
   },
 
   // Play previous track in playlist
   previousTrack: () => {
-    const { currentTrack, playlist, playTrack } = get();
+    const { currentTrack, playlist, currentTime } = get();
     if (!currentTrack || playlist.length === 0) return;
 
     const currentIndex = playlist.findIndex(track => track.id === currentTrack.id);
-    if (currentIndex <= 0) {
-      // Play last track if at beginning or not found
-      if (playlist.length > 0) {
-        playTrack(playlist[playlist.length - 1]!);
-      }
-    } else {
-      playTrack(playlist[currentIndex - 1]!);
+    if (currentTime > 3 || currentIndex <= 0) {
+      get().seek(0);
+      return;
     }
+
+    const audio = getAudioElement();
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+    set({
+      currentTrack: playlist[currentIndex - 1]!,
+      status: 'loading',
+      currentTime: 0,
+      duration: 0,
+      pendingSeekTime: null,
+    });
   },
 
   // Set volume and persist to local storage
   setVolume: (volume) => {
-    const audio = getAudioElement();
-    const clampedVolume = Math.max(0, Math.min(1, volume));
-    audio.volume = clampedVolume;
+    if (!Number.isFinite(volume)) return;
 
-    // Save to localStorage
-    if (typeof window !== 'undefined') {
+    const audio = getAudioElement();
+    const clampedVolume = clampVolume(volume);
+    audio.volume = clampedVolume;
+    audio.muted = clampedVolume === 0;
+
+    try {
       localStorage.setItem('playerVolume', clampedVolume.toString());
+    } catch {
+      // Playback should still work when storage is unavailable.
     }
 
     set({
       volume: clampedVolume,
-      isMuted: clampedVolume === 0
+      isMuted: audio.muted
     });
   },
 
@@ -206,17 +284,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const audio = getAudioElement();
 
     if (isMuted) {
-      // Unmute: restore previous volume if it was > 0
-      audio.muted = false;
       if (volume === 0) {
-        get().setVolume(0.5); // Default volume if previous was 0
+        get().setVolume(0.5);
+      } else {
+        audio.muted = false;
+        set({ isMuted: false });
       }
     } else {
-      // Mute: keep volume setting but mute audio
       audio.muted = true;
+      set({ isMuted: true });
     }
-
-    set({ isMuted: !isMuted });
   },
 
   // Set playlist tracks
@@ -227,33 +304,54 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
 // Hook to set up audio events
 export function useAudioEvents() {
-  const {
-    setVolume,
-    nextTrack,
-  } = usePlayerStore(state => ({
-    setVolume: state.setVolume,
-    nextTrack: state.nextTrack,
-  }));
+  const nextTrack = usePlayerStore(state => state.nextTrack);
 
   useEffect(() => {
     const audio = getAudioElement();
 
     // Sync volume from localStorage on mount
-    const storedVolume = localStorage.getItem('playerVolume');
-    if (storedVolume) {
-      setVolume(parseFloat(storedVolume));
-    }
+    const storedVolume = getStoredVolume();
+    audio.volume = storedVolume ?? audio.volume;
+    usePlayerStore.setState({
+      volume: audio.volume,
+      isMuted: audio.muted || audio.volume === 0,
+    });
 
     // Set up event listeners
     const handleTimeUpdate = () => {
+      if (!isCurrentAudioSource(audio)) return;
       usePlayerStore.setState({ currentTime: audio.currentTime });
     };
 
     const handleDurationChange = () => {
-      usePlayerStore.setState({ duration: isFinite(audio.duration) ? audio.duration : 0 });
+      if (!isCurrentAudioSource(audio)) return;
+
+      const duration =
+        Number.isFinite(audio.duration) && audio.duration > 0
+          ? audio.duration
+          : 0;
+      const pendingSeekTime = usePlayerStore.getState().pendingSeekTime;
+
+      if (duration > 0 && pendingSeekTime !== null) {
+        const targetTime = Math.min(pendingSeekTime, duration);
+        try {
+          audio.currentTime = targetTime;
+          usePlayerStore.setState({
+            duration,
+            currentTime: targetTime,
+            pendingSeekTime: null,
+          });
+          return;
+        } catch {
+          // A later media event will retry once the stream becomes seekable.
+        }
+      }
+
+      usePlayerStore.setState({ duration });
     };
 
     const handlePlay = () => {
+      if (!isCurrentAudioSource(audio) || audio.paused) return;
       usePlayerStore.setState({ status: 'playing' });
     };
 
@@ -266,10 +364,12 @@ export function useAudioEvents() {
     };
 
     const handleEnded = () => {
+      if (!isCurrentAudioSource(audio) || !audio.ended) return;
       nextTrack();
     };
 
     const handleError = (e: Event) => {
+      if (!isCurrentAudioSource(audio) || !audio.error) return;
       console.error('Audio element error:', e);
       // Only update state if we're not already in error status
       // This prevents error toast loops
@@ -282,13 +382,15 @@ export function useAudioEvents() {
     const handleVolumeChange = () => {
       usePlayerStore.setState({
         volume: audio.volume,
-        isMuted: audio.muted
+        isMuted: audio.muted || audio.volume === 0
       });
     };
 
     // Add all event listeners
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('durationchange', handleDurationChange);
+    audio.addEventListener('loadedmetadata', handleDurationChange);
+    audio.addEventListener('canplay', handleDurationChange);
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleEnded);
@@ -299,13 +401,15 @@ export function useAudioEvents() {
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('durationchange', handleDurationChange);
+      audio.removeEventListener('loadedmetadata', handleDurationChange);
+      audio.removeEventListener('canplay', handleDurationChange);
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
       audio.removeEventListener('volumechange', handleVolumeChange);
     };
-  }, [setVolume, nextTrack]);
+  }, [nextTrack]);
 
   return null;
 }
@@ -315,18 +419,20 @@ export function useMediaSession() {
   const {
     currentTrack,
     status,
-    togglePlay,
+    play,
+    pause,
     nextTrack,
     previousTrack,
     seek
   } = usePlayerStore(state => ({
     currentTrack: state.currentTrack,
     status: state.status,
-    togglePlay: state.togglePlay,
+    play: state.play,
+    pause: state.pause,
     nextTrack: state.nextTrack,
     previousTrack: state.previousTrack,
     seek: state.seek
-  }));
+  }), shallow);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
@@ -335,8 +441,8 @@ export function useMediaSession() {
     if (currentTrack) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTrack.title,
-        artist: currentTrack.userId || 'Unknown Artist',
-        album: currentTrack.albumId || '',
+        artist: currentTrack.userId ?? 'Unknown Artist',
+        album: currentTrack.albumId ?? '',
         artwork: currentTrack.artworkUrl
           ? [{ src: currentTrack.artworkUrl, sizes: '512x512', type: 'image/jpeg' }]
           : []
@@ -351,8 +457,8 @@ export function useMediaSession() {
         status === 'paused' ? 'paused' : 'none';
 
     // Set up handlers
-    navigator.mediaSession.setActionHandler('play', () => togglePlay());
-    navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+    navigator.mediaSession.setActionHandler('play', () => play());
+    navigator.mediaSession.setActionHandler('pause', () => pause());
     navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack());
     navigator.mediaSession.setActionHandler('previoustrack', () => previousTrack());
     navigator.mediaSession.setActionHandler('seekto', (details) => {
@@ -369,7 +475,7 @@ export function useMediaSession() {
       navigator.mediaSession.setActionHandler('previoustrack', null);
       navigator.mediaSession.setActionHandler('seekto', null);
     };
-  }, [currentTrack, status, togglePlay, nextTrack, previousTrack, seek]);
+  }, [currentTrack, status, play, pause, nextTrack, previousTrack, seek]);
 }
 
 // Keyboard navigation support
@@ -382,13 +488,15 @@ export function useKeyboardControls() {
     togglePlay: state.togglePlay,
     nextTrack: state.nextTrack,
     previousTrack: state.previousTrack
-  }));
+  }), shallow);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only apply when not typing in form elements
-      if (e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement) {
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest('input, textarea, select, button, a[href], [contenteditable="true"], [role="button"], [role="textbox"]')
+      ) {
         return;
       }
 
@@ -420,16 +528,13 @@ export function useKeyboardControls() {
 }
 
 // Main playback controller component
-export function PlayerController({ userId }: { userId: string | undefined }) {
+export function PlayerController({ userId: _userId }: { userId: string | undefined }) {
   // Set up audio events
   useAudioEvents();
   // Set up media session
   useMediaSession();
   // Set up keyboard controls
   useKeyboardControls();
-
-  // Track the last played track ID to prevent duplicate setups
-  const lastPlayedTrackIdRef = useRef<string | null>(null);
 
   // Get state and actions from store
   const {
@@ -438,51 +543,38 @@ export function PlayerController({ userId }: { userId: string | undefined }) {
   } = usePlayerStore(state => ({
     currentTrack: state.currentTrack,
     status: state.status
-  }));
+  }), shallow);
 
   // Set up direct playback when track changes
   useEffect(() => {
-    // Only proceed if:
-    // 1. We have a current track
-    // 2. We're in loading state
-    // 3. This is a different track than the last played one
-    if (
-      currentTrack &&
-      status === 'loading' &&
-      lastPlayedTrackIdRef.current !== currentTrack.id
-    ) {
-      // Update last played track
-      lastPlayedTrackIdRef.current = currentTrack.id;
-      
+    if (currentTrack && status === 'loading') {
       const audio = getAudioElement();
-      const streamUrl = `http://localhost:4000/tracks/stream?key=${encodeURIComponent(currentTrack.storageKey)}`;
-      console.log({ streamUrl });
+      const requestedTrackId = currentTrack.id;
+      const streamUrl = getTrackStreamUrl(currentTrack.id);
       
       // Set the audio source
       audio.src = streamUrl;
       audio.load();
 
-      // Start playback if we were in loading state
-      if (status === 'loading') {
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              usePlayerStore.setState({ status: 'playing' });
-            })
-            .catch((error) => {
-              console.error('Error playing audio:', error);
-              if (error.name !== 'AbortError') {
-                toast.error('Failed to play track');
-                usePlayerStore.setState({ status: 'error' });
-              }
-            });
-        }
-      } else {
-        usePlayerStore.setState({ status: 'paused' });
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .catch((error) => {
+            if (
+              isAbortError(error) ||
+              usePlayerStore.getState().currentTrack?.id !== requestedTrackId
+            ) {
+              return;
+            }
+            console.error('Error playing audio:', error);
+            if (usePlayerStore.getState().status !== 'error') {
+              usePlayerStore.setState({ status: 'error' });
+              toast.error('Failed to play track');
+            }
+          });
       }
     }
   }, [currentTrack, status]);
 
   return null;
-} 
+}

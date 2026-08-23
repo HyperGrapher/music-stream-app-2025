@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import { usePlayerStore } from '@/store/player';
 import { formatDuration } from '@/lib/utils';
-import type { Track } from '@prisma/client';
 import { shallow } from 'zustand/shallow';
 import { usePathname } from 'next/navigation'
 
@@ -29,7 +28,7 @@ function TrackInfo() {
   return (
     <div className="flex items-center space-x-3 flex-shrink min-w-0">
       <img
-        src={currentTrack.artworkUrl || '/placeholder-track.jpg'}
+        src={currentTrack.artworkUrl ?? '/placeholder-track.jpg'}
         alt="Now playing"
         className="w-10 h-10 object-cover rounded-sm flex-shrink-0"
       />
@@ -144,19 +143,22 @@ function ProgressBar() {
     seek: state.seek,
   }), shallow);
 
-  let progressBarRef = useRef<HTMLDivElement>(null);
+  const progressBarRef = useRef<HTMLDivElement>(null);
 
-  let handleProgressChange = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleProgressChange = (e: React.MouseEvent<HTMLDivElement>) => {
     if (progressBarRef.current && duration > 0) {
-      let rect = progressBarRef.current.getBoundingClientRect();
-      let x = e.clientX - rect.left;
-      let percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
-      let newTime = (percentage / 100) * duration;
+      const rect = progressBarRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+      const newTime = (percentage / 100) * duration;
       seek(newTime);
     }
   };
 
-  const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progressPercentage =
+    duration > 0
+      ? Math.max(0, Math.min(100, (currentTime / duration) * 100))
+      : 0;
 
   return (
     <div className="flex items-center w-full max-w-xl mt-1">
@@ -203,11 +205,11 @@ const Volume = memo(function Volume() {
 
   const volumeBarRef = useRef<HTMLDivElement>(null);
 
-  let handleVolumeChange = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleVolumeChange = (e: React.MouseEvent<HTMLDivElement>) => {
     if (volumeBarRef.current) {
-      let rect = volumeBarRef.current.getBoundingClientRect();
-      let x = e.clientX - rect.left;
-      let percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+      const rect = volumeBarRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
       setVolume(percentage / 100);
     }
   };

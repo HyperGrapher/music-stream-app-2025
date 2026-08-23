@@ -3,7 +3,7 @@
 import { usePlayerStore } from '@/store/player';
 import { type Track } from '@prisma/client';
 import { formatDuration } from '@/lib/utils';
-import { useRef, useEffect, useState, useMemo, memo } from 'react';
+import { useEffect, useMemo, memo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Pause, Play, RefreshCw } from 'lucide-react';
 import { shallow } from 'zustand/shallow';
@@ -15,31 +15,25 @@ type PlaylistWithSongs = {
   trackCount: number;
   duration: number;
   songs: Track[];
-} | any;
+};
 
 // Memoize TrackRow component to prevent unnecessary re-renders
 const TrackRow = memo(function TrackRow({
   track,
   index,
-  isSelected,
   isCurrentPlaying,
-  onSelect,
 }: {
   track: Track;
   index: number;
-  isSelected: boolean;
   isCurrentPlaying: boolean;
-  onSelect: () => void;
 }) {
   // Consolidated store subscription with shallow equality
   const {
     playTrack,
-    togglePlay,
     status
   } = usePlayerStore(
     (state) => ({
       playTrack: state.playTrack,
-      togglePlay: state.togglePlay,
       status: state.status
     }),
     shallow // Use shallow equality to prevent unnecessary re-renders
@@ -48,21 +42,19 @@ const TrackRow = memo(function TrackRow({
   // Check if this track is playing based on the current status
   const isPlaying = status === 'playing';
 
-  let [isFocused, setIsFocused] = useState(false);
-
   function onClickTrackRow(e: React.MouseEvent) {
     e.preventDefault();
-    console.log('onClickTrackRow', track);
-    onSelect();
+    e.stopPropagation();
 
     // Always use playTrack, which internally handles toggling if it's the current track
     playTrack(track);
   }
 
   function onKeyDownTrackRow(e: React.KeyboardEvent<HTMLTableRowElement>) {
+    if (e.target !== e.currentTarget) return;
+
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      onSelect();
 
       // Always use playTrack, which internally handles toggling if it's the current track
       playTrack(track);
@@ -74,9 +66,8 @@ const TrackRow = memo(function TrackRow({
       className={`group cursor-pointer hover:bg-zinc-700/50 select-none relative ${isCurrentPlaying ? 'bg-zinc-800/50 text-green-400' : ''
         }`}
       tabIndex={0}
+      onClick={onClickTrackRow}
       onKeyDown={onKeyDownTrackRow}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
     >
       <td className="py-[2px] pl-3 pr-2 tabular-nums w-10 text-center">
         {isCurrentPlaying && isPlaying ? (
@@ -128,7 +119,6 @@ const TrackRow = memo(function TrackRow({
   // Custom comparison function for memo
   // Only re-render if these props change
   return (
-    prevProps.isSelected === nextProps.isSelected &&
     prevProps.isCurrentPlaying === nextProps.isCurrentPlaying &&
     prevProps.track.id === nextProps.track.id &&
     prevProps.index === nextProps.index
@@ -138,19 +128,16 @@ const TrackRow = memo(function TrackRow({
 
 function PauseOrLoadingIcon({ status, isCurrent }: { status: string, isCurrent: boolean }) {
   if (status === 'loading' && isCurrent) return <RefreshCw className="w-3 h-3 animate-spin" />;
-  return <Pause className="h-4 w-4" />;
+  return <Play className="h-4 w-4" />;
 }
 
 
 export function TrackTable({
   playlist,
-  query,
 }: {
   playlist: PlaylistWithSongs;
   query?: string;
 }) {
-  let tableRef = useRef<HTMLTableElement>(null);
-
   // Consolidated store subscription with shallow equality
   const {
     setPlaylist,
@@ -159,8 +146,6 @@ export function TrackTable({
     setPlaylist: state.setPlaylist,
     currentTrack: state.currentTrack,
   }), shallow);
-
-  const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
 
   useEffect(() => {
     // Set the playlist in the store
@@ -174,18 +159,13 @@ export function TrackTable({
         key={track.id}
         track={track}
         index={index}
-        isSelected={selectedTrackId === track.id}
         isCurrentPlaying={currentTrack?.id === track.id}
-        onSelect={() => setSelectedTrackId(track.id)}
       />
     ));
-  }, [playlist.songs, selectedTrackId, currentTrack]);
+  }, [playlist.songs, currentTrack]);
 
   return (
-    <table
-      ref={tableRef}
-      className="w-full text-xs"
-    >
+    <table className="w-full text-xs">
       <thead className="sticky top-0 bg-[#0A0A0A] z-10 border-b border-[#282828]">
         <tr className="text-left text-gray-400">
           <th className="py-2 pl-3 pr-2 font-medium w-10">#</th>

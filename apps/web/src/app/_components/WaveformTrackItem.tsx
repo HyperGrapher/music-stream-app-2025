@@ -21,22 +21,33 @@ interface WaveformTrackItemProps {
   compact?: boolean;
 }
 
+const createFallbackWaveform = () =>
+  Array.from({ length: 100 }, () => Math.random());
+
+const parseWaveform = (waveform: string): number[] => {
+  const parsed: unknown = JSON.parse(waveform);
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed.filter(
+    (value): value is number =>
+      typeof value === "number" && Number.isFinite(value)
+  );
+};
+
 // Memoized track cover and play button component
 const TrackCover = memo(function TrackCover({ 
   track, 
-  isCurrentTrack, 
   isPlaying, 
   handlePlayPause 
 }: { 
   track: Track, 
-  isCurrentTrack: boolean, 
   isPlaying: boolean, 
   handlePlayPause: (e: React.MouseEvent) => void 
 }) {
   return (
     <div className="relative min-w-16 w-16 h-16 md:min-w-20 md:w-20 md:h-20 rounded overflow-hidden">
       <img
-        src={track.artworkUrl || "/placeholder-track.jpg"}
+        src={track.artworkUrl ?? "/placeholder-track.jpg"}
         alt={track.title}
         className="object-cover"
       />
@@ -56,7 +67,6 @@ const TrackCover = memo(function TrackCover({
     </div>
   );
 });
-
 // Memoized track info component
 const TrackInfo = memo(function TrackInfo({ 
   track
@@ -67,7 +77,7 @@ const TrackInfo = memo(function TrackInfo({
     <div className="flex items-center mb-1">
       <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
         <div className="text-gray-400 text-xs">
-          {track.user?.name || "Unknown Artist"}
+          {track.user?.name ?? "Unknown Artist"}
         </div>
         <h3 className="text-sm md:text-base font-medium truncate text-white">
           {track.title}
@@ -93,10 +103,9 @@ function TrackWaveform({
   handleSeek: (position: number) => void 
 }) {
   // Only subscribe to currentTime if this is the current track
-  const { isCurrentTrack, currentTime } = usePlayerStore(state => ({
-    isCurrentTrack: state.currentTrack?.id === track.id,
-    currentTime: state.currentTrack?.id === track.id ? state.currentTime : 0
-  }), shallow);
+  const currentTime = usePlayerStore(state =>
+    state.currentTrack?.id === track.id ? state.currentTime : 0
+  );
 
   return (
     <div className="h-12 md:h-16 relative mt-2">
@@ -178,15 +187,16 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
     if (waveformData.length > 0) return waveformData;
     if (track.waveformData) {
       try {
-        return JSON.parse(track.waveformData);
+        const parsedWaveform = parseWaveform(track.waveformData);
+        return parsedWaveform.length > 0
+          ? parsedWaveform
+          : createFallbackWaveform();
       } catch (e) {
         console.error("Error parsing waveform data:", e);
-        // Generate random waveform data as fallback
-        return Array.from({ length: 100 }, () => Math.floor(Math.random() * 100));
+        return createFallbackWaveform();
       }
     }
-    // Generate random waveform data as fallback
-    return Array.from({ length: 100 }, () => Math.floor(Math.random() * 100));
+    return createFallbackWaveform();
   }, [track.waveformData, waveformData]);
 
   // Only subscribe to the minimal state needed for this component
@@ -221,8 +231,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
       seek(position);
     } else {
       playTrack(track);
-      // Small delay to ensure track is loaded before seeking
-      setTimeout(() => seek(position), 100);
+      seek(position);
     }
   }, [isCurrentTrack, seek, playTrack, track]);
 
@@ -232,7 +241,6 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
         {/* Cover Art & Play Button Section */}
         <TrackCover 
           track={track} 
-          isCurrentTrack={isCurrentTrack} 
           isPlaying={isPlaying} 
           handlePlayPause={handlePlayPause} 
         />
@@ -257,4 +265,4 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
   );
 });
 
-// export default WaveformTrackItem; 
+export default WaveformTrackItem;
