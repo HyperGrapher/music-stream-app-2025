@@ -72,17 +72,6 @@ function createStorageKey(
   return `${prefix}/${userId}/${crypto.randomUUID()}-${safeFilename}`;
 }
 
-function getR2PublicBaseUrl(): string {
-  if (!env.R2_PUBLIC_BASE_URL) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "Artwork uploads require R2_PUBLIC_BASE_URL to be configured",
-    });
-  }
-
-  return env.R2_PUBLIC_BASE_URL;
-}
-
 async function verifyUploadedObject(
   bucket: string,
   storageKey: string,
@@ -268,8 +257,6 @@ export const uploadRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
-      getR2PublicBaseUrl();
-
       // Validate the file type
       if (!ALLOWED_IMAGE_TYPES.includes(input.contentType)) {
         throw new TRPCError({
@@ -309,7 +296,9 @@ export const uploadRouter = createTRPCRouter({
             bucket: env.R2_BUCKET_NAME,
             originalFilename: input.filename,
             mimeType: input.contentType,
-            publicUrl: buildPublicObjectUrl(getR2PublicBaseUrl(), fileKey),
+            publicUrl: env.R2_PUBLIC_BASE_URL
+              ? buildPublicObjectUrl(env.R2_PUBLIC_BASE_URL, fileKey)
+              : null,
             expiresAt: new Date(Date.now() + UNATTACHED_ASSET_TTL_MS),
           },
         });

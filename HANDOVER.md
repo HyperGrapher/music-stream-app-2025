@@ -29,11 +29,13 @@ Date: 2026-08-24
 - Track/release publication atomically claims `READY` assets and marks them `ATTACHED`.
 - Cancellation and owner-scoped expiry cleanup atomically claim assets before deleting R2 objects.
 - Artwork follows the same lifecycle and stores its configured public URL on the asset.
+- Artwork uploads do not require `R2_PUBLIC_BASE_URL`; when it is absent, Express serves attached artwork through `/tracks/:trackId/artwork`.
 - Express streaming resolves bucket/key through `Track.audioAsset` and only serves public tracks.
 - Artist queries map relational artwork to the existing `artworkUrl` UI DTO.
 - Player components now use `PlayerTrack`, a stable client DTO, rather than Prisma's persistence record.
 - The starter `Post` router/pages and unused hardcoded auth demo were removed.
 - Better Auth now supports Google and email/password. The browser client uses same-origin auth endpoints.
+- Authenticated `/profile` redirects to the stable `/u/{userId}` route, so display names containing spaces or dots do not break navigation.
 
 ## Database state
 
@@ -54,7 +56,7 @@ Date: 2026-08-24
 
 ## Next work
 
-1. Configure/confirm `R2_PUBLIC_BASE_URL`, then upload one real audio file with artwork and publish it. This is the first important manual integration test after the reset.
+1. Upload one real audio file with artwork and publish it. If desired, configure `R2_PUBLIC_BASE_URL` later to use direct CDN URLs; the Express artwork proxy works without it.
 2. Replace dummy 180-second duration and random waveform generation with background media processing that records results/errors against `MediaAsset`.
 3. Add authorization semantics for private and unlisted playback; Express currently streams public tracks only.
 4. Add integration tests for asset claim races, release rollback, stream visibility, and Better Auth account linking.
@@ -62,4 +64,4 @@ Date: 2026-08-24
 
 ## Suggested fresh-session prompt
 
-> Read `HANDOVER.md`, `CONTEXT.md`, `learned-memories.md`, the ADR, and the current diff. Do not run typecheck. Preserve existing changes. Start by manually publishing a real track and artwork through `/upload`, verify it appears on the creator page and streams through Express, then fix any integration failures before beginning UI redesign.
+> Read `HANDOVER.md`, `CONTEXT.md`, `learned-memories.md`, the ADR, and the current diff. Do not run typecheck. Preserve existing changes. Start by manually publishing a real track and artwork through `/upload`, verify it appears on the creator page, artwork loads through Express, and the `/profile` dropdown opens the signed-in profile at `/u/{userId}` before beginning UI redesign.

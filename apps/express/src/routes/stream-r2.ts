@@ -169,6 +169,68 @@ router.get(
   },
 );
 
+router.get("/:trackId/artwork", async (req, res) => {
+  const requestedTrackId = req.params.trackId;
+  if (!isTrackId(requestedTrackId)) {
+    return res.status(404).json({ error: "Track not found" });
+  }
+
+  try {
+    const track = await prisma.track.findFirst({
+      where: {
+        id: requestedTrackId,
+        visibility: "PUBLIC",
+      },
+      select: {
+        artworkAsset: {
+          select: {
+            bucket: true,
+            storageKey: true,
+            mimeType: true,
+          },
+        },
+      },
+    });
+
+    if (!track?.artworkAsset) {
+      return res.status(404).json({ error: "Artwork not found" });
+    }
+
+    const object = await r2Client.send(
+      new GetObjectCommand({
+        Bucket: track.artworkAsset.bucket,
+        Key: track.artworkAsset.storageKey,
+      }),
+    );
+
+    if (
+      !object.Body ||
+      typeof (object.Body as { pipe?: unknown }).pipe !== "function"
+    ) {
+      return res
+        .status(502)
+        .json({ error: "Artwork storage returned an invalid stream" });
+    }
+
+    res.setHeader(
+      "Content-Type",
+      object.ContentType ?? track.artworkAsset.mimeType,
+    );
+    if (object.ContentLength !== undefined) {
+      res.setHeader("Content-Length", String(object.ContentLength));
+    }
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    (object.Body as Readable).pipe(res);
+    return undefined;
+  } catch (error) {
+    console.error(
+      `Artwork request failed for track ${requestedTrackId}`,
+      error,
+    );
+    return res.status(502).json({ error: "Unable to load artwork" });
+  }
+});
+
 router.get("/:trackId", async (req, res) => {
   const requestedTrackId = req.params.trackId;
   if (!isTrackId(requestedTrackId)) {
@@ -195,7 +257,13 @@ router.get("/:trackId", async (req, res) => {
 
   const { artworkAsset, ...trackData } = track;
   return res.json({
-    track: { ...trackData, artworkUrl: artworkAsset?.publicUrl ?? null },
+    track: {
+      ...trackData,
+      artworkUrl: artworkAsset
+        ? (artworkAsset.publicUrl ??
+          `${req.protocol}://${req.get("host")}/tracks/${requestedTrackId}/artwork`)
+        : null,
+    },
   });
 });
 

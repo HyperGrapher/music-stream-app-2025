@@ -2,14 +2,18 @@ import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
 
+function artistLookup(value: string) {
+  return {
+    OR: [{ id: value }, { name: value }],
+  };
+}
+
 export const artistRouter = createTRPCRouter({
   getArtist: publicProcedure
     .input(z.object({ artist: z.string() }))
     .query(async ({ input, ctx }) => {
       const artist = await ctx.db.user.findFirst({
-        where: {
-          name: input.artist,
-        },
+        where: artistLookup(input.artist),
         select: {
           id: true,
           name: true,
@@ -60,9 +64,7 @@ export const artistRouter = createTRPCRouter({
     )
     .query(async ({ input, ctx }) => {
       const artist = await ctx.db.user.findFirst({
-        where: {
-          name: input.artist,
-        },
+        where: artistLookup(input.artist),
         select: {
           id: true,
         },
@@ -93,9 +95,16 @@ export const artistRouter = createTRPCRouter({
         },
       });
 
+      const streamBaseUrl = (
+        process.env.NEXT_PUBLIC_STREAM_API_URL ?? "http://localhost:4000"
+      ).replace(/\/+$/, "");
+
       return tracks.map(({ artworkAsset, ...track }) => ({
         ...track,
-        artworkUrl: artworkAsset?.publicUrl ?? null,
+        artworkUrl: artworkAsset
+          ? (artworkAsset.publicUrl ??
+            `${streamBaseUrl}/tracks/${track.id}/artwork`)
+          : null,
       }));
     }),
 
@@ -105,9 +114,7 @@ export const artistRouter = createTRPCRouter({
     )
     .query(async ({ input, ctx }) => {
       const artist = await ctx.db.user.findFirst({
-        where: {
-          name: input.artist,
-        },
+        where: artistLookup(input.artist),
         select: {
           id: true,
         },
@@ -135,9 +142,16 @@ export const artistRouter = createTRPCRouter({
         },
       });
 
+      const streamBaseUrl = (
+        process.env.NEXT_PUBLIC_STREAM_API_URL ?? "http://localhost:4000"
+      ).replace(/\/+$/, "");
+
       return tracks.map(({ artworkAsset, ...track }) => ({
         ...track,
-        artworkUrl: artworkAsset?.publicUrl ?? null,
+        artworkUrl: artworkAsset
+          ? (artworkAsset.publicUrl ??
+            `${streamBaseUrl}/tracks/${track.id}/artwork`)
+          : null,
       }));
     }),
 });
