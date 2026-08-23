@@ -1,14 +1,21 @@
 "use client";
 
 import { useCallback, useMemo, memo } from "react";
-import { Heart, MessageCircle, Share, MoreHorizontal, Pause, Play } from "lucide-react";
+import {
+  Heart,
+  MessageCircle,
+  Share,
+  MoreHorizontal,
+  Pause,
+  Play,
+} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import WaveformVisualizer from "./WaveformVisualizer";
 import { usePlayerStore } from "@/store/player";
-import type { Track } from "@prisma/client";
+import type { PlayerTrack as Track } from "@/types/player-track";
 import { formatDuration } from "@/lib/utils";
-import { shallow } from 'zustand/shallow';
+import { shallow } from "zustand/shallow";
 
 interface WaveformTrackItemProps {
   track: Track & {
@@ -30,22 +37,22 @@ const parseWaveform = (waveform: string): number[] => {
 
   return parsed.filter(
     (value): value is number =>
-      typeof value === "number" && Number.isFinite(value)
+      typeof value === "number" && Number.isFinite(value),
   );
 };
 
 // Memoized track cover and play button component
-const TrackCover = memo(function TrackCover({ 
-  track, 
-  isPlaying, 
-  handlePlayPause 
-}: { 
-  track: Track, 
-  isPlaying: boolean, 
-  handlePlayPause: (e: React.MouseEvent) => void 
+const TrackCover = memo(function TrackCover({
+  track,
+  isPlaying,
+  handlePlayPause,
+}: {
+  track: Track;
+  isPlaying: boolean;
+  handlePlayPause: (e: React.MouseEvent) => void;
 }) {
   return (
-    <div className="relative min-w-16 w-16 h-16 md:min-w-20 md:w-20 md:h-20 rounded overflow-hidden">
+    <div className="relative h-16 w-16 min-w-16 overflow-hidden rounded md:h-20 md:w-20 md:min-w-20">
       <img
         src={track.artworkUrl ?? "/placeholder-track.jpg"}
         alt={track.title}
@@ -53,14 +60,14 @@ const TrackCover = memo(function TrackCover({
       />
       <button
         onClick={handlePlayPause}
-        className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
         aria-label={isPlaying ? "Pause" : "Play"}
       >
-        <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500">
           {isPlaying ? (
-            <Pause className="w-5 h-5 text-white" />
+            <Pause className="h-5 w-5 text-white" />
           ) : (
-            <Play className="w-5 h-5 text-white ml-1" />
+            <Play className="ml-1 h-5 w-5 text-white" />
           )}
         </div>
       </button>
@@ -68,18 +75,18 @@ const TrackCover = memo(function TrackCover({
   );
 });
 // Memoized track info component
-const TrackInfo = memo(function TrackInfo({ 
-  track
-}: { 
-  track: WaveformTrackItemProps['track']
+const TrackInfo = memo(function TrackInfo({
+  track,
+}: {
+  track: WaveformTrackItemProps["track"];
 }) {
   return (
-    <div className="flex items-center mb-1">
-      <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
-        <div className="text-gray-400 text-xs">
+    <div className="mb-1 flex items-center">
+      <div className="flex flex-col gap-1 md:flex-row md:items-center md:gap-2">
+        <div className="text-xs text-gray-400">
           {track.user?.name ?? "Unknown Artist"}
         </div>
-        <h3 className="text-sm md:text-base font-medium truncate text-white">
+        <h3 className="truncate text-sm font-medium text-white md:text-base">
           {track.title}
         </h3>
       </div>
@@ -91,24 +98,24 @@ const TrackInfo = memo(function TrackInfo({
 });
 
 // Memoized waveform component that will only update for the current track
-function TrackWaveform({ 
-  track, 
-  parsedWaveformData, 
-  compact, 
-  handleSeek 
-}: { 
-  track: Track, 
-  parsedWaveformData: number[], 
-  compact: boolean, 
-  handleSeek: (position: number) => void 
+function TrackWaveform({
+  track,
+  parsedWaveformData,
+  compact,
+  handleSeek,
+}: {
+  track: Track;
+  parsedWaveformData: number[];
+  compact: boolean;
+  handleSeek: (position: number) => void;
 }) {
   // Only subscribe to currentTime if this is the current track
-  const currentTime = usePlayerStore(state =>
-    state.currentTrack?.id === track.id ? state.currentTime : 0
+  const currentTime = usePlayerStore((state) =>
+    state.currentTrack?.id === track.id ? state.currentTime : 0,
   );
 
   return (
-    <div className="h-12 md:h-16 relative mt-2">
+    <div className="relative mt-2 h-12 md:h-16">
       <WaveformVisualizer
         waveformData={parsedWaveformData}
         duration={track.duration}
@@ -120,67 +127,67 @@ function TrackWaveform({
         backgroundColor="transparent"
       />
       {track.genre && (
-        <div className="absolute top-0 right-0 bg-zinc-800 text-xs text-white px-2 py-1 rounded">
+        <div className="absolute top-0 right-0 rounded bg-zinc-800 px-2 py-1 text-xs text-white">
           {track.genre}
         </div>
       )}
-      <div className="absolute bottom-0 right-0 text-xs text-gray-400">
+      <div className="absolute right-0 bottom-0 text-xs text-gray-400">
         {formatDuration(track.duration)}
       </div>
     </div>
   );
-};
+}
 
 // Memoized action buttons component
 const ActionButtons = memo(function ActionButtons({ track }: { track: Track }) {
   return (
-    <div className="flex items-center gap-2 mt-2">
+    <div className="mt-2 flex items-center gap-2">
       <Button
         variant="ghost"
         size="icon"
         className="h-8 w-8 text-gray-400 hover:text-white"
         title="Like"
       >
-        <Heart className="w-4 h-4" />
+        <Heart className="h-4 w-4" />
       </Button>
       <span className="text-xs text-gray-500">{track.likeCount}</span>
-      
+
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8 text-gray-400 hover:text-white ml-2"
+        className="ml-2 h-8 w-8 text-gray-400 hover:text-white"
         title="Comment"
       >
-        <MessageCircle className="w-4 h-4" />
+        <MessageCircle className="h-4 w-4" />
       </Button>
       <span className="text-xs text-gray-500">{track.commentCount}</span>
-      
+
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8 text-gray-400 hover:text-white ml-2"
+        className="ml-2 h-8 w-8 text-gray-400 hover:text-white"
         title="Share"
       >
-        <Share className="w-4 h-4" />
+        <Share className="h-4 w-4" />
       </Button>
-      
+
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8 text-gray-400 hover:text-white ml-auto"
+        className="ml-auto h-8 w-8 text-gray-400 hover:text-white"
         title="More options"
       >
-        <MoreHorizontal className="w-4 h-4" />
+        <MoreHorizontal className="h-4 w-4" />
       </Button>
     </div>
   );
 });
 
 // Main component that manages the state and combines the memoized subcomponents
-export const WaveformTrackItem = memo(function WaveformTrackItem({ 
-  track, 
-  waveformData = [], 
-  compact = false 
+export const WaveformTrackItem = memo(function WaveformTrackItem({
+  track,
+  waveformData = [],
+  compact = false,
 }: WaveformTrackItemProps) {
   // Parse waveform data from track if provided as string
   const parsedWaveformData = useMemo(() => {
@@ -200,49 +207,54 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
   }, [track.waveformData, waveformData]);
 
   // Only subscribe to the minimal state needed for this component
-  const { 
-    isCurrentTrack,
-    isPlaying,
-    togglePlay, 
-    playTrack, 
-    seek 
-  } = usePlayerStore(state => ({
-    isCurrentTrack: state.currentTrack?.id === track.id,
-    isPlaying: state.currentTrack?.id === track.id && state.status === 'playing',
-    togglePlay: state.togglePlay,
-    playTrack: state.playTrack,
-    seek: state.seek
-  }), shallow);
+  const { isCurrentTrack, isPlaying, togglePlay, playTrack, seek } =
+    usePlayerStore(
+      (state) => ({
+        isCurrentTrack: state.currentTrack?.id === track.id,
+        isPlaying:
+          state.currentTrack?.id === track.id && state.status === "playing",
+        togglePlay: state.togglePlay,
+        playTrack: state.playTrack,
+        seek: state.seek,
+      }),
+      shallow,
+    );
 
   // Handle play/pause
-  const handlePlayPause = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    if (isCurrentTrack) {
-      togglePlay();
-    } else {
-      playTrack(track);
-    }
-  }, [isCurrentTrack, togglePlay, playTrack, track]);
+  const handlePlayPause = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+
+      if (isCurrentTrack) {
+        togglePlay();
+      } else {
+        playTrack(track);
+      }
+    },
+    [isCurrentTrack, togglePlay, playTrack, track],
+  );
 
   // Handle seek on waveform
-  const handleSeek = useCallback((position: number) => {
-    if (isCurrentTrack) {
-      seek(position);
-    } else {
-      playTrack(track);
-      seek(position);
-    }
-  }, [isCurrentTrack, seek, playTrack, track]);
+  const handleSeek = useCallback(
+    (position: number) => {
+      if (isCurrentTrack) {
+        seek(position);
+      } else {
+        playTrack(track);
+        seek(position);
+      }
+    },
+    [isCurrentTrack, seek, playTrack, track],
+  );
 
   return (
-    <div className="bg-zinc-900 rounded-md border border-zinc-800 p-3 mb-4 group">
+    <div className="group mb-4 rounded-md border border-zinc-800 bg-zinc-900 p-3">
       <div className="flex gap-3">
         {/* Cover Art & Play Button Section */}
-        <TrackCover 
-          track={track} 
-          isPlaying={isPlaying} 
-          handlePlayPause={handlePlayPause} 
+        <TrackCover
+          track={track}
+          isPlaying={isPlaying}
+          handlePlayPause={handlePlayPause}
         />
 
         {/* Track Info Section */}
@@ -250,9 +262,9 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
           <TrackInfo track={track} />
 
           {/* Waveform Section */}
-          <TrackWaveform 
-            track={track} 
-            parsedWaveformData={parsedWaveformData} 
+          <TrackWaveform
+            track={track}
+            parsedWaveformData={parsedWaveformData}
             compact={compact}
             handleSeek={handleSeek}
           />

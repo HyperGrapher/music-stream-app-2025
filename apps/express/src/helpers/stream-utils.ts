@@ -9,12 +9,12 @@ export const SESSION_CLEANUP_INTERVAL = 300000; // 5 minutes
 
 // Streaming statistics (Global)
 export const streamStats: StreamStats = {
-    totalBytes: 0,
-    streamCount: 0, // Represents total *sessions* initiated
-    startTime: process.hrtime(),
-    averageSpeed: 0, // Note: Global average speed calculation removed for simplicity
-    activeSessions: new Set(),
-    errors: new Map() // Tracks errors per session ID
+  totalBytes: 0,
+  streamCount: 0, // Represents total *sessions* initiated
+  startTime: process.hrtime(),
+  averageSpeed: 0, // Note: Global average speed calculation removed for simplicity
+  activeSessions: new Set(),
+  errors: new Map(), // Tracks errors per session ID
 };
 
 // Track total bytes streamed per session (Session specific)
@@ -23,71 +23,78 @@ export const streamProgress = new Map<string, SessionProgress>();
 // Map client IP to their latest session ID to detect track changes (Global)
 export const ipToCurrentSessionId = new Map<string, string>();
 
-
 // --- Interfaces and Enums ---
 
 // Streaming statistics
 export interface StreamStats {
-    totalBytes: number;
-    streamCount: number;
-    startTime: [number, number];
-    averageSpeed: number;
-    activeSessions: Set<string>;
-    errors: Map<string, number>;
+  totalBytes: number;
+  streamCount: number;
+  startTime: [number, number];
+  averageSpeed: number;
+  activeSessions: Set<string>;
+  errors: Map<string, number>;
 }
 
 // Enum for session statuses
 export enum SessionStatus {
-    Completed = 'completed',
-    Switched = 'switched',
-    Timeout = 'timeout',
-    Error = 'error',
-    InactiveCleanup = 'inactive_cleanup',
+  Completed = "completed",
+  Switched = "switched",
+  Timeout = "timeout",
+  Error = "error",
+  InactiveCleanup = "inactive_cleanup",
 }
 
 // Session progress structure
 export interface SessionProgress {
-    totalBytes: number;
-    startTime: [number, number];
-    lastActivityTime: number;
-    chunkCount: number;
-    fileSize: number;
-    trackId: string;
+  totalBytes: number;
+  startTime: [number, number];
+  lastActivityTime: number;
+  chunkCount: number;
+  fileSize: number;
+  trackId: string;
 }
 
 export class RangeNotSatisfiableError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'RangeNotSatisfiableError';
-    }
+  constructor(message: string) {
+    super(message);
+    this.name = "RangeNotSatisfiableError";
+  }
 }
 
 // --- Utility Functions ---
 
-export async function logStreamError(trackId: string, sessionId: string, error: Error) { // Removed streamStats param, use exported const
-    console.error(`Streaming error occurred for track ${trackId}, session ${sessionId}:`, error.message);
-    // Increment error count for this specific session
-    streamStats.errors.set(sessionId, (streamStats.errors.get(sessionId) ?? 0) + 1);
+export async function logStreamError(
+  trackId: string,
+  sessionId: string,
+  error: Error,
+) {
+  // Removed streamStats param, use exported const
+  console.error(
+    `Streaming error occurred for track ${trackId}, session ${sessionId}:`,
+    error.message,
+  );
+  // Increment error count for this specific session
+  streamStats.errors.set(
+    sessionId,
+    (streamStats.errors.get(sessionId) ?? 0) + 1,
+  );
 
-    // Attempt to log to DB, but don't let it block console logging
-    try {
-        await prisma.trackError.upsert({
-            create: {
-                track_id: trackId,
-                title: trackId,
-                filepath: `audio/${trackId}.mp3`,
-                reason: error.message,
-            },
-            update: {
-                count: { increment: 1 },
-            },
-            where: {
-                track_id: trackId,
-            },
-        });
-    } catch (dbError) {
-        console.error(`Failed to log stream error to database for session ${sessionId}:`, dbError);
-    }
+  // Attempt to log to DB, but don't let it block console logging
+  try {
+    await prisma.mediaProcessingError.create({
+      data: {
+        trackId,
+        requestId: sessionId,
+        operation: "STREAM",
+        reason: error.message,
+      },
+    });
+  } catch (dbError) {
+    console.error(
+      `Failed to log stream error to database for session ${sessionId}:`,
+      dbError,
+    );
+  }
 }
 
 /*
@@ -95,144 +102,162 @@ there is a issue probably related to Cloudflare R2, if chunk size is set to (10 
 in two minutes mark, a chunk on the client stuck in pending status.
 because of that adjust the chunk size to 500kb or 1mb to delay the track being paused.
 */
-const isDev = process.env.APP_DOMAIN?.startsWith('http://localhost');
+const isDev = process.env.APP_DOMAIN?.startsWith("http://localhost");
 
 export function calculateStreamHeaders(fileSize: number, range: string) {
-    const CHUNK_SIZE = 500_000;
+  const CHUNK_SIZE = 500_000;
 
-    if (!Number.isSafeInteger(fileSize) || fileSize <= 0) {
-        throw new RangeNotSatisfiableError('Invalid file size');
+  if (!Number.isSafeInteger(fileSize) || fileSize <= 0) {
+    throw new RangeNotSatisfiableError("Invalid file size");
+  }
+
+  const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+  if (!match || (!match[1] && !match[2])) {
+    throw new RangeNotSatisfiableError("Malformed range header");
+  }
+
+  let start: number;
+  let requestedEnd: number | undefined;
+
+  if (!match[1]) {
+    const suffixLength = Number.parseInt(match[2]!, 10);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) {
+      throw new RangeNotSatisfiableError("Invalid suffix range");
+    }
+    start = Math.max(fileSize - suffixLength, 0);
+  } else {
+    start = Number.parseInt(match[1], 10);
+    if (!Number.isSafeInteger(start) || start < 0 || start >= fileSize) {
+      throw new RangeNotSatisfiableError("Range starts outside the file");
     }
 
-    const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
-    if (!match || (!match[1] && !match[2])) {
-        throw new RangeNotSatisfiableError('Malformed range header');
+    if (match[2]) {
+      requestedEnd = Number.parseInt(match[2], 10);
+      if (!Number.isSafeInteger(requestedEnd) || requestedEnd < start) {
+        throw new RangeNotSatisfiableError("Invalid range end");
+      }
     }
+  }
 
-    let start: number;
-    let requestedEnd: number | undefined;
+  const chunkEnd = start + CHUNK_SIZE - 1;
+  const end = Math.min(requestedEnd ?? chunkEnd, chunkEnd, fileSize - 1);
+  const contentLength = end - start + 1;
 
-    if (!match[1]) {
-        const suffixLength = Number.parseInt(match[2]!, 10);
-        if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) {
-            throw new RangeNotSatisfiableError('Invalid suffix range');
-        }
-        start = Math.max(fileSize - suffixLength, 0);
-    } else {
-        start = Number.parseInt(match[1], 10);
-        if (!Number.isSafeInteger(start) || start < 0 || start >= fileSize) {
-            throw new RangeNotSatisfiableError('Range starts outside the file');
-        }
+  // Debug info only for development
+  if (isDev) {
+    console.log(
+      `Range request: ${range} => Calculated Range: bytes ${start}-${end}/${fileSize}, Length: ${contentLength}`,
+    );
+  }
 
-        if (match[2]) {
-            requestedEnd = Number.parseInt(match[2], 10);
-            if (!Number.isSafeInteger(requestedEnd) || requestedEnd < start) {
-                throw new RangeNotSatisfiableError('Invalid range end');
-            }
-        }
-    }
-
-    const chunkEnd = start + CHUNK_SIZE - 1;
-    const end = Math.min(requestedEnd ?? chunkEnd, chunkEnd, fileSize - 1);
-    const contentLength = end - start + 1;
-
-    // Debug info only for development
-    if (isDev) {
-        console.log(`Range request: ${range} => Calculated Range: bytes ${start}-${end}/${fileSize}, Length: ${contentLength}`);
-    }
-
-    return {
-        headers: {
-            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-            'Accept-Ranges': 'bytes',
-            'Content-Length': contentLength,
-            'Content-Type': 'audio/mpeg',
-            'Content-Disposition': 'inline',
-            'Cache-Control': 'public, max-age=3600',
-            'Cross-Origin-Resource-Policy': 'cross-origin',
-            'Access-Control-Allow-Origin': process.env.NEXT_URL ?? (process.env.APP_DOMAIN ?? '*'),
-            // Add keepalive header to prevent proxy timeouts
-            'Connection': 'keep-alive'
-        },
-        fileSize,
-        start,
-        end,
-        contentLength
-    };
+  return {
+    headers: {
+      "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+      "Accept-Ranges": "bytes",
+      "Content-Length": contentLength,
+      "Content-Type": "audio/mpeg",
+      "Content-Disposition": "inline",
+      "Cache-Control": "public, max-age=3600",
+      "Cross-Origin-Resource-Policy": "cross-origin",
+      "Access-Control-Allow-Origin":
+        process.env.NEXT_URL ?? process.env.APP_DOMAIN ?? "*",
+      // Add keepalive header to prevent proxy timeouts
+      Connection: "keep-alive",
+    },
+    fileSize,
+    start,
+    end,
+    contentLength,
+  };
 }
 
 // Helper function to format bytes to KB
 export function formatBytesToKB(bytes: number): string {
-    if (bytes === 0) return '0 KB';
-    const kb = bytes / 1024;
-    return `${kb.toFixed(2)} KB`;
+  if (bytes === 0) return "0 KB";
+  const kb = bytes / 1024;
+  return `${kb.toFixed(2)} KB`;
 }
 
 // Centralized function for logging session stats and cleaning up
-export function logSessionStats(sessionId: string, status: SessionStatus) { // Removed streamStats param, use exported const
-    const progress = streamProgress.get(sessionId);
-    if (!progress) {
-        console.log(`Attempted to log stats for already cleaned session: ${sessionId} (${status})`);
-        return;
+export function logSessionStats(sessionId: string, status: SessionStatus) {
+  // Removed streamStats param, use exported const
+  const progress = streamProgress.get(sessionId);
+  if (!progress) {
+    console.log(
+      `Attempted to log stats for already cleaned session: ${sessionId} (${status})`,
+    );
+    return;
+  }
+
+  const {
+    totalBytes,
+    startTime,
+    chunkCount,
+    fileSize,
+    trackId,
+    lastActivityTime,
+  } = progress;
+  const sessionEndTime = process.hrtime(startTime);
+  const sessionDuration = (sessionEndTime[0] * 1e9 + sessionEndTime[1]) / 1e9;
+  const sessionSpeed = sessionDuration > 0 ? totalBytes / sessionDuration : 0;
+
+  console.log(`🚩 *** Stream Session ${status.toUpperCase()} ***`);
+  console.log({
+    status,
+    trackId,
+    sessionId,
+    totalFileSize: formatBytesToKB(fileSize),
+    totalBytesStreamed: formatBytesToKB(totalBytes),
+    sessionDuration: `${sessionDuration.toFixed(2)}s`,
+    sessionAverageSpeed: `${formatBytesToKB(sessionSpeed)}/s`,
+    numberOfChunks: chunkCount,
+    activeSessions: streamStats.activeSessions.size,
+    totalSessionsStarted: streamStats.streamCount,
+    totalBytesAllStreams: formatBytesToKB(streamStats.totalBytes),
+    errorsForSession: streamStats.errors.get(sessionId) ?? 0,
+    isComplete: status === SessionStatus.Completed || totalBytes >= fileSize,
+  });
+
+  // Clean up session data
+  streamProgress.delete(sessionId);
+  streamStats.activeSessions.delete(sessionId);
+  streamStats.errors.delete(sessionId); // Clean up errors for this session
+
+  // If the session being cleaned is the *current* one for its IP, clear the IP mapping
+  // This prevents immediately logging a 'switched' status if the same user reconnects quickly
+  // Find the IP associated with this sessionId (less efficient, might need reverse map if performance critical)
+  let ipForSession: string | null = null;
+  for (const [ip, sId] of ipToCurrentSessionId.entries()) {
+    if (sId === sessionId) {
+      ipForSession = ip;
+      break;
     }
-
-    const { totalBytes, startTime, chunkCount, fileSize, trackId, lastActivityTime } = progress;
-    const sessionEndTime = process.hrtime(startTime);
-    const sessionDuration = (sessionEndTime[0] * 1e9 + sessionEndTime[1]) / 1e9;
-    const sessionSpeed = sessionDuration > 0 ? totalBytes / sessionDuration : 0;
-
-    console.log(`🚩 *** Stream Session ${status.toUpperCase()} ***`);
-    console.log({
-        status,
-        trackId,
-        sessionId,
-        totalFileSize: formatBytesToKB(fileSize),
-        totalBytesStreamed: formatBytesToKB(totalBytes),
-        sessionDuration: `${sessionDuration.toFixed(2)}s`,
-        sessionAverageSpeed: `${formatBytesToKB(sessionSpeed)}/s`,
-        numberOfChunks: chunkCount,
-        activeSessions: streamStats.activeSessions.size,
-        totalSessionsStarted: streamStats.streamCount,
-        totalBytesAllStreams: formatBytesToKB(streamStats.totalBytes),
-        errorsForSession: streamStats.errors.get(sessionId) ?? 0,
-        isComplete: status === SessionStatus.Completed || totalBytes >= fileSize
-    });
-
-    // Clean up session data
-    streamProgress.delete(sessionId);
-    streamStats.activeSessions.delete(sessionId);
-    streamStats.errors.delete(sessionId); // Clean up errors for this session
-
-    // If the session being cleaned is the *current* one for its IP, clear the IP mapping
-    // This prevents immediately logging a 'switched' status if the same user reconnects quickly
-    // Find the IP associated with this sessionId (less efficient, might need reverse map if performance critical)
-    let ipForSession: string | null = null;
-    for (const [ip, sId] of ipToCurrentSessionId.entries()) {
-        if (sId === sessionId) {
-            ipForSession = ip;
-            break;
-        }
-    }
-    if (ipForSession && ipToCurrentSessionId.get(ipForSession) === sessionId) {
-        console.log(`Clearing IP mapping for ${ipForSession} due to session cleanup (${status}).`);
-        ipToCurrentSessionId.delete(ipForSession);
-    }
+  }
+  if (ipForSession && ipToCurrentSessionId.get(ipForSession) === sessionId) {
+    console.log(
+      `Clearing IP mapping for ${ipForSession} due to session cleanup (${status}).`,
+    );
+    ipToCurrentSessionId.delete(ipForSession);
+  }
 }
 
 // --- Background Tasks ---
 
 // Cleanup inactive sessions
 setInterval(() => {
-    const now = Date.now();
-    // Iterate over a copy of keys to avoid issues if map is modified during iteration by logSessionStats
-    const sessionIdsToCheck = Array.from(streamProgress.keys());
+  const now = Date.now();
+  // Iterate over a copy of keys to avoid issues if map is modified during iteration by logSessionStats
+  const sessionIdsToCheck = Array.from(streamProgress.keys());
 
-    for (const sessionId of sessionIdsToCheck) {
-        const progress = streamProgress.get(sessionId); // Re-fetch progress in case it was deleted
-        if (progress && now - progress.lastActivityTime > SESSION_CLEANUP_INTERVAL) {
-            console.log(`Cleaning up inactive session via interval: ${sessionId}`);
-            logSessionStats(sessionId, SessionStatus.InactiveCleanup);
-            // No need to delete here, logSessionStats does it
-        }
+  for (const sessionId of sessionIdsToCheck) {
+    const progress = streamProgress.get(sessionId); // Re-fetch progress in case it was deleted
+    if (
+      progress &&
+      now - progress.lastActivityTime > SESSION_CLEANUP_INTERVAL
+    ) {
+      console.log(`Cleaning up inactive session via interval: ${sessionId}`);
+      logSessionStats(sessionId, SessionStatus.InactiveCleanup);
+      // No need to delete here, logSessionStats does it
     }
+  }
 }, SESSION_CLEANUP_INTERVAL);

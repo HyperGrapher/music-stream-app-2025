@@ -1,4 +1,3 @@
-import { postRouter } from "@/server/api/routers/post";
 import { streamRouter } from "@/server/api/routers/strream";
 import { artistRouter } from "./routers/artist";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
@@ -10,7 +9,6 @@ import { uploadRouter } from "./routers/upload";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
-  post: postRouter,
   stream: streamRouter,
   artist: artistRouter,
   upload: uploadRouter,
@@ -21,9 +19,6 @@ export type AppRouter = typeof appRouter;
 
 /**
  * Create a server-side caller for the tRPC API.
- * @example
- * const trpc = createCaller(createContext);
- * const res = await trpc.post.all();
- *       ^? Post[]
+ * @example Create a server-side caller from a request context.
  */
 export const createCaller = createCallerFactory(appRouter);

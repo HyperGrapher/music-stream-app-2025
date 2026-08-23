@@ -29,5 +29,8 @@ export const auth = betterAuth({
             clientSecret: env.GOOGLE_CLIENT_SECRET,
         },
     },
+    emailAndPassword: {
+        enabled: true,
+    },
 
 })

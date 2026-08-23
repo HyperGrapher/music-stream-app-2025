@@ -52,10 +52,10 @@ router.get("/stream/:trackId", async (req, res) => {
     const track = await prisma.track.findFirst({
       where: {
         id: requestedTrackId,
-        isPrivate: false,
+        visibility: "PUBLIC",
       },
       select: {
-        storageKey: true,
+        audioAsset: { select: { storageKey: true, bucket: true } },
       },
     });
 
@@ -63,18 +63,12 @@ router.get("/stream/:trackId", async (req, res) => {
       return res.status(404).json({ error: "Track not found" });
     }
 
-    const bucket = process.env.R2_BUCKET_NAME;
-    if (!bucket) {
-      console.error("R2_BUCKET_NAME is not configured");
-      return res
-        .status(500)
-        .json({ error: "Streaming service is not configured" });
-    }
+    const bucket = track.audioAsset.bucket;
 
     const objectMetadata = await r2Client.send(
       new HeadObjectCommand({
         Bucket: bucket,
-        Key: track.storageKey,
+        Key: track.audioAsset.storageKey,
       }),
     );
     const fileSize = objectMetadata.ContentLength;
@@ -103,7 +97,7 @@ router.get("/stream/:trackId", async (req, res) => {
     const object = await r2Client.send(
       new GetObjectCommand({
         Bucket: bucket,
-        Key: track.storageKey,
+        Key: track.audioAsset.storageKey,
         Range: `bytes=${start}-${end}`,
       }),
     );
@@ -184,13 +178,13 @@ router.get("/:trackId", async (req, res) => {
   const track = await prisma.track.findFirst({
     where: {
       id: requestedTrackId,
-      isPrivate: false,
+      visibility: "PUBLIC",
     },
     select: {
       id: true,
       title: true,
       duration: true,
-      artworkUrl: true,
+      artworkAsset: { select: { publicUrl: true } },
       waveformData: true,
     },
   });
@@ -199,7 +193,10 @@ router.get("/:trackId", async (req, res) => {
     return res.status(404).json({ error: "Track not found" });
   }
 
-  return res.json({ track });
+  const { artworkAsset, ...trackData } = track;
+  return res.json({
+    track: { ...trackData, artworkUrl: artworkAsset?.publicUrl ?? null },
+  });
 });
 
 export default router;
