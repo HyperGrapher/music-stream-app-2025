@@ -42,6 +42,9 @@ Date: 2026-08-24
 - Authenticated `/profile` redirects to the stable `/u/{userId}` route, so display names containing spaces or dots do not break navigation.
 - Publishing a track or release queues durable audio analysis. `apps/media-worker` downloads the private R2 source, obtains real metadata with FFprobe, pipes FFmpeg-decoded mono PCM into BBC audiowaveform, and uploads 100-points/second detail DAT plus 20-points/second overview JSON assets to R2.
 - Profile DTOs expose real analyzed duration and an Express waveform URL. The client parses audiowaveform min/max pairs and reduces them to canvas width by preserving extrema rather than averaging; playback progress uses a clipped second canvas and no longer redraws every peak each tick.
+- Waveform rendering now keeps its measured canvas container mounted while data loads, fixing the blank-canvas/working-hover-line bug. List and detail variants use dense narrow bars, a dim lower reflection, a center axis, time labels, and an orange played-progress overlay.
+- Artist profiles were redesigned around a SoundCloud-like hero, navigation/actions, two-column track feed and profile sidebar. Track artwork/titles use the canonical `/track/{trackId}` detail route.
+- Public track details are exposed through `artist.getTrack`; the new detail page has a large interactive waveform hero, artwork, metadata, creator card, engagement stats, and comments empty state.
 - `turbo dev` now starts Web, Express, and the media worker. Local binaries resolve as FFmpeg/FFprobe 8.1.2 and audiowaveform 1.10.1; paths can be overridden with `FFMPEG_PATH`, `FFPROBE_PATH`, and `AUDIOWAVEFORM_PATH`.
 
 ## Database state
@@ -59,6 +62,7 @@ Date: 2026-08-24
 - Upload lifecycle tests pass: 4/4.
 - Waveform parsing/extrema-preserving reduction tests pass: 3/3.
 - Live profile, track metadata, and waveform endpoints return HTTP 200. The checked waveform response contained 1,562 real min/max peaks for a 78.054-second track.
+- The redesigned `/u/{userId}` profile and `/track/{trackId}` detail pages both return HTTP 200; profile HTML includes canonical track links and detail HTML includes the interactive waveform control.
 - Disposable email signup, sign-out, and sign-in each returned HTTP 200; the disposable user was deleted afterward.
 - User confirmed Google sign-in works after regeneration/restart.
 - `/`, `/burak`, `/upload`, Express `/`, and `/api/version` return HTTP 200.
@@ -66,12 +70,11 @@ Date: 2026-08-24
 
 ## Next work
 
-1. Visually inspect the new real waveforms in the browser and tune bar width/spacing/colors if desired.
+1. Visually inspect the redesigned profile/detail pages in the user's browser and tune responsive spacing, bar density, or colors from screenshots. This Codex session exposed zero in-app browser backends, so automated visual inspection was unavailable.
 2. Add authorization semantics for private and unlisted playback/waveforms; Express currently serves public tracks only.
 3. Add integration tests for asset claim races, release rollback, processing retry/recovery, stream visibility, and Better Auth account linking.
 4. Add deletion orchestration for generated waveform assets when a track/audio asset is permanently removed.
-5. Continue the planned UI redesign on the now-verified publishing and processing pipeline.
 
 ## Suggested fresh-session prompt
 
-> Read `HANDOVER.md`, `CONTEXT.md`, `learned-memories.md`, the ADR, and the current diff. Do not run typecheck. Preserve existing changes. `turbo dev` now includes `apps/media-worker`, and all seven existing tracks have real READY analyses/waveforms. Start by visually inspecting waveform rendering on `/u/{userId}`, then continue the UI redesign or private/unlisted authorization work.
+> Read `HANDOVER.md`, `CONTEXT.md`, `learned-memories.md`, the ADR, and the current diff. Do not run typecheck. Preserve existing changes. `turbo dev` includes `apps/media-worker`, and all seven tracks have real READY analyses/waveforms. Visually inspect the redesigned `/u/{userId}` and `/track/{trackId}` pages, then continue private/unlisted authorization work.

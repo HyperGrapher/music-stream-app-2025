@@ -203,6 +203,91 @@ export const artistRouter = createTRPCRouter({
       });
     }),
 
+  getTrack: publicProcedure
+    .input(z.object({ trackId: z.string().uuid() }))
+    .query(async ({ input, ctx }) => {
+      const track = await ctx.db.track.findFirst({
+        where: { id: input.trackId, visibility: "PUBLIC" },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          genre: true,
+          tags: true,
+          recordLabel: true,
+          releaseDate: true,
+          createdAt: true,
+          playCount: true,
+          likeCount: true,
+          repostCount: true,
+          commentCount: true,
+          artworkAsset: { select: { publicUrl: true } },
+          audioAsset: {
+            select: {
+              audioAnalysis: {
+                select: {
+                  status: true,
+                  durationMs: true,
+                  waveformVersion: true,
+                },
+              },
+            },
+          },
+          creator: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+              bio: true,
+              location: true,
+              website: true,
+              _count: { select: { followers: true, tracks: true } },
+            },
+          },
+          releaseEntries: {
+            orderBy: { position: "asc" },
+            take: 1,
+            select: {
+              position: true,
+              release: { select: { id: true, title: true, type: true } },
+            },
+          },
+        },
+      });
+
+      if (!track) return null;
+      const streamBaseUrl = (
+        process.env.NEXT_PUBLIC_STREAM_API_URL ?? "http://localhost:4000"
+      ).replace(/\/+$/, "");
+      const { artworkAsset, audioAsset, creator, ...trackData } = track;
+      const analysis = audioAsset.audioAnalysis;
+
+      return {
+        ...trackData,
+        duration: analysis?.durationMs
+          ? Math.round(analysis.durationMs / 1_000)
+          : 0,
+        waveformStatus: analysis?.status ?? "QUEUED",
+        waveformUrl: `${streamBaseUrl}/tracks/${track.id}/waveform?v=${analysis?.waveformVersion ?? 1}`,
+        artworkUrl: artworkAsset
+          ? (artworkAsset.publicUrl ??
+            `${streamBaseUrl}/tracks/${track.id}/artwork`)
+          : null,
+        userId: creator.id,
+        user: { name: creator.name, image: creator.image },
+        creator: {
+          id: creator.id,
+          name: creator.name,
+          image: creator.image,
+          bio: creator.bio,
+          location: creator.location,
+          website: creator.website,
+          followersCount: creator._count.followers,
+          trackCount: creator._count.tracks,
+        },
+      };
+    }),
+
   getReleases: publicProcedure
     .input(z.object({ artist: z.string() }))
     .query(async ({ input, ctx }) => {

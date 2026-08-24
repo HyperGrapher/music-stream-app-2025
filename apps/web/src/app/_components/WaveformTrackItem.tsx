@@ -1,222 +1,48 @@
 "use client";
 
-import { useCallback, useEffect, useState, memo } from "react";
+import { memo, useCallback } from "react";
+import { formatDistanceToNow } from "date-fns";
 import {
+  Copy,
   Heart,
   MessageCircle,
-  Share,
   MoreHorizontal,
   Pause,
   Play,
+  Repeat2,
+  Share2,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { Button } from "@/components/ui/button";
-import WaveformVisualizer from "./WaveformVisualizer";
+import Link from "next/link";
+import { shallow } from "zustand/shallow";
+
+import { useTrackWaveform } from "@/hooks/useTrackWaveform";
 import { usePlayerStore } from "@/store/player";
 import type { PlayerTrack as Track } from "@/types/player-track";
-import { formatDuration } from "@/lib/utils";
-import { shallow } from "zustand/shallow";
-import {
-  parseAudiowaveformJson,
-  type WaveformPeak,
-} from "@/lib/waveform-utils";
+import WaveformVisualizer from "./WaveformVisualizer";
 
 interface WaveformTrackItemProps {
   track: Track & {
-    user?: {
-      name: string;
-      image?: string | null;
-    };
+    user?: { name: string; image?: string | null };
   };
   compact?: boolean;
-  /** Queue to use for Next/Previous when this item starts playback. */
   playlist?: Track[];
 }
 
-// Memoized track cover and play button component
-const TrackCover = memo(function TrackCover({
-  track,
-  isPlaying,
-  handlePlayPause,
-}: {
-  track: Track;
-  isPlaying: boolean;
-  handlePlayPause: (e: React.MouseEvent) => void;
-}) {
-  return (
-    <div className="relative h-16 w-16 min-w-16 overflow-hidden rounded md:h-20 md:w-20 md:min-w-20">
-      <img
-        src={track.artworkUrl ?? "/placeholder-track.jpg"}
-        alt={track.title}
-        className="object-cover"
-      />
-      <button
-        onClick={handlePlayPause}
-        className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
-        aria-label={isPlaying ? "Pause" : "Play"}
-      >
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500">
-          {isPlaying ? (
-            <Pause className="h-5 w-5 text-white" />
-          ) : (
-            <Play className="ml-1 h-5 w-5 text-white" />
-          )}
-        </div>
-      </button>
-    </div>
-  );
-});
-// Memoized track info component
-const TrackInfo = memo(function TrackInfo({
-  track,
-}: {
-  track: WaveformTrackItemProps["track"];
-}) {
-  return (
-    <div className="mb-1 flex items-center">
-      <div className="flex flex-col gap-1 md:flex-row md:items-center md:gap-2">
-        <div className="text-xs text-gray-400">
-          {track.user?.name ?? "Unknown Artist"}
-        </div>
-        <h3 className="truncate text-sm font-medium text-white md:text-base">
-          {track.title}
-        </h3>
-      </div>
-      <div className="ml-auto text-xs text-gray-500">
-        {formatDistanceToNow(new Date(track.createdAt), { addSuffix: true })}
-      </div>
-    </div>
-  );
-});
+const actionClass =
+  "inline-flex h-8 items-center gap-1.5 rounded border border-zinc-700 bg-zinc-900 px-2.5 text-xs font-semibold text-zinc-300 transition hover:border-zinc-500 hover:text-white";
 
-// Memoized waveform component that will only update for the current track
-function TrackWaveform({
-  track,
-  parsedWaveformData,
-  compact,
-  handleSeek,
-}: {
-  track: Track;
-  parsedWaveformData: WaveformPeak[];
-  compact: boolean;
-  handleSeek: (position: number) => void;
-}) {
-  // Only subscribe to currentTime if this is the current track
-  const currentTime = usePlayerStore((state) =>
-    state.currentTrack?.id === track.id ? state.currentTime : 0,
-  );
-
-  return (
-    <div className="relative mt-2 h-12 md:h-16">
-      <WaveformVisualizer
-        waveformData={parsedWaveformData}
-        duration={track.duration}
-        currentTime={currentTime}
-        onSeek={handleSeek}
-        height={compact ? 32 : 52}
-        color="#999999"
-        progressColor="#f50"
-        backgroundColor="transparent"
-      />
-      {track.genre && (
-        <div className="absolute top-0 right-0 rounded bg-zinc-800 px-2 py-1 text-xs text-white">
-          {track.genre}
-        </div>
-      )}
-      <div className="absolute right-0 bottom-0 text-xs text-gray-400">
-        {track.duration > 0 ? formatDuration(track.duration) : "Processing…"}
-      </div>
-    </div>
-  );
-}
-
-// Memoized action buttons component
-const ActionButtons = memo(function ActionButtons({ track }: { track: Track }) {
-  return (
-    <div className="mt-2 flex items-center gap-2">
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 text-gray-400 hover:text-white"
-        title="Like"
-      >
-        <Heart className="h-4 w-4" />
-      </Button>
-      <span className="text-xs text-gray-500">{track.likeCount}</span>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        className="ml-2 h-8 w-8 text-gray-400 hover:text-white"
-        title="Comment"
-      >
-        <MessageCircle className="h-4 w-4" />
-      </Button>
-      <span className="text-xs text-gray-500">{track.commentCount}</span>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        className="ml-2 h-8 w-8 text-gray-400 hover:text-white"
-        title="Share"
-      >
-        <Share className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        className="ml-auto h-8 w-8 text-gray-400 hover:text-white"
-        title="More options"
-      >
-        <MoreHorizontal className="h-4 w-4" />
-      </Button>
-    </div>
-  );
-});
-
-// Main component that manages the state and combines the memoized subcomponents
 export const WaveformTrackItem = memo(function WaveformTrackItem({
   track,
   compact = false,
   playlist,
 }: WaveformTrackItemProps) {
-  const [parsedWaveformData, setParsedWaveformData] = useState<WaveformPeak[]>(
-    [],
+  const { peaks, isLoading, error } = useTrackWaveform(
+    track.waveformUrl,
+    track.waveformStatus === "FAILED",
   );
-
-  useEffect(() => {
-    if (!track.waveformUrl) return;
-    let canceled = false;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-
-    const loadWaveform = async () => {
-      try {
-        const response = await fetch(track.waveformUrl!);
-        if (response.status === 202) {
-          if (!canceled) retryTimer = setTimeout(loadWaveform, 3_000);
-          return;
-        }
-        if (!response.ok) throw new Error(`Waveform request returned ${response.status}`);
-
-        const peaks = parseAudiowaveformJson(await response.json());
-        if (!canceled) setParsedWaveformData(peaks);
-      } catch (error) {
-        console.error(`Unable to load waveform for ${track.id}`, error);
-        if (!canceled && track.waveformStatus !== "FAILED") {
-          retryTimer = setTimeout(loadWaveform, 10_000);
-        }
-      }
-    };
-
-    void loadWaveform();
-    return () => {
-      canceled = true;
-      if (retryTimer) clearTimeout(retryTimer);
-    };
-  }, [track.id, track.waveformStatus, track.waveformUrl]);
-
-  // Only subscribe to the minimal state needed for this component
+  const currentTime = usePlayerStore((state) =>
+    state.currentTrack?.id === track.id ? state.currentTime : 0,
+  );
   const {
     isCurrentTrack,
     isPlaying,
@@ -242,61 +68,153 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
     playTrack(track);
   }, [playlist, playTrack, setPlaylist, track]);
 
-  // Handle play/pause
-  const handlePlayPause = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
+  const handlePlayPause = useCallback(() => {
+    if (isCurrentTrack) {
+      setPlaylist(playlist?.length ? playlist : [track]);
+      togglePlay();
+    } else {
+      playFromQueue();
+    }
+  }, [isCurrentTrack, playFromQueue, playlist, setPlaylist, togglePlay, track]);
 
-      if (isCurrentTrack) {
-        setPlaylist(playlist?.length ? playlist : [track]);
-        togglePlay();
-      } else {
-        playFromQueue();
-      }
-    },
-    [isCurrentTrack, playFromQueue, playlist, setPlaylist, togglePlay, track],
-  );
-
-  // Handle seek on waveform
   const handleSeek = useCallback(
     (position: number) => {
-      if (isCurrentTrack) {
-        seek(position);
-      } else {
-        playFromQueue();
-        seek(position);
-      }
+      if (!isCurrentTrack) playFromQueue();
+      seek(position);
     },
-    [isCurrentTrack, playFromQueue, seek, track],
+    [isCurrentTrack, playFromQueue, seek],
   );
 
+  const artistName = track.user?.name ?? "Unknown artist";
+  const artworkSize = compact ? "h-28 w-28" : "h-32 w-32 lg:h-40 lg:w-40";
+
   return (
-    <div className="group mb-4 rounded-md border border-zinc-800 bg-zinc-900 p-3">
-      <div className="flex gap-3">
-        {/* Cover Art & Play Button Section */}
-        <TrackCover
-          track={track}
-          isPlaying={isPlaying}
-          handlePlayPause={handlePlayPause}
-        />
-
-        {/* Track Info Section */}
-        <div className="flex-1 overflow-hidden">
-          <TrackInfo track={track} />
-
-          {/* Waveform Section */}
-          <TrackWaveform
-            track={track}
-            parsedWaveformData={parsedWaveformData}
-            compact={compact}
-            handleSeek={handleSeek}
+    <article className="group border-b border-zinc-800/80 py-5 first:pt-0">
+      <div className="flex gap-4 lg:gap-5">
+        <Link
+          href={`/track/${track.id}`}
+          className={`${artworkSize} relative shrink-0 overflow-hidden rounded-sm bg-zinc-900`}
+        >
+          <img
+            src={track.artworkUrl ?? "/placeholder-track.jpg"}
+            alt={`${track.title} artwork`}
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
           />
+        </Link>
 
-          {/* Action Buttons */}
-          <ActionButtons track={track} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={handlePlayPause}
+              className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-black transition hover:scale-105 hover:bg-orange-500 hover:text-white"
+              aria-label={
+                isPlaying ? `Pause ${track.title}` : `Play ${track.title}`
+              }
+            >
+              {isPlaying ? (
+                <Pause className="h-5 w-5 fill-current" />
+              ) : (
+                <Play className="ml-0.5 h-5 w-5 fill-current" />
+              )}
+            </button>
+
+            <div className="min-w-0 flex-1">
+              <Link
+                href={track.userId ? `/u/${track.userId}` : "#"}
+                className="block truncate text-sm font-medium text-zinc-500 transition hover:text-zinc-300"
+              >
+                {artistName}
+              </Link>
+              <Link
+                href={`/track/${track.id}`}
+                className="block truncate text-base font-semibold text-zinc-100 transition hover:text-orange-500"
+              >
+                {track.title}
+              </Link>
+            </div>
+
+            <div className="hidden shrink-0 flex-col items-end gap-2 sm:flex">
+              {track.createdAt && (
+                <time className="text-xs text-zinc-500">
+                  {formatDistanceToNow(new Date(track.createdAt), {
+                    addSuffix: true,
+                  })}
+                </time>
+              )}
+              {track.genre && (
+                <span className="rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300">
+                  # {track.genre}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <WaveformVisualizer
+              waveformData={peaks}
+              duration={track.duration}
+              currentTime={currentTime}
+              onSeek={handleSeek}
+              height={compact ? 58 : 72}
+              variant="list"
+              isLoading={isLoading}
+            />
+            {error && (
+              <p className="mt-1 text-[11px] text-red-400">
+                Waveform unavailable
+              </p>
+            )}
+          </div>
+
+          <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+            <button
+              type="button"
+              className={actionClass}
+              aria-label="Like track"
+            >
+              <Heart className="h-3.5 w-3.5" /> {track.likeCount ?? 0}
+            </button>
+            <button
+              type="button"
+              className={actionClass}
+              aria-label="Repost track"
+            >
+              <Repeat2 className="h-3.5 w-3.5" /> {track.repostCount ?? 0}
+            </button>
+            <button
+              type="button"
+              className={actionClass}
+              aria-label="Share track"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              className={actionClass}
+              aria-label="Copy track link"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              className={actionClass}
+              aria-label="More options"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+            <div className="ml-auto hidden items-center gap-3 text-xs text-zinc-500 md:flex">
+              <span className="inline-flex items-center gap-1">
+                <Play className="h-3 w-3 fill-current" /> {track.playCount ?? 0}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <MessageCircle className="h-3 w-3" /> {track.commentCount ?? 0}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </article>
   );
 });
 
