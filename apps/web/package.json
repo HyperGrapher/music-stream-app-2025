@@ -20,6 +20,7 @@
     "preview": "next build && next start",
     "start": "next start",
     "test:upload-lifecycle": "node --import tsx --test src/server/api/routers/upload-lifecycle.test.ts",
+    "test:waveform": "node --import tsx --test src/lib/waveform-utils.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

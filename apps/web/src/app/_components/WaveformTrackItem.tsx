@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, memo } from "react";
+import { useCallback, useEffect, useState, memo } from "react";
 import {
   Heart,
   MessageCircle,
@@ -16,6 +16,10 @@ import { usePlayerStore } from "@/store/player";
 import type { PlayerTrack as Track } from "@/types/player-track";
 import { formatDuration } from "@/lib/utils";
 import { shallow } from "zustand/shallow";
+import {
+  parseAudiowaveformJson,
+  type WaveformPeak,
+} from "@/lib/waveform-utils";
 
 interface WaveformTrackItemProps {
   track: Track & {
@@ -24,24 +28,10 @@ interface WaveformTrackItemProps {
       image?: string | null;
     };
   };
-  waveformData?: number[];
   compact?: boolean;
   /** Queue to use for Next/Previous when this item starts playback. */
   playlist?: Track[];
 }
-
-const createFallbackWaveform = () =>
-  Array.from({ length: 100 }, () => Math.random());
-
-const parseWaveform = (waveform: string): number[] => {
-  const parsed: unknown = JSON.parse(waveform);
-  if (!Array.isArray(parsed)) return [];
-
-  return parsed.filter(
-    (value): value is number =>
-      typeof value === "number" && Number.isFinite(value),
-  );
-};
 
 // Memoized track cover and play button component
 const TrackCover = memo(function TrackCover({
@@ -107,7 +97,7 @@ function TrackWaveform({
   handleSeek,
 }: {
   track: Track;
-  parsedWaveformData: number[];
+  parsedWaveformData: WaveformPeak[];
   compact: boolean;
   handleSeek: (position: number) => void;
 }) {
@@ -134,7 +124,7 @@ function TrackWaveform({
         </div>
       )}
       <div className="absolute right-0 bottom-0 text-xs text-gray-400">
-        {formatDuration(track.duration)}
+        {track.duration > 0 ? formatDuration(track.duration) : "Processing…"}
       </div>
     </div>
   );
@@ -188,26 +178,43 @@ const ActionButtons = memo(function ActionButtons({ track }: { track: Track }) {
 // Main component that manages the state and combines the memoized subcomponents
 export const WaveformTrackItem = memo(function WaveformTrackItem({
   track,
-  waveformData = [],
   compact = false,
   playlist,
 }: WaveformTrackItemProps) {
-  // Parse waveform data from track if provided as string
-  const parsedWaveformData = useMemo(() => {
-    if (waveformData.length > 0) return waveformData;
-    if (track.waveformData) {
+  const [parsedWaveformData, setParsedWaveformData] = useState<WaveformPeak[]>(
+    [],
+  );
+
+  useEffect(() => {
+    if (!track.waveformUrl) return;
+    let canceled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const loadWaveform = async () => {
       try {
-        const parsedWaveform = parseWaveform(track.waveformData);
-        return parsedWaveform.length > 0
-          ? parsedWaveform
-          : createFallbackWaveform();
-      } catch (e) {
-        console.error("Error parsing waveform data:", e);
-        return createFallbackWaveform();
+        const response = await fetch(track.waveformUrl!);
+        if (response.status === 202) {
+          if (!canceled) retryTimer = setTimeout(loadWaveform, 3_000);
+          return;
+        }
+        if (!response.ok) throw new Error(`Waveform request returned ${response.status}`);
+
+        const peaks = parseAudiowaveformJson(await response.json());
+        if (!canceled) setParsedWaveformData(peaks);
+      } catch (error) {
+        console.error(`Unable to load waveform for ${track.id}`, error);
+        if (!canceled && track.waveformStatus !== "FAILED") {
+          retryTimer = setTimeout(loadWaveform, 10_000);
+        }
       }
-    }
-    return createFallbackWaveform();
-  }, [track.waveformData, waveformData]);
+    };
+
+    void loadWaveform();
+    return () => {
+      canceled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [track.id, track.waveformStatus, track.waveformUrl]);
 
   // Only subscribe to the minimal state needed for this component
   const {

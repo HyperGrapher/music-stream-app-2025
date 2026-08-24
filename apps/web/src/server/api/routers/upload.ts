@@ -8,9 +8,12 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { TRPCError } from "@trpc/server";
 import {
+  AudioAnalysisStatus,
   MediaKind,
+  MediaProcessingJobStatus,
   MediaStatus,
   Visibility,
+  type Prisma,
   type MediaAsset,
 } from "@prisma/client";
 import sanitizeFilename from "sanitize-filename";
@@ -20,7 +23,6 @@ import { env } from "@/env";
 import {
   createTRPCRouter,
   protectedProcedure,
-  publicProcedure,
 } from "@/server/api/trpc";
 import {
   buildPublicObjectUrl,
@@ -33,6 +35,39 @@ import {
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const MAX_ARTWORK_FILE_SIZE = 10 * 1024 * 1024;
 const UNATTACHED_ASSET_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function queueAudioProcessing(
+  transaction: Prisma.TransactionClient,
+  audioAssetId: string,
+) {
+  await transaction.audioAnalysis.upsert({
+    where: { audioAssetId },
+    create: {
+      audioAssetId,
+      status: AudioAnalysisStatus.QUEUED,
+    },
+    update: {
+      status: AudioAnalysisStatus.QUEUED,
+      completedAt: null,
+    },
+  });
+
+  await transaction.mediaProcessingJob.upsert({
+    where: { audioAssetId },
+    create: {
+      audioAssetId,
+      status: MediaProcessingJobStatus.QUEUED,
+    },
+    update: {
+      status: MediaProcessingJobStatus.QUEUED,
+      availableAt: new Date(),
+      lockedAt: null,
+      lockedBy: null,
+      lastError: null,
+      finishedAt: null,
+    },
+  });
+}
 
 // Allowed audio mime types
 const ALLOWED_AUDIO_TYPES = [
@@ -523,61 +558,6 @@ export const uploadRouter = createTRPCRouter({
       }
     }),
 
-  // Get track waveform data
-  getWaveformData: publicProcedure
-    .input(
-      z.object({
-        trackId: z.string(),
-      }),
-    )
-    .query(async ({ input }) => {
-      try {
-        // First get the track to ensure it exists and get the storageKey
-        const track = await db.track.findUnique({
-          where: {
-            id: input.trackId,
-          },
-          select: {
-            id: true,
-            waveformData: true,
-          },
-        });
-
-        if (!track) {
-          throw new Error("Track not found");
-        }
-
-        // If waveform data already exists, return it
-        if (track.waveformData) {
-          return {
-            waveformData: JSON.parse(track.waveformData),
-          };
-        }
-
-        // Otherwise, generate dummy waveform data
-        // In a real app, you'd analyze the audio file to generate real waveform data
-        // This could be done with a serverless function or external service
-        const dummyWaveformData = generateDummyWaveformData();
-
-        // Update the track with the waveform data
-        await db.track.update({
-          where: {
-            id: input.trackId,
-          },
-          data: {
-            waveformData: JSON.stringify(dummyWaveformData),
-          },
-        });
-
-        return {
-          waveformData: dummyWaveformData,
-        };
-      } catch (error) {
-        console.error("Error getting waveform data:", error);
-        throw new Error("Failed to get waveform data");
-      }
-    }),
-
   // Create final track records from media assets
   createTrack: protectedProcedure
     .input(
@@ -595,14 +575,6 @@ export const uploadRouter = createTRPCRouter({
       const userId = ctx.session.user.id;
 
       try {
-        // Extract audio metadata (like duration) - in a real implementation,
-        // this might be done by a serverless function or webhook after upload
-        // For now, we'll set a dummy duration
-        const dummyDuration = 180; // 3 minutes in seconds
-
-        // Generate dummy waveform data
-        const dummyWaveformData = generateDummyWaveformData();
-
         const track = await db.$transaction(async (transaction) => {
           const mediaAsset = await transaction.mediaAsset.findFirst({
             where: {
@@ -699,7 +671,7 @@ export const uploadRouter = createTRPCRouter({
             artworkAssetId = artworkUpload.id;
           }
 
-          return transaction.track.create({
+          const createdTrack = await transaction.track.create({
             data: {
               title: input.title,
               audioAssetId: mediaAsset.id,
@@ -715,11 +687,12 @@ export const uploadRouter = createTRPCRouter({
                   ?.split(",")
                   .map((tag) => tag.trim())
                   .filter(Boolean) ?? [],
-              duration: dummyDuration,
-              waveformData: JSON.stringify(dummyWaveformData),
               creatorId: userId,
             },
           });
+
+          await queueAudioProcessing(transaction, mediaAsset.id);
+          return createdTrack;
         });
 
         return { track };
@@ -906,11 +879,10 @@ export const uploadRouter = createTRPCRouter({
                     ?.split(",")
                     .map((tag) => tag.trim())
                     .filter(Boolean) ?? [],
-                duration: 180,
-                waveformData: JSON.stringify(generateDummyWaveformData()),
                 creatorId: userId,
               },
             });
+            await queueAudioProcessing(transaction, mediaAsset.id);
             await transaction.releaseTrack.create({
               data: {
                 releaseId: createdRelease.id,
@@ -1009,24 +981,3 @@ export const uploadRouter = createTRPCRouter({
       }
     }),
 });
-
-// Helper function to generate dummy waveform data
-function generateDummyWaveformData(points = 100): number[] {
-  const waveform = [];
-  for (let i = 0; i < points; i++) {
-    // Generate a value between 0.1 and 1.0 with some natural-looking variations
-    const position = i / points;
-
-    // Create a base pattern that's louder in the middle
-    let value = 0.2 + 0.6 * Math.sin(position * Math.PI);
-
-    // Add some random variation
-    value += 0.2 * (Math.random() - 0.5);
-
-    // Ensure value is between 0.1 and 1.0
-    value = Math.max(0.1, Math.min(1.0, value));
-
-    waveform.push(value);
-  }
-  return waveform;
-}

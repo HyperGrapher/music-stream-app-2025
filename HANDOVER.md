@@ -13,6 +13,7 @@ Date: 2026-08-24
 
 - `apps/web/prisma/schema.prisma` is the canonical schema for both apps. Express Prisma scripts explicitly target it; the duplicate Express schema was removed.
 - `MediaAsset` owns R2 metadata and has `PENDING -> READY -> ATTACHED` lifecycle states plus cleanup states.
+- `AudioAnalysis` owns intrinsic duration/codec/sample-rate/channel metadata for an audio asset and references overview/detail waveform assets. `MediaProcessingJob` is the durable queue consumed by `apps/media-worker`.
 - `Track` references one audio asset and optional artwork asset. Storage keys are no longer copied onto tracks.
 - `Release` replaces the generic `Album` database concept, with ordered `ReleaseTrack` membership.
 - Playlists have independent ordered membership.
@@ -39,12 +40,16 @@ Date: 2026-08-24
 - The starter `Post` router/pages and unused hardcoded auth demo were removed.
 - Better Auth now supports Google and email/password. The browser client uses same-origin auth endpoints.
 - Authenticated `/profile` redirects to the stable `/u/{userId}` route, so display names containing spaces or dots do not break navigation.
+- Publishing a track or release queues durable audio analysis. `apps/media-worker` downloads the private R2 source, obtains real metadata with FFprobe, pipes FFmpeg-decoded mono PCM into BBC audiowaveform, and uploads 100-points/second detail DAT plus 20-points/second overview JSON assets to R2.
+- Profile DTOs expose real analyzed duration and an Express waveform URL. The client parses audiowaveform min/max pairs and reduces them to canvas width by preserving extrema rather than averaging; playback progress uses a clipped second canvas and no longer redraws every peak each tick.
+- `turbo dev` now starts Web, Express, and the media worker. Local binaries resolve as FFmpeg/FFprobe 8.1.2 and audiowaveform 1.10.1; paths can be overridden with `FFMPEG_PATH`, `FFPROBE_PATH`, and `AUDIOWAVEFORM_PATH`.
 
 ## Database state
 
 - Local PostgreSQL database `streamapp`, schema `stream`, was force-reset and pushed successfully.
 - Seed creates three creator profiles and deliberately creates no fake tracks with nonexistent media.
 - A real Google login was subsequently confirmed by the user; the database showed one provider account and one session.
+- All seven real uploaded tracks were backfilled successfully. Every `AudioAnalysis` is `READY`, with real durations ranging from 34.873 to 209.763 seconds and both waveform assets attached in R2.
 
 ## Verification
 
@@ -52,6 +57,8 @@ Date: 2026-08-24
 - Prisma Client regenerated successfully after restarting the dev processes to release the Windows DLL lock.
 - Router modules load successfully with the app environment.
 - Upload lifecycle tests pass: 4/4.
+- Waveform parsing/extrema-preserving reduction tests pass: 3/3.
+- Live profile, track metadata, and waveform endpoints return HTTP 200. The checked waveform response contained 1,562 real min/max peaks for a 78.054-second track.
 - Disposable email signup, sign-out, and sign-in each returned HTTP 200; the disposable user was deleted afterward.
 - User confirmed Google sign-in works after regeneration/restart.
 - `/`, `/burak`, `/upload`, Express `/`, and `/api/version` return HTTP 200.
@@ -59,12 +66,12 @@ Date: 2026-08-24
 
 ## Next work
 
-1. Upload one real audio file with artwork and publish it. If desired, configure `R2_PUBLIC_BASE_URL` later to use direct CDN URLs; the Express artwork proxy works without it.
-2. Replace dummy 180-second duration and random waveform generation with background media processing that records results/errors against `MediaAsset`.
-3. Add authorization semantics for private and unlisted playback; Express currently streams public tracks only.
-4. Add integration tests for asset claim races, release rollback, stream visibility, and Better Auth account linking.
-5. Continue the planned UI redesign once the first real uploaded track proves the new publishing pipeline.
+1. Visually inspect the new real waveforms in the browser and tune bar width/spacing/colors if desired.
+2. Add authorization semantics for private and unlisted playback/waveforms; Express currently serves public tracks only.
+3. Add integration tests for asset claim races, release rollback, processing retry/recovery, stream visibility, and Better Auth account linking.
+4. Add deletion orchestration for generated waveform assets when a track/audio asset is permanently removed.
+5. Continue the planned UI redesign on the now-verified publishing and processing pipeline.
 
 ## Suggested fresh-session prompt
 
-> Read `HANDOVER.md`, `CONTEXT.md`, `learned-memories.md`, the ADR, and the current diff. Do not run typecheck. Preserve existing changes. Start by manually publishing a real track and artwork through `/upload`, verify it appears on the creator page, artwork loads through Express, and the `/profile` dropdown opens the signed-in profile at `/u/{userId}` before beginning UI redesign.
+> Read `HANDOVER.md`, `CONTEXT.md`, `learned-memories.md`, the ADR, and the current diff. Do not run typecheck. Preserve existing changes. `turbo dev` now includes `apps/media-worker`, and all seven existing tracks have real READY analyses/waveforms. Start by visually inspecting waveform rendering on `/u/{userId}`, then continue the UI redesign or private/unlisted authorization work.

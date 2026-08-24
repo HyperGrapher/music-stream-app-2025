@@ -6,7 +6,6 @@ import { formatDistanceToNow } from "date-fns";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import JsonInfo from "./json-info";
-const numberArray: number[] = new Array(200).fill(1);
 
 export async function generateMetadata({
   params,
@@ -190,7 +189,6 @@ export default async function ArtistPage({
                       <WaveformTrackItem
                         key={track.id}
                         playlist={latestTracks}
-                        waveformData={JSON.parse(track.waveformData ?? "[]")}
                         // @ts-ignore
                         track={{
                           userId: artistData.id,
@@ -228,19 +226,13 @@ export default async function ArtistPage({
                     {popularTracks.map((track) => (
                       <WaveformTrackItem
                         key={track.id}
-                        playlist={popularTracks.map((item) => ({
-                          ...item,
-                          duration: 240,
-                        }))}
-                        waveformData={numberArray}
+                        playlist={popularTracks}
                         // @ts-ignore
                         track={{
-                          ...track,
-                          userId: artistData.id,
-                          updatedAt: new Date(),
-                          duration: 240, // Default duration
-                          waveformData: null,
-                          isOriginal: true,
+                           ...track,
+                           userId: artistData.id,
+                           updatedAt: new Date(),
+                           isOriginal: true,
                           isPrivate: false,
                           bpm: null,
                           key: null,
@@ -275,12 +267,10 @@ export default async function ArtistPage({
                         playlist={latestTracks}
                         // @ts-ignore
                         track={{
-                          ...track,
-                          userId: artistData.id,
-                          updatedAt: new Date(),
-                          duration: 240, // Default duration
-                          waveformData: null,
-                          isOriginal: true,
+                           ...track,
+                           userId: artistData.id,
+                           updatedAt: new Date(),
+                           isOriginal: true,
                           isPrivate: false,
                           bpm: null,
                           key: null,

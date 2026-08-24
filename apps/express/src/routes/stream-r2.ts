@@ -1,7 +1,5 @@
 import express, { type Response, type Router } from "express";
 import { GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
-import fs from "node:fs";
-import path from "node:path";
 import { Readable } from "node:stream";
 import { randomUUID } from "node:crypto";
 
@@ -12,7 +10,6 @@ import {
 } from "../helpers/stream-utils";
 import { r2Client } from "../lib/r2-client";
 import { prisma } from "../lib/prisma";
-import { validatePlaybackToken } from "../middlewares/validate-playback-token";
 
 const router: Router = express.Router();
 const TRACK_ID_PATTERN =
@@ -161,28 +158,66 @@ router.get("/stream/:trackId", async (req, res) => {
 });
 
 router.get(
-  "/stream/:trackId/waveform",
-  validatePlaybackToken,
+  ["/stream/:trackId/waveform", "/:trackId/waveform"],
   async (req, res) => {
     const requestedTrackId = req.params.trackId;
     if (!isTrackId(requestedTrackId)) {
       return res.status(404).json({ error: "Track not found" });
     }
 
-    const waveformPath = path.resolve(
-      __dirname,
-      "..",
-      "..",
-      "audio",
-      `${requestedTrackId}.json`,
-    );
+    try {
+      const track = await prisma.track.findFirst({
+        where: { id: requestedTrackId, visibility: "PUBLIC" },
+        select: {
+          audioAsset: {
+            select: {
+              audioAnalysis: {
+                select: {
+                  status: true,
+                  overviewWaveformAsset: {
+                    select: { bucket: true, storageKey: true, mimeType: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
 
-    if (!fs.existsSync(waveformPath)) {
-      return res.status(404).json({ error: "Waveform file not found" });
+      if (!track) return res.status(404).json({ error: "Track not found" });
+      const analysis = track.audioAsset.audioAnalysis;
+      if (analysis?.status !== "READY" || !analysis.overviewWaveformAsset) {
+        return res.status(202).json({ status: analysis?.status ?? "QUEUED" });
+      }
+
+      const waveformAsset = analysis.overviewWaveformAsset;
+      const object = await r2Client.send(
+        new GetObjectCommand({
+          Bucket: waveformAsset.bucket,
+          Key: waveformAsset.storageKey,
+        }),
+      );
+      if (
+        !object.Body ||
+        typeof (object.Body as { pipe?: unknown }).pipe !== "function"
+      ) {
+        throw new Error("Waveform storage returned an invalid stream");
+      }
+
+      res.setHeader("Content-Type", object.ContentType ?? waveformAsset.mimeType);
+      if (object.ContentLength !== undefined) {
+        res.setHeader("Content-Length", String(object.ContentLength));
+      }
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      (object.Body as Readable).pipe(res);
+      return undefined;
+    } catch (error) {
+      console.error(
+        `Waveform request failed for track ${requestedTrackId}`,
+        error,
+      );
+      return res.status(502).json({ error: "Unable to load waveform" });
     }
-
-    const waveformData = JSON.parse(fs.readFileSync(waveformPath, "utf8"));
-    return res.json(waveformData);
   },
 );
 
@@ -262,9 +297,18 @@ router.get("/:trackId", async (req, res) => {
     select: {
       id: true,
       title: true,
-      duration: true,
       artworkAsset: { select: { publicUrl: true } },
-      waveformData: true,
+      audioAsset: {
+        select: {
+          audioAnalysis: {
+            select: {
+              status: true,
+              durationMs: true,
+              waveformVersion: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -272,10 +316,16 @@ router.get("/:trackId", async (req, res) => {
     return res.status(404).json({ error: "Track not found" });
   }
 
-  const { artworkAsset, ...trackData } = track;
+  const { artworkAsset, audioAsset, ...trackData } = track;
+  const analysis = audioAsset.audioAnalysis;
   return res.json({
     track: {
       ...trackData,
+      duration: analysis?.durationMs
+        ? Math.round(analysis.durationMs / 1_000)
+        : 0,
+      waveformStatus: analysis?.status ?? "QUEUED",
+      waveformUrl: `${req.protocol}://${req.get("host")}/tracks/${requestedTrackId}/waveform?v=${analysis?.waveformVersion ?? 1}`,
       artworkUrl: artworkAsset
         ? (artworkAsset.publicUrl ??
           `${req.protocol}://${req.get("host")}/tracks/${requestedTrackId}/artwork`)

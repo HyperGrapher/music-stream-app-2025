@@ -324,7 +324,10 @@ const WaveAudioPlayer: React.FC = () => {
 
             {/* Existing 2D Waveform Visualizer */}
             <WaveformVisualizer
-                waveformData={waveformData}
+                waveformData={waveformData.map((amplitude) => ({
+                    min: -Math.abs(amplitude),
+                    max: Math.abs(amplitude),
+                }))}
                 duration={duration}
                 currentTime={currentTime}
                 onSeek={handleSeek}

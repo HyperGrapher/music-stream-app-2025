@@ -86,8 +86,17 @@ export const artistRouter = createTRPCRouter({
           id: true,
           title: true,
           description: true,
-          waveformData: true,
-          duration: true,
+          audioAsset: {
+            select: {
+              audioAnalysis: {
+                select: {
+                  status: true,
+                  durationMs: true,
+                  waveformVersion: true,
+                },
+              },
+            },
+          },
           releaseDate: true,
           artworkAsset: { select: { publicUrl: true } },
           playCount: true,
@@ -102,13 +111,21 @@ export const artistRouter = createTRPCRouter({
         process.env.NEXT_PUBLIC_STREAM_API_URL ?? "http://localhost:4000"
       ).replace(/\/+$/, "");
 
-      return tracks.map(({ artworkAsset, ...track }) => ({
-        ...track,
-        artworkUrl: artworkAsset
-          ? (artworkAsset.publicUrl ??
-            `${streamBaseUrl}/tracks/${track.id}/artwork`)
-          : null,
-      }));
+      return tracks.map(({ artworkAsset, audioAsset, ...track }) => {
+        const analysis = audioAsset.audioAnalysis;
+        return {
+          ...track,
+          duration: analysis?.durationMs
+            ? Math.round(analysis.durationMs / 1_000)
+            : 0,
+          waveformStatus: analysis?.status ?? "QUEUED",
+          waveformUrl: `${streamBaseUrl}/tracks/${track.id}/waveform?v=${analysis?.waveformVersion ?? 1}`,
+          artworkUrl: artworkAsset
+            ? (artworkAsset.publicUrl ??
+              `${streamBaseUrl}/tracks/${track.id}/artwork`)
+            : null,
+        };
+      });
     }),
 
   getPopularTracks: publicProcedure
@@ -145,6 +162,17 @@ export const artistRouter = createTRPCRouter({
           id: true,
           title: true,
           description: true,
+          audioAsset: {
+            select: {
+              audioAnalysis: {
+                select: {
+                  status: true,
+                  durationMs: true,
+                  waveformVersion: true,
+                },
+              },
+            },
+          },
           artworkAsset: { select: { publicUrl: true } },
           playCount: true,
           likeCount: true,
@@ -158,13 +186,21 @@ export const artistRouter = createTRPCRouter({
         process.env.NEXT_PUBLIC_STREAM_API_URL ?? "http://localhost:4000"
       ).replace(/\/+$/, "");
 
-      return tracks.map(({ artworkAsset, ...track }) => ({
-        ...track,
-        artworkUrl: artworkAsset
-          ? (artworkAsset.publicUrl ??
-            `${streamBaseUrl}/tracks/${track.id}/artwork`)
-          : null,
-      }));
+      return tracks.map(({ artworkAsset, audioAsset, ...track }) => {
+        const analysis = audioAsset.audioAnalysis;
+        return {
+          ...track,
+          duration: analysis?.durationMs
+            ? Math.round(analysis.durationMs / 1_000)
+            : 0,
+          waveformStatus: analysis?.status ?? "QUEUED",
+          waveformUrl: `${streamBaseUrl}/tracks/${track.id}/waveform?v=${analysis?.waveformVersion ?? 1}`,
+          artworkUrl: artworkAsset
+            ? (artworkAsset.publicUrl ??
+              `${streamBaseUrl}/tracks/${track.id}/artwork`)
+            : null,
+        };
+      });
     }),
 
   getReleases: publicProcedure
@@ -196,8 +232,17 @@ export const artistRouter = createTRPCRouter({
                   id: true,
                   title: true,
                   description: true,
-                  duration: true,
-                  waveformData: true,
+                  audioAsset: {
+                    select: {
+                      audioAnalysis: {
+                        select: {
+                          status: true,
+                          durationMs: true,
+                          waveformVersion: true,
+                        },
+                      },
+                    },
+                  },
                   genre: true,
                   createdAt: true,
                   playCount: true,
@@ -219,9 +264,19 @@ export const artistRouter = createTRPCRouter({
         ...release,
         artworkUrl: artworkAsset?.publicUrl ?? null,
         tracks: tracks.map(({ track }) => {
-          const { artworkAsset: trackArtwork, ...trackData } = track;
+          const {
+            artworkAsset: trackArtwork,
+            audioAsset,
+            ...trackData
+          } = track;
+          const analysis = audioAsset.audioAnalysis;
           return {
             ...trackData,
+            duration: analysis?.durationMs
+              ? Math.round(analysis.durationMs / 1_000)
+              : 0,
+            waveformStatus: analysis?.status ?? "QUEUED",
+            waveformUrl: `${streamBaseUrl}/tracks/${track.id}/waveform?v=${analysis?.waveformVersion ?? 1}`,
             userId: creator.id,
             user: { name: creator.name, image: creator.image },
             artworkUrl: trackArtwork

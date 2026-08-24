@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { S3Client } from "@aws-sdk/client-s3";
+import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 dotenv.config();
 
 // Log important environment variables to debug R2 connection
@@ -36,20 +36,12 @@ export const r2Client = globalForR2Client.r2Client ?? new S3Client({
 // Create a function to validate the R2 connection
 export async function validateR2Connection() {
     try {
-        // Import GetObjectCommand here to avoid circular dependencies
-        const { GetObjectCommand } = await import('@aws-sdk/client-s3');
-        
-        // Use a test file path that we know exists based on earlier testing
-        const testParams = {
+        console.log('Testing R2 bucket access...');
+        await r2Client.send(new HeadBucketCommand({
             Bucket: process.env.R2_BUCKET_NAME,
-            Key: 'connection-test.txt', 
-            Range: 'bytes=0-0' // Just get the first byte to verify access
-        };
-        
-        console.log('Testing R2 connection with object request...');
-        const response = await r2Client.send(new GetObjectCommand(testParams));
-        
-        console.log('✅ R2 connection successful! Content type:', response.ContentType);
+        }));
+
+        console.log('✅ R2 connection successful!');
         return true;
     } catch (error) {
         console.error('❌ R2 connection validation failed:', error);
@@ -61,4 +53,4 @@ export async function validateR2Connection() {
 if (isDev) {
     globalForR2Client.r2Client = r2Client;
     validateR2Connection().catch(console.error);
-} 
+}

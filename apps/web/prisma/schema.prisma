@@ -16,6 +16,7 @@ enum Visibility {
 enum MediaKind {
   AUDIO
   IMAGE
+  WAVEFORM
 }
 
 enum MediaStatus {
@@ -28,6 +29,20 @@ enum MediaStatus {
 
 enum StorageProvider {
   CLOUDFLARE_R2
+}
+
+enum AudioAnalysisStatus {
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum MediaProcessingJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
 }
 
 enum ReleaseType {
@@ -139,32 +154,82 @@ model Verification {
 }
 
 model MediaAsset {
-  id               String                 @id @default(uuid())
-  ownerId          String
-  owner            User                   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  kind             MediaKind
-  status           MediaStatus            @default(PENDING)
-  provider         StorageProvider        @default(CLOUDFLARE_R2)
-  bucket           String
-  storageKey       String                 @unique
-  originalFilename String
-  mimeType         String
-  byteSize         BigInt?
-  publicUrl        String?
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
-  uploadedAt       DateTime?
-  attachedAt       DateTime?
-  expiresAt        DateTime?
-  audioTrack       Track?                 @relation("trackAudio")
-  trackArtwork     Track[]                @relation("trackArtwork")
-  releaseArtwork   Release[]              @relation("releaseArtwork")
-  playlistArtwork  Playlist[]             @relation("playlistArtwork")
-  processingErrors MediaProcessingError[]
+  id                  String                 @id @default(uuid())
+  ownerId             String
+  owner               User                   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  kind                MediaKind
+  status              MediaStatus            @default(PENDING)
+  provider            StorageProvider        @default(CLOUDFLARE_R2)
+  bucket              String
+  storageKey          String                 @unique
+  originalFilename    String
+  mimeType            String
+  byteSize            BigInt?
+  publicUrl           String?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  uploadedAt          DateTime?
+  attachedAt          DateTime?
+  expiresAt           DateTime?
+  audioTrack          Track?                 @relation("trackAudio")
+  trackArtwork        Track[]                @relation("trackArtwork")
+  releaseArtwork      Release[]              @relation("releaseArtwork")
+  playlistArtwork     Playlist[]             @relation("playlistArtwork")
+  audioAnalysis       AudioAnalysis?         @relation("analysisAudioAsset")
+  processingJob       MediaProcessingJob?    @relation("processingJobAudioAsset")
+  detailWaveformFor   AudioAnalysis?         @relation("analysisDetailWaveform")
+  overviewWaveformFor AudioAnalysis?         @relation("analysisOverviewWaveform")
+  processingErrors    MediaProcessingError[]
 
   @@index([ownerId, status, expiresAt])
   @@index([kind, status])
   @@map("media_asset")
+}
+
+model AudioAnalysis {
+  id                      String              @id @default(uuid())
+  audioAssetId            String              @unique
+  audioAsset              MediaAsset          @relation("analysisAudioAsset", fields: [audioAssetId], references: [id], onDelete: Cascade)
+  status                  AudioAnalysisStatus @default(QUEUED)
+  durationMs              Int?
+  sampleRate              Int?
+  channels                Int?
+  codec                   String?
+  bitRate                 BigInt?
+  waveformVersion         Int                 @default(1)
+  detailPixelsPerSecond   Int                 @default(100)
+  overviewPixelsPerSecond Int                 @default(20)
+  waveformBits            Int                 @default(8)
+  detailWaveformAssetId   String?             @unique
+  detailWaveformAsset     MediaAsset?         @relation("analysisDetailWaveform", fields: [detailWaveformAssetId], references: [id], onDelete: SetNull)
+  overviewWaveformAssetId String?             @unique
+  overviewWaveformAsset   MediaAsset?         @relation("analysisOverviewWaveform", fields: [overviewWaveformAssetId], references: [id], onDelete: SetNull)
+  startedAt               DateTime?
+  completedAt             DateTime?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  @@index([status, updatedAt])
+  @@map("audio_analysis")
+}
+
+model MediaProcessingJob {
+  id           String                   @id @default(uuid())
+  audioAssetId String                   @unique
+  audioAsset   MediaAsset               @relation("processingJobAudioAsset", fields: [audioAssetId], references: [id], onDelete: Cascade)
+  status       MediaProcessingJobStatus @default(QUEUED)
+  attempts     Int                      @default(0)
+  maxAttempts  Int                      @default(3)
+  availableAt  DateTime                 @default(now())
+  lockedAt     DateTime?
+  lockedBy     String?
+  lastError    String?                  @db.Text
+  finishedAt   DateTime?
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@index([status, availableAt, createdAt])
+  @@map("media_processing_job")
 }
 
 model Track {
@@ -177,8 +242,6 @@ model Track {
   artworkAsset     MediaAsset?            @relation("trackArtwork", fields: [artworkAssetId], references: [id], onDelete: SetNull)
   title            String
   description      String?                @db.Text
-  duration         Int
-  waveformData     String?                @db.Text
   visibility       Visibility             @default(PUBLIC)
   isOriginal       Boolean                @default(true)
   genre            String?

@@ -5,7 +5,8 @@ export interface PlayerTrack {
   duration: number;
   userId?: string;
   artworkUrl?: string | null;
-  waveformData?: string | null;
+  waveformUrl?: string | null;
+  waveformStatus?: "QUEUED" | "PROCESSING" | "READY" | "FAILED";
   description?: string | null;
   genre?: string | null;
   createdAt?: Date | string;

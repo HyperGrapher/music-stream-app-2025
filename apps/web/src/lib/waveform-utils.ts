@@ -1,82 +1,87 @@
-// utils/waveformUtils.ts
+export interface WaveformPeak {
+  min: number;
+  max: number;
+}
+
+export interface AudiowaveformJson {
+  version: number;
+  channels: number;
+  sample_rate: number;
+  samples_per_pixel: number;
+  bits: 8 | 16;
+  length: number;
+  data: number[];
+}
+
+function isAudiowaveformJson(value: unknown): value is AudiowaveformJson {
+  if (!value || typeof value !== "object") return false;
+  const waveform = value as Partial<AudiowaveformJson>;
+  return (
+    (waveform.bits === 8 || waveform.bits === 16) &&
+    waveform.channels === 1 &&
+    typeof waveform.length === "number" &&
+    waveform.length > 0 &&
+    Array.isArray(waveform.data) &&
+    waveform.data.length === waveform.length * 2
+  );
+}
+
+/** Parse the mono min/max pairs emitted by BBC audiowaveform. */
+export function parseAudiowaveformJson(value: unknown): WaveformPeak[] {
+  if (!isAudiowaveformJson(value)) return [];
+  const scale = value.bits === 8 ? 128 : 32_768;
+  const peaks = new Array<WaveformPeak>(value.length);
+
+  for (let index = 0; index < value.length; index++) {
+    const offset = index * 2;
+    const min = value.data[offset];
+    const max = value.data[offset + 1];
+    peaks[index] = {
+      min: Math.max(-1, Math.min(1, (min ?? 0) / scale)),
+      max: Math.max(-1, Math.min(1, (max ?? 0) / scale)),
+    };
+  }
+
+  return peaks;
+}
 
 /**
- * Process waveform data from BBC audiowaveform format
- * to ensure it's suitable for visualization
+ * Reduce a waveform to the available display columns without averaging away
+ * transients. Every output column keeps the lowest minimum and highest maximum
+ * from its source interval.
  */
-export const processWaveformData = (rawData: any): number[] => {
-    if (!rawData || !rawData.data || !Array.isArray(rawData.data)) {
-        return [];
+export function reduceWaveformPeaks(
+  peaks: WaveformPeak[],
+  targetLength: number,
+): WaveformPeak[] {
+  const safeTarget = Math.max(1, Math.floor(targetLength));
+  if (peaks.length <= safeTarget) return peaks;
+
+  const result = new Array<WaveformPeak>(safeTarget);
+  for (let index = 0; index < safeTarget; index++) {
+    const start = Math.floor((index * peaks.length) / safeTarget);
+    const end = Math.max(
+      start + 1,
+      Math.floor(((index + 1) * peaks.length) / safeTarget),
+    );
+    let min = 1;
+    let max = -1;
+
+    for (let sourceIndex = start; sourceIndex < end; sourceIndex++) {
+      const peak = peaks[sourceIndex];
+      if (!peak) continue;
+      if (peak.min < min) min = peak.min;
+      if (peak.max > max) max = peak.max;
     }
+    result[index] = { min, max };
+  }
 
-    // Extract just the data array from the full response
-    const waveData = rawData.data;
+  return result;
+}
 
-    // Ensure we have enough data points for smooth visualization
-    if (waveData.length < 100) {
-        // Interpolate data to get more points if needed
-        return interpolateWaveformData(waveData, 200);
-    }
-
-    // If there's too much data, you might want to downsample
-    if (waveData.length > 2000) {
-        return downsampleWaveformData(waveData, 1000);
-    }
-
-    return waveData;
-};
-
-/**
- * Interpolate waveform data to increase the number of points
- */
-export const interpolateWaveformData = (data: number[], targetLength: number): number[] => {
-    const result: number[] = [];
-    const factor = (data.length - 1) / (targetLength - 1);
-
-    for (let i = 0; i < targetLength; i++) {
-        const exactIndex = i * factor;
-        const lowerIndex = Math.floor(exactIndex);
-        const upperIndex = Math.min(lowerIndex + 1, data.length - 1);
-        const fraction = exactIndex - lowerIndex;
-
-        // Linear interpolation between two adjacent points
-        const value = (data[lowerIndex] ?? 0) * (1 - fraction) + (data[upperIndex] ?? 0) * fraction;
-        result.push(value);
-    }
-
-    return result;
-};
-
-/**
- * Downsample waveform data to reduce the number of points
- */
-export const downsampleWaveformData = (data: number[], targetLength: number): number[] => {
-    const result: number[] = [];
-    const factor = data.length / targetLength;
-
-    for (let i = 0; i < targetLength; i++) {
-        const start = Math.floor(i * factor);
-        const end = Math.floor((i + 1) * factor);
-        let sum = 0;
-
-        // Average the points in this segment
-        for (let j = start; j < end; j++) {
-            sum += data[j] ?? 0;
-        }
-
-        result.push(sum / (end - start));
-    }
-
-    return result;
-};
-
-/**
- * Normalize waveform data to a certain range [-maxValue, maxValue]
- */
-export const normalizeWaveformData = (data: number[], maxValue: number = 100): number[] => {
-    const max = Math.max(...data.map(v => Math.abs(v)));
-    if (max === 0) return data;
-
-    const scaleFactor = maxValue / max;
-    return data.map(v => v * scaleFactor);
-};
+/** Compatibility adapter for older experimental visualizers. */
+export function processWaveformData(value: unknown): number[] {
+  return parseAudiowaveformJson(value).map((peak) =>
+    Math.max(Math.abs(peak.min), Math.abs(peak.max)),
+  );
+}

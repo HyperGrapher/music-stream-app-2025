@@ -21,8 +21,16 @@ An ordered, user-curated collection of tracks that can change independently of h
 _Avoid_: Release, album, set
 
 **Media Asset**:
-An owned audio or image object that progresses from upload preparation through verification to attachment to published content.
+An owned audio, image, or generated waveform object that progresses from upload preparation or generation through verification to attachment.
 _Avoid_: Temporary upload, file key
+
+**Audio Analysis**:
+Intrinsic metadata and generated waveform references derived from one audio media asset, including duration, codec, sample rate, channels, and processing state.
+_Avoid_: Track waveform JSON, dummy duration
+
+**Media Processing Job**:
+A durable, retryable instruction for a worker to analyze one audio media asset and produce its waveform assets.
+_Avoid_: Upload request callback, in-request processing
 
 **Visibility**:
 The audience allowed to discover or play content: public, private, or unlisted.
