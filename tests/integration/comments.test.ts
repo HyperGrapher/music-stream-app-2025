@@ -1,24 +1,22 @@
 import assert from "node:assert/strict";
-import { after, describe, it } from "node:test";
+import { after, beforeEach, describe, it } from "node:test";
 
-import { COMMENT_RATE_LIMIT, commentLockKey } from "@/server/modules/tracks/comments";
+import { RATE_LIMITS } from "@/server/modules/rate-limit";
+import { commentLockKey } from "@/server/modules/tracks/comments";
 
-import { callerFor, cleanup, createAsset, createUser, db } from "./helpers";
+import { callerFor, cleanup, createTrack, createUser, db, resetRateLimits } from "./helpers";
 
 after(async () => {
   await cleanup();
   await db.$disconnect();
 });
+beforeEach(resetRateLimits);
 
 /** A track with a known 30 s duration. */
-async function newTrack(visibility: "PUBLIC" | "UNLISTED" | "PRIVATE" = "PUBLIC") {
+async function newTrack(visibility: "PUBLIC" | "PRIVATE" = "PUBLIC") {
   const owner = await createUser("c-owner");
-  const asset = await createAsset(owner, { status: "ATTACHED" });
-  await db.audioAnalysis.create({ data: { audioAssetId: asset.id, status: "READY", durationMs: 30_000 } });
-  const track = await db.track.create({
-    data: { creatorId: owner, audioAssetId: asset.id, title: "commented", visibility },
-  });
-  return { owner, trackId: track.id };
+  const track = await createTrack(owner, { title: "commented", visibility, durationMs: 30_000 });
+  return { owner, trackId: track.id, secret: track.secretToken };
 }
 
 /** The invariant everything rests on: the counter equals the rows it summarises. */
@@ -98,7 +96,7 @@ describe("comments.create", () => {
     assert.equal(await assertConsistent(trackId), 1);
   });
 
-  it("follows track visibility: private tracks are the owner's only", async () => {
+  it("follows track visibility: private tracks are the owner's, or whoever holds the secret link", async () => {
     const priv = await newTrack("PRIVATE");
     const stranger = await createUser("stranger");
     await assert.rejects(callerFor(stranger).comments.create({ trackId: priv.trackId, content: "hi" }), { code: "NOT_FOUND" });
@@ -106,18 +104,40 @@ describe("comments.create", () => {
     assert.deepEqual((await callerFor(stranger).comments.list({ trackId: priv.trackId })).comments, []);
     assert.equal((await callerFor(priv.owner).comments.list({ trackId: priv.trackId })).comments.length, 1);
 
-    const unlisted = await newTrack("UNLISTED");
-    await callerFor(stranger).comments.create({ trackId: unlisted.trackId, content: "via the link" });
-    assert.equal(await assertConsistent(unlisted.trackId), 1);
+    const access = { secret: priv.secret };
+    await callerFor(stranger).comments.create({ trackId: priv.trackId, content: "via the link", access });
+    assert.equal((await callerFor(undefined).comments.list({ trackId: priv.trackId, access })).comments.length, 2);
+    assert.equal(await assertConsistent(priv.trackId), 2);
   });
 
-  it("rate limits a flood from one author", async () => {
+  it("CM-5: with comments switched off only the owner can post or read", async () => {
+    const owner = await createUser("c-off");
+    const track = await createTrack(owner, { title: "quiet", commentsEnabled: false });
+    const fan = await createUser("c-off-fan");
+    await assert.rejects(callerFor(fan).comments.create({ trackId: track.id, content: "hi" }), { code: "FORBIDDEN" });
+    await callerFor(owner).comments.create({ trackId: track.id, content: "owner note" });
+    const seenByFan = await callerFor(fan).comments.list({ trackId: track.id });
+    assert.deepEqual([seenByFan.comments.length, seenByFan.commentsEnabled], [0, false]);
+    assert.equal((await callerFor(owner).comments.list({ trackId: track.id })).comments.length, 1);
+  });
+
+  it("CM-9: the track's creator is marked as such", async () => {
+    const { owner, trackId } = await newTrack();
+    const fan = await createUser("badge-fan");
+    await callerFor(owner).comments.create({ trackId, content: "creator speaking" });
+    await callerFor(fan).comments.create({ trackId, content: "fan speaking" });
+    const { comments } = await callerFor().comments.list({ trackId });
+    assert.deepEqual(comments.map((c) => [c.content, c.isCreator]), [["fan speaking", false], ["creator speaking", true]]);
+  });
+
+  it("rate limits a flood from one author (8 a minute)", async () => {
     const { trackId } = await newTrack();
     const spammer = await createUser("spammer");
     const api = callerFor(spammer).comments;
-    for (let i = 0; i < COMMENT_RATE_LIMIT.max; i++) await api.create({ trackId, content: `c${i}` });
+    const max = RATE_LIMITS.commentPerMinute.max;
+    for (let i = 0; i < max; i++) await api.create({ trackId, content: `c${i}` });
     await assert.rejects(api.create({ trackId, content: "one too many" }), { code: "TOO_MANY_REQUESTS" });
-    assert.equal(await assertConsistent(trackId), COMMENT_RATE_LIMIT.max);
+    assert.equal(await assertConsistent(trackId), max);
   });
 
   it("keeps the counter exact under concurrent posting", async () => {
@@ -221,11 +241,8 @@ describe("comments.delete", () => {
       );
       await Promise.allSettled([...replyCalls, callerFor(owner).comments.delete({ commentId: root.id })]);
       await assertConsistent(trackId); // counter == rows, whichever replies made it in
-      // rate limit is per author per minute: let the repliers start fresh each round
-      await db.comment.updateMany({
-        where: { authorId: { in: repliers } },
-        data: { createdAt: new Date(Date.now() - 10 * 60_000) },
-      });
+      // the limit is per author per minute: let the repliers start fresh each round
+      await resetRateLimits();
     }
   });
 });

@@ -16,3 +16,7 @@ process.env.SKIP_ENV_VALIDATION = "1";
 process.env.BETTER_AUTH_SECRET ??= "integration-test-secret-integration-test-secret";
 process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
 process.env.R2_BUCKET_NAME ??= "test-bucket";
+// Emails listed here get the ADMIN role at sign-up / sign-in (tests/integration/auth.test.ts).
+process.env.ADMIN_EMAILS = "it-admin@example.test";
+// No Resend key: every email is stored as LOGGED.
+delete process.env.RESEND_API_KEY;

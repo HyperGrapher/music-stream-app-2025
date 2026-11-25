@@ -31,9 +31,9 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
   const session = await auth.api.getSession({
     headers: opts.headers,
   });
-  const end = performance.now();
-  const duration = (end - start).toFixed(2);
-  console.log(`🔋 [createTRPCContext] Session took ${duration}ms to fetch`);
+  if (process.env.NODE_ENV === "development") {
+    console.log(`🔋 [createTRPCContext] Session took ${(performance.now() - start).toFixed(2)}ms to fetch`);
+  }
 
   return {
     db,
@@ -110,9 +110,9 @@ const timingMiddleware = t.middleware(async ({ next, path, ctx }) => {
     },
   });
 
-  const end = performance.now();
-  const duration = (end - start).toFixed(2);
-  console.log(`🚩 [TRPC] ${path} took ${duration}ms to execute`);
+  if (process.env.NODE_ENV === "development") {
+    console.log(`🚩 [TRPC] ${path} took ${(performance.now() - start).toFixed(2)}ms to execute`);
+  }
 
   return result;
 });

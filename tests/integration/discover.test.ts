@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 
-import { callerFor, cleanup, createAsset, createUser, db } from "./helpers";
+import { callerFor, cleanup, createAsset, createTrack, createUser, db, usernameOf } from "./helpers";
 
 after(async () => {
   await cleanup();
@@ -16,26 +16,14 @@ async function makeTrack(
   ownerId: string,
   name: string,
   opts: {
-    visibility?: "PUBLIC" | "UNLISTED" | "PRIVATE";
+    visibility?: "PUBLIC" | "PRIVATE";
     genre?: string;
     playCount?: number;
     likeCount?: number;
-    createdAt?: Date;
+    publishedAt?: Date;
   } = {},
 ) {
-  const asset = await createAsset(ownerId, { status: "ATTACHED" });
-  return db.track.create({
-    data: {
-      creatorId: ownerId,
-      audioAssetId: asset.id,
-      title: title(name),
-      visibility: opts.visibility ?? "PUBLIC",
-      genre: opts.genre,
-      playCount: opts.playCount ?? 0,
-      likeCount: opts.likeCount ?? 0,
-      ...(opts.createdAt ? { createdAt: opts.createdAt } : {}),
-    },
-  });
+  return createTrack(ownerId, { title: title(name), ...opts });
 }
 
 /** The API's order, restricted to the named tracks this test created (other tests' data is ignored). */
@@ -50,21 +38,21 @@ describe("discover.tracks", () => {
   it("lists public tracks only", async () => {
     const owner = await createUser("disc-vis");
     await makeTrack(owner, "pub");
-    await makeTrack(owner, "unl", { visibility: "UNLISTED" });
     await makeTrack(owner, "priv", { visibility: "PRIVATE" });
+    await makeTrack(owner, "sched", { visibility: "PRIVATE" });
 
-    const names = mine(await api().discover.tracks({ limit: 48 }), ["pub", "unl", "priv"]);
+    const names = mine(await api().discover.tracks({ limit: 48 }), ["pub", "priv", "sched"]);
     assert.deepEqual(names, ["pub"]);
   });
 
-  it("sorts latest by creation time and popular by plays, then likes", async () => {
+  it("sorts latest by publication time and popular by plays, then likes", async () => {
     const owner = await createUser("disc-sort");
     const day = 24 * 60 * 60 * 1000;
     const now = Date.now();
-    await makeTrack(owner, "old-but-hot", { playCount: 50, createdAt: new Date(now - 3 * day) });
-    await makeTrack(owner, "newest", { playCount: 1, createdAt: new Date(now - 1 * day) });
-    await makeTrack(owner, "middle-liked", { playCount: 10, likeCount: 9, createdAt: new Date(now - 2 * day) });
-    await makeTrack(owner, "middle-plain", { playCount: 10, likeCount: 1, createdAt: new Date(now - 2 * day + 1000) });
+    await makeTrack(owner, "old-but-hot", { playCount: 50, publishedAt: new Date(now - 3 * day) });
+    await makeTrack(owner, "newest", { playCount: 1, publishedAt: new Date(now - 1 * day) });
+    await makeTrack(owner, "middle-liked", { playCount: 10, likeCount: 9, publishedAt: new Date(now - 2 * day) });
+    await makeTrack(owner, "middle-plain", { playCount: 10, likeCount: 1, publishedAt: new Date(now - 2 * day + 1000) });
 
     const all = ["old-but-hot", "newest", "middle-liked", "middle-plain"];
     assert.deepEqual(
@@ -79,13 +67,13 @@ describe("discover.tracks", () => {
 
   it("filters by genre", async () => {
     const owner = await createUser("disc-genre");
-    await makeTrack(owner, "jazzy", { genre: "jazz" });
+    await makeTrack(owner, "jazzy", { genre: "jazz-blues" });
     await makeTrack(owner, "rocky", { genre: "rock" });
 
-    assert.deepEqual(mine(await api().discover.tracks({ genre: "jazz", limit: 48 }), ["jazzy", "rocky"]), ["jazzy"]);
+    assert.deepEqual(mine(await api().discover.tracks({ genre: "jazz-blues", limit: 48 }), ["jazzy", "rocky"]), ["jazzy"]);
   });
 
-  it("searches titles and creator names case-insensitively, never leaking private tracks", async () => {
+  it("searches titles, creator names and usernames case-insensitively, never leaking private tracks", async () => {
     const owner = await createUser(`finder${run}`);
     await makeTrack(owner, "Sunrise");
     await makeTrack(owner, "Hidden", { visibility: "PRIVATE" });
@@ -93,6 +81,8 @@ describe("discover.tracks", () => {
 
     // by creator name (createUser names users `it-<label>`)
     assert.deepEqual(mine(await api().discover.tracks({ q: needle, limit: 48 }), ["Sunrise", "Hidden"]), ["Sunrise"]);
+    // by username
+    assert.deepEqual(mine(await api().discover.tracks({ q: usernameOf(owner).toUpperCase(), limit: 48 }), ["Sunrise", "Hidden"]), ["Sunrise"]);
     // by title
     assert.deepEqual(mine(await api().discover.tracks({ q: `SUNRISE-${run}`, limit: 48 }), ["Sunrise", "Hidden"]), ["Sunrise"]);
     // private titles are not searchable
@@ -109,13 +99,17 @@ describe("discover.tracks", () => {
     await assert.rejects(api().discover.tracks({ limit: 0 }));
   });
 
-  it("returns the card DTO (creator, artwork fallback, stream-free urls)", async () => {
+  it("returns the card DTO (creator, permalink, media urls, waveform)", async () => {
     const owner = await createUser("disc-dto");
-    const track = await makeTrack(owner, "dto", { genre: "folk" });
-    const [item] = (await api().discover.tracks({ q: title("dto"), limit: 5 }));
+    const track = await makeTrack(owner, "dto", { genre: "folk-singer-songwriter" });
+    const [item] = await api().discover.tracks({ q: title("dto"), limit: 5 });
     assert.equal(item?.id, track.id);
     assert.equal(item?.userId, owner);
-    assert.match(item?.user.name ?? "", /^it-disc-dto$/);
+    assert.equal(item?.user?.name, "it-disc-dto");
+    assert.equal(item?.user?.username, usernameOf(owner));
+    assert.equal(item?.permalink, `/${usernameOf(owner)}/${track.slug}`);
+    assert.equal(item?.duration, 30);
+    assert.equal(item?.streamUrl, `/api/tracks/${track.id}/stream`);
     assert.equal(item?.artworkUrl, null);
     assert.equal(item?.waveformUrl, `/api/tracks/${track.id}/waveform?v=1`);
     assert.equal(item?.artworkSrcSet, null);
@@ -123,14 +117,13 @@ describe("discover.tracks", () => {
 
   it("serves processed artwork as a srcset of its renditions, legacy artwork as one url", async () => {
     const owner = await createUser("disc-art");
-    const processed = await makeTrack(owner, "art-new");
-    const legacy = await makeTrack(owner, "art-old");
     const assetId = crypto.randomUUID();
     await db.mediaAsset.create({
       data: {
         id: assetId,
         ownerId: owner,
         kind: "IMAGE",
+        imagePurpose: "ARTWORK",
         status: "ATTACHED",
         bucket: "test-bucket",
         storageKey: `artworks/${owner}/${assetId}/640.webp`,
@@ -139,9 +132,9 @@ describe("discover.tracks", () => {
         mimeType: "image/webp",
       },
     });
-    await db.track.update({ where: { id: processed.id }, data: { artworkAssetId: assetId } });
     const legacyArt = await createAsset(owner, { kind: "IMAGE", status: "ATTACHED" });
-    await db.track.update({ where: { id: legacy.id }, data: { artworkAssetId: legacyArt.id } });
+    const processed = await createTrack(owner, { title: title("art-new"), artworkAssetId: assetId });
+    const legacy = await createTrack(owner, { title: title("art-old"), artworkAssetId: legacyArt.id });
 
     const items = [
       ...(await api().discover.tracks({ q: title("art-new"), limit: 5 })),
@@ -157,9 +150,9 @@ describe("discover.tracks", () => {
     assert.equal(byId.get(legacy.id)?.artworkUrl, route(legacy.id));
     assert.equal(byId.get(legacy.id)?.artworkSrcSet, null);
 
-    // the track page and profile feed use the same mapping
-    const page = await api().artist.getTrack({ trackId: processed.id });
-    assert.equal(page?.artworkSrcSet, byId.get(processed.id)?.artworkSrcSet);
+    // the track page uses the same mapping
+    const page = await api().tracks.byPermalink({ username: usernameOf(owner), slug: processed.slug });
+    assert.equal(page.status === "ok" && page.track.artworkSrcSet, byId.get(processed.id)?.artworkSrcSet);
   });
 });
 
