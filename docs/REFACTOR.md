@@ -197,3 +197,8 @@ with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration).
 - Chosen by rendering the real demo waveforms (max vs mean vs RMS, gamma 1 and 1.5) against SoundCloud screenshots of the same tracks: RMS with linear scaling matched the intros, breaks and ripple best; gamma 1.5 exaggerated drops. No library does this (wavesurfer.js / peaks.js also draw max peaks).
 - Write-up with settings and how to tune or revert: [`docs/waveform-fix.docx`](waveform-fix.docx).
 - Tests: 5 new unit tests (bar count independent of length, quiet passages survive transients, polarity, interpolation, silence). Verified check-types, lint, 27 unit, 26 e2e, and screenshots of the track page with the real waveforms.
+
+### Session 9 - demo artwork
+- The demo creator's old artwork files were deleted from R2 and replaced by a pool of 27 images at `random-artwork-images/artwork-001..027.webp` (bucket `music-stream-app`).
+- Production data fix (one transaction, over Neon's HTTPS endpoint because port 5432 is blocked from the cloud sandbox): each of the 8 demo tracks got its own randomly chosen image as a new `IMAGE` asset (`ATTACHED`, `image/webp`), and the 2 old asset rows pointing at the deleted files were removed. Verified: every `/api/tracks/:id/artwork` on the live site redirects to a 200 `image/webp`, and `/discover` has no broken images.
+- `prisma/seed-r2.ts` now takes artwork from that pool, shuffled so each new track gets a different image (checked on a throwaway local database: 10 tracks, 10 distinct images).

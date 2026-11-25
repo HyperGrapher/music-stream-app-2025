@@ -1,6 +1,7 @@
 /**
  * Registers media that already exists in the R2 bucket as demo content:
- * one creator, one track per uploads/*.mp3|ogg with its artwork and waveform.
+ * one creator, one track per uploads/*.mp3|ogg with its waveform, and a distinct
+ * random artwork from random-artwork-images/artwork-NNN.webp.
  *
  * Idempotent (keyed on storageKey). Waveforms carry no link to their audio, so
  * they are paired by duration: overview.json length / 20 px per second vs the
@@ -45,6 +46,7 @@ const mime = (key: string) =>
   : key.endsWith(".ogg") ? "audio/ogg"
   : key.endsWith(".png") ? "image/png"
   : key.endsWith(".jpg") ? "image/jpeg"
+  : key.endsWith(".webp") ? "image/webp"
   : key.endsWith(".json") ? "application/json"
   : "application/octet-stream";
 
@@ -70,7 +72,12 @@ async function probeSeconds(key: string): Promise<number> {
 async function main() {
   const objects = await listAll();
   const audio = objects.filter((o) => /^uploads\/.+\.(mp3|ogg)$/.test(o.key));
-  const artworks = objects.filter((o) => o.key.startsWith("artworks/"));
+  // Shuffled so each new track gets a different image (storageKey is unique per asset).
+  const artworks = objects.filter((o) => /^random-artwork-images\/artwork-\d+\.webp$/.test(o.key));
+  for (let i = artworks.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [artworks[i], artworks[j]] = [artworks[j]!, artworks[i]!];
+  }
   const overviews = objects.filter((o) => o.key.endsWith("/overview.json"));
 
   const waveformLength = new Map<string, number>();
