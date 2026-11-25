@@ -16,7 +16,7 @@ Single Next.js app on Vercel + Neon Postgres + Cloudflare R2.
 ```bash
 pnpm install
 cp .env.example .env        # fill in values (see below)
-pnpm db:push                # create tables
+pnpm db:migrate             # apply migrations (prisma migrate deploy)
 pnpm db:seed:r2             # optional: demo tracks from the R2 bucket (needs ffprobe)
 pnpm dev                    # http://localhost:3000
 ```
@@ -31,4 +31,6 @@ Required env (validated in `src/env.js`): `DATABASE_URL`, `BETTER_AUTH_SECRET`, 
 |---------|--|
 | `pnpm check-types` / `pnpm lint` / `pnpm test` | typecheck, ESLint, node:test |
 | `SKIP_ENV_VALIDATION=1 pnpm build` | production build without real env |
-| `pnpm db:push` / `pnpm db:studio` | schema sync / Prisma Studio |
+| `pnpm db:migrate` | apply committed migrations (use the **direct** Neon URL, not the pooler) |
+| `pnpm db:migrate:dev` | create a new migration after editing `prisma/schema.prisma` |
+| `pnpm db:studio` | Prisma Studio |

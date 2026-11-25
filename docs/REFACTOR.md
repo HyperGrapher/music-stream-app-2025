@@ -119,3 +119,7 @@ with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration).
 - Verified: check-types, lint (0 errors), 19/19 tests, build.
 - `.env` moved to the repo root (still gitignored). Remember to rebuild the Vercel project root to `/` (default).
 - **Next up: Phase 5** (dependency upgrades, one commit each) or Phase 6 (Neon + Vercel) - recommend 6 first so there is a deployed baseline, then upgrade.
+
+### Session 3 - Phase 6 prep
+- Baseline migration `prisma/migrations/0_init` generated from the schema; verified on a fresh DB (`migrate deploy` then `migrate diff` = no difference). Local `streamapp` DB marked as applied. **Create Neon tables with `DATABASE_URL=<direct url> pnpm db:migrate`** (not `db:push`). From now on schema changes go through `pnpm db:migrate:dev`.
+- Migrations use the direct URL; runtime on Vercel uses the pooled URL as `DATABASE_URL`. No `directUrl` in the datasource since Vercel never runs migrations.
