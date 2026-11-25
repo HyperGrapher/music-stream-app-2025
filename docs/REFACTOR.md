@@ -24,8 +24,8 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 
 | Milestone | State |
 |---|---|
-| M0 Foundation reset | in progress, see sub-steps below |
-| M1 Accounts & profiles | not started |
+| M0 Foundation reset | **done** (see "M0 summary" below) |
+| M1 Accounts & profiles | **next** (see "Next up") |
 | M2 Upload & editing | not started |
 | M3 Listening | not started |
 | M4 Social loop | not started |
@@ -34,15 +34,42 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 | M7 Trust & safety | not started |
 | M8 Polish | not started |
 
-**M0 sub-steps**
+**M0 summary: what exists now** (read these before starting M1)
 
-- [ ] M0.1 Schema baseline (PRD §16) + fresh `0_init` migration
-- [ ] M0.2 Core modules: clock, names/slugs, visibility builders, entitlements, rate-limit, email, storage-deletion + cron, generic image pipeline
-- [ ] M0.3 Auth: username on user creation, session user fields, `ADMIN_EMAILS`, env vars
-- [ ] M0.4 Port server features onto the new model (upload, tracks, collections, comments, likes, plays, discover, route handlers with secret links)
-- [ ] M0.5 Permalink routing + UI port (`/[username]`, `/[username]/[trackSlug]`, `/[username]/sets/[slug]`, `s-token` variants, legacy redirects, upload form)
-- [ ] M0.6 New seed (PRD §20)
-- [ ] M0.7 Port unit/integration/e2e tests, all checks green, docs (`CONTEXT.md`, ADR, README)
+| Area | Where | Notes |
+|---|---|---|
+| Schema (PRD §16, all models) | `prisma/schema.prisma`, one baseline `prisma/migrations/0_init` | CHECK constraints (username format, follow/block not self, collection date/visibility, spotlight target, counters >= 0) are hand-written at the end of the migration; `prisma migrate diff` sees no drift. Full-text/trigram search columns are NOT there yet (M5 adds them in a new migration). |
+| Visibility (single source of truth) | `src/server/modules/visibility/index.ts` | `effectiveVisibility`, `publicTrackWhere/accessibleTrackWhere/publicCollectionWhere/accessibleCollectionWhere`, `trackAccess/collectionAccess`, secret tokens. Use these for EVERY listing/route; never hand-write visibility conditions. Track route handlers and procedures call `authorizeTrack` (`modules/tracks/authorize.ts`) and answer 404, never 403. |
+| Names, slugs, reserved words | `src/lib/names.ts` | A unit test checks every first-level folder of `src/app` is reserved: adding a top-level route without adding it to `RESERVED_USERNAMES` fails CI. |
+| Entitlements | `server/modules/plans/entitlements.ts` | Limits + `requireEntitlement` (throws `PLAN_REQUIRED`). Only upload size is enforced so far; upload-time quota (UP-8), scheduling, Quiet Mode etc. are enforced when their features land (M2/M6). |
+| Rate limiter | `server/modules/rate-limit` | `enforceRateLimit(db, action, subject, ...rules)`, `RATE_LIMITS` mirrors PRD 14.3. Enforced today: comment (8/min, 200/day), like (60/min + 10 toggles/10 min per target, counted only when committed), upload URLs. Add the rest with their features. |
+| Errors | `server/errors.ts` | `appError/planRequired/rateLimited` set `error.data.appCode` (+ `retryAfterSeconds`); the UI mapping to friendly text is still ad hoc (`useTrackLike`, `CommentsSection`): centralise it in M1/M2. |
+| Email | `server/modules/email` | `sendEmail(db, mail)` -> Resend or stored as `LOGGED`; templates for verification and reset exist but Better Auth is NOT wired to send them yet (M1). |
+| Storage deletion queue + daily cron | `server/modules/storage/deletion.ts`, `server/modules/housekeeping.ts`, `app/api/cron/daily`, `vercel.json` | Cancel/expire/image replacement enqueue keys and drain via `runAfter()` (`server/after.ts`). Cron today: expire unattached assets, drain queue, prune rate-limit buckets, email bodies, play events > 13 months, username redirects > 30 days. Account purge and digests come with M1/M4. `demo/` and `random-artwork-images/` are protected. |
+| Image pipeline | `server/modules/media/artwork-processing.ts`, `src/lib/artwork.ts` (`IMAGE_SPECS`) | `processImageObject(r2, {purpose})` for ARTWORK / AVATAR / BANNER; `/api/images/[assetId]?w=` serves avatars, banners, collection artwork with access checks. No UI uploads avatars/banners yet (M1). |
+| Publishing | `server/modules/publishing`, `server/api/routers/upload.ts` | `publishTrack`, `publishCollection` (atomic claim READY -> ATTACHED, slugs with -2/-3 and retry on a unique race, secret tokens, activities, `publicTrackCount`). `markUploadComplete` now REQUIRES the browser analysis. Procedures: `createTrack`, `createCollection` (replaces createRelease). The upload UI is still the old two-step form (M2 rebuilds it). |
+| Routers | `server/api/routers/*` | `tracks.byPermalink`, `collections.byPermalink`, `profiles.{byUsername,tracks,collections}`, `discover`, `engagement.setTrackLike`, `comments`, `upload`. Old `artist` router is gone. Shared DTO builder: `modules/tracks/dto.ts` (`trackDtoSelect`, `toTrackDto`, `userAvatarUrl`). |
+| Pages | `app/(player)/[username]`, `[trackSlug]`, `[trackSlug]/[secret]` (`s-` prefix), `sets/[slug]`, `sets/[slug]/[secret]`; legacy `app/track/[id]`, `app/u/[id]`, `app/profile` | Everything user-facing stays under `(player)` so playback survives navigation. Profile page has the old tab layout with Tracks/Popular/Albums/Playlists wired (Reposts is a placeholder). |
+| Stats + repair | `server/modules/stats.ts`, `server/modules/recount.ts`, `pnpm db:recount` | `bumpTrackDailyStat` is called inside the transactions of plays/likes/comments (same-day undo only, per IN-6). |
+| Seed | `prisma/seed.ts`, `prisma/seed/demo-media.ts`, `SEED_README.md` | `DATABASE_URL=<local> pnpm db:seed` (refuses Neon unless `--force`). Demo login `demo@example.test` / `DemoPassword123!`. Demo media is prepared once into `demo/` in R2 (manifest). |
+| Tests | unit `src/**/*.test.ts` (55), integration `tests/integration` (98), e2e `tests/e2e` (33 + 1 opt-in real-R2) | e2e fixtures: `tests/e2e/fixtures.ts` (creator `e2e-creator`, public/likes/plays/private/scheduled tracks, an album, a private playlist). |
+
+**Deliberately deferred from the PRD's M0 wording** (nothing is forgotten, each has an owner milestone):
+
+- AU-4 verified-email requirement for upload/comment/repost (M1, together with the verification email flow). Today any signed-in user can comment and upload.
+- Full-text + trigram search columns (M5).
+- Upload-time quota enforcement UP-8 (M2).
+- Follow/repost/block rate limits, notifications on likes/comments (M4/M7).
+- Navbar/layout redesign GL-1..GL-5 (M1 for auth/profile entries, M3 for mobile tabs and player sheet).
+
+**Next up: M1 Accounts & profiles** (PRD §6, §9; exit: journey J2)
+
+1. Better Auth: wire `sendVerificationEmail` / `sendResetPassword` to `server/modules/email` (limit 3/hour/address via `RATE_LIMITS.emailPerHour`), email verification, password reset (`/forgot-password`, `/reset-password`, revoke other sessions), common-password check (AU-3), "sign out everywhere" + session list (AU-6), Google accounts verified automatically.
+2. `/signin`, `/signup` pages and sign-in modal with pending-action retry (AU-2); forced `/onboarding` until `onboardedAt` (username availability check + `UsernameRedirect` on rename, display name, avatar via the AVATAR pipeline, >= 3 genres, 12 suggested creators to follow, PRD 6.2).
+3. Settings: profile (avatar/banner crop UI, links, city/country, bio), account (email/password change, connected accounts, delete account with `recount*` + `StorageDeletion`), privacy basics (AU-7..AU-10, 9.2).
+4. Profile page with all tabs as real sub-routes (`/[username]/popular-tracks|tracks|albums|sets|reposts|likes|followers|following`, infinite scroll, Spotlight read side), follow/unfollow with counters + daily stats + rate limits (FO-*), followers/following pages, "Who to follow" (FO-4).
+5. Enforce the verified-email gate (AU-4) in `upload.*`, `comments.create` and later repost; add the "Verify your email" prompt with resend.
+6. Tests: integration per rule (verified gate, onboarding redirect logic as a pure function, follow counters under concurrency like the likes tests), e2e journey J2 (read verification link from `EmailMessage`).
 
 **Environment gotchas for agents (cloud sandbox)**
 
@@ -53,9 +80,26 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 - R2 is reachable from the sandbox with the env credentials (bucket has demo audio under `uploads/…`, artwork pool under `random-artwork-images/`). **Never delete objects in the shared demo prefixes.**
 - The production Neon database is NOT touched by `dev` work. M0 replaces the migration history with a fresh baseline; before `master` is ever deployed with it, the Neon schema must be reset (see "Open items for the owner" below).
 
+**Recipes used in the cloud sandbox** (set the env inline; never rely on the ambient `DATABASE_URL`):
+
+```bash
+LOCAL=postgresql://streamer:streamer@localhost:5432
+# fresh test DB + integration tests
+DATABASE_URL=$LOCAL/streamapp_test DATABASE_URL_UNPOOLED=$LOCAL/streamapp_test pnpm prisma db execute --stdin <<< "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;"
+DATABASE_URL=$LOCAL/streamapp_test DATABASE_URL_UNPOOLED=$LOCAL/streamapp_test pnpm db:migrate
+DATABASE_URL=$LOCAL/streamapp DATABASE_URL_UNPOOLED=$LOCAL/streamapp TEST_DATABASE_URL=$LOCAL/streamapp_test pnpm test:integration
+# e2e (wipes the test DB, builds, starts the app on :3100); chromium is preinstalled in the sandbox
+DATABASE_URL=$LOCAL/streamapp DATABASE_URL_UNPOOLED=$LOCAL/streamapp TEST_DATABASE_URL=$LOCAL/streamapp_test \
+  PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/opt/pw-browsers/chromium-1243/chrome-linux64/chrome pnpm test:e2e --trace off
+# the opt-in real-R2 journey additionally needs: E2E_R2=1 E2E_PORT=3000 E2E_BROWSER_PROXY="$HTTPS_PROXY"
+# dev server + demo data
+DATABASE_URL=$LOCAL/streamapp DATABASE_URL_UNPOOLED=$LOCAL/streamapp pnpm db:migrate && pnpm db:seed   # (with the same env)
+```
+
 **Open items for the owner**
 
 - Before merging `dev` into `master`: reset the Neon database schema (`DROP SCHEMA public CASCADE; CREATE SCHEMA public;` on the direct URL) and let `prisma migrate deploy` apply the new `0_init`, because the baseline replaces migrations `0_init`..`2_artwork_image_widths`. Vercel's `vercel-build` would otherwise fail on the history mismatch.
+- Set on Vercel before deploying M0: `CRON_SECRET` (the daily cron endpoint refuses callers without it), and optionally `RESEND_API_KEY` + `EMAIL_FROM`, `ADMIN_EMAILS`. Note the variable names differ between Vercel (`DATABASE_URL` = pooled, `DATABASE_URL_UNPOOLED` = direct) and the cloud sandbox (`DATABASE_URL`, `DATABASE_URL_POOLED`): the app reads `DATABASE_URL` (pooled at runtime) and `prisma.config.ts` prefers `DATABASE_URL_UNPOOLED` for migrations.
 - Old user uploads in R2 (`uploads/<oldUserId>/…`, `artworks/<oldUserId>/…`, `waveforms/…`) become orphaned once the DB is reset. The seed copies the demo audio it needs to `demo/…`; the rest can be erased by the owner at their discretion (not done automatically).
 
 ## Goal
@@ -95,9 +139,11 @@ A pro-level portfolio demo (SoundCloud-style creator platform) that is:
 pnpm install
 pnpm check-types   # tsc
 pnpm lint          # eslint, fails on any warning
-pnpm test          # unit tests, node:test, src/**/*.test.ts (23 tests, no DB)
-TEST_DATABASE_URL=postgresql://... pnpm test:integration   # 49 tests against a real Postgres (skips if unset)
-TEST_DATABASE_URL=postgresql://... pnpm test:e2e           # Playwright, WIPES that database, builds + starts the app (26 tests, +1 opt-in R2 test)
+pnpm test          # unit tests, node:test, src/**/*.test.ts (no DB)
+TEST_DATABASE_URL=postgresql://... pnpm test:integration   # 98 tests against a real Postgres (skips if unset)
+TEST_DATABASE_URL=postgresql://... pnpm test:e2e           # Playwright, WIPES that database, builds + starts the app (33 tests, +1 opt-in real-R2 test)
+DATABASE_URL=postgresql://... pnpm db:seed                 # demo world (see SEED_README.md)
+DATABASE_URL=postgresql://... pnpm db:recount              # repair every denormalised counter
 SKIP_ENV_VALIDATION=1 pnpm build   # no real env needed to build
 ```
 
@@ -120,7 +166,7 @@ All under `src/app/api/tracks/[trackId]/`, logic in `src/server/modules/tracks/`
 | `GET artwork` | `307` to `publicUrl` or presigned URL (fallback when `R2_PUBLIC_BASE_URL` is unset) |
 | `POST play` | `recordPlay()` in `server/modules/tracks/plays.ts`: one counted play per listener (account, else HMAC(ip+user-agent)) per track per 30 min, serialised with a Postgres advisory lock; always answers 204 for a viewable track. The player calls it after 5 s of real listening |
 
-Visibility: PUBLIC/UNLISTED = anyone with the link; PRIVATE = creator only. Denied and missing both return 404.
+Visibility (since M0, superseding the text below): PUBLIC = anyone; PRIVATE = owner or anyone with the secret link (`?s=`, or `?c=<collectionId>&s=`); SCHEDULED = private until `publishAt`. Denied and missing both return 404. See `server/modules/visibility`.
 The old JWT playback-token flow (`stream.getPlaybackToken`, `JWT_PLAYBACK_SECRET`) and the desktop auth-code exchange
 (`/auth/exchange-code`, in-memory map, incompatible with serverless) were dropped. The legacy unauthenticated `/api/upload` was removed.
 
@@ -138,10 +184,12 @@ Rendering (`buildWaveformBars` in `lib/waveform-utils.ts`): bar count = display 
 
 ## Demo data
 
-`pnpm db:seed:r2` registers the audio, artwork and waveforms already in the R2 bucket as one "Demo Creator"
-with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration). Needs `ffprobe` and the `R2_*` + `DATABASE_URL` env.
+`pnpm db:seed` (see `SEED_README.md`) builds the whole demo world. The old `db:seed:r2` script was removed in M0.
 
 ## Log
+
+> The Log below is history up to session 10 and describes the OLD data model (Release, Playlist, UNLISTED,
+> `artist` router, MediaProcessingJob, etc.). The PRD implementation log is at the very end ("PRD implementation log").
 
 ### Session 1 - Phase 0
 - Created branch `refactor/single-nextjs-app`.
@@ -264,3 +312,15 @@ with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration).
 - `pnpm artwork:backfill [--dry-run]` converts existing images; it deletes a source only when it is the owner's own upload (`artworks/<ownerId>/`), never the shared demo pool. `seed-r2` now makes renditions from the pool the same way.
 - Tests: 7 unit tests (width planning, keys, srcset, real sharp renders incl. an EXIF-orientation test mutation-checked to fail without auto-orient, corrupt/oversized inputs), 1 integration test (srcset DTO for processed vs legacy artwork on discover and the track page), the opt-in real-R2 e2e now uploads a 1500x1000 JPEG through the form and asserts exactly the 3 renditions exist in R2 (original gone), each `?w=` serves an image of that size, and the browser picks the 320 rendition for the 320 px hero. Backfill exercised against real R2 with a local DB (own upload processed + deleted, pool source kept, second run a no-op). Verified: types, lint, 34 unit, 50 integration, 27 e2e.
 - Production backfill is pending: it needs the migration, which Vercel applies on the production deploy after merge.
+
+## PRD implementation log
+
+### Session 11 - PRD M0 (foundation reset), branch `dev`
+- Replaced the schema with PRD §16 and a fresh `0_init` baseline (old migrations deleted): Collection replaces Release/Playlist, Visibility = PUBLIC/PRIVATE/SCHEDULED + moderation, usernames, slugs + redirect tables, notifications/messages/reports/stats/rate-limit/storage-deletion tables, `Track.audioAssetId` no longer unique (demo audio is shared). Dropped `MediaProcessingJob`/`MediaProcessingError`, the detail waveform and `AudioAnalysis.QUEUED/PROCESSING`.
+- New server modules: clock, names/slugs, visibility, entitlements, rate limiter, email, storage deletion queue, housekeeping + `/api/cron/daily`, image pipeline for avatars/banners, publishing, stats/recount (see the table at the top for locations).
+- Auth: Better Auth `databaseHooks` generate a unique lowercase username at user creation (reserved words skipped, `_2` suffixes, recently renamed handles held for 30 days) and grant ADMIN to `ADMIN_EMAILS` at sign-up/sign-in; `username`/`role` are `input: false` (clients cannot set them).
+- Behaviour changes versus before: you cannot like your own track (A3); private tracks cannot be liked even through a secret link; `markUploadComplete` requires the browser analysis (files the browser cannot decode are rejected); max audio size is 100 MB (entitlements); comment limits moved to the bucket limiter (8/min + 200/day); tRPC timing logs only in development.
+- Ported UI/routes to permalinks (see "Pages" in the table), added the collection page, legacy redirects, `s-` secret routes, `noindex` for hidden content, canonical links. Removed `artist` router, `/track/[id]` page (now a redirect), `scripts/process-artwork.ts` and `artwork-backfill` (nothing to backfill on a fresh DB), `db:seed:r2`.
+- Seed rewritten (`pnpm db:seed`), verified by running it twice against a local database and browsing the pages (screenshots checked: track page, album page).
+- Verified locally on a fresh database: `check-types`, `lint` (0 warnings), 53 unit tests, 98 integration tests, 33 e2e tests, the opt-in real-R2 upload e2e (upload -> in-browser analysis -> publish -> play -> comment), `next build`, and `prisma migrate diff` shows no drift. NOT verified: the GitHub workflows themselves, the Vercel deployment, anything against Neon (the sandbox cannot reach it and was deliberately kept away from it).
+- Learned: Better Auth rejects client-supplied `input: false` fields at sign-up and silently drops unknown ones; `tx`-scoped rate-limit upserts roll back with a rejected action, so only committed toggles count towards LK-3; running 20 parallel transactions that each need a second pooled connection can deadlock the pool, so keep helper writes inside the same `tx`.

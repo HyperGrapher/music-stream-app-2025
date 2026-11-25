@@ -19,7 +19,6 @@
     "preview": "next build && next start",
     "start": "next start",
     "check-types": "tsc --noEmit",
-    "artwork:backfill": "tsx scripts/process-artwork.ts",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "db:migrate:dev": "prisma migrate dev && prisma generate",
     "db:generate": "prisma generate",
