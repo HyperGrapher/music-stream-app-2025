@@ -81,6 +81,7 @@ creates an `ATTACHED` WAVEFORM asset and a `READY` `AudioAnalysis` in one transa
 the upload still succeeds with `AudioAnalysis.FAILED` (UI shows no waveform). Cancelling/expiring the audio also deletes its waveform.
 No `MediaProcessingJob` is queued anymore. Trust model: peaks are client-supplied, so a creator could fake their own waveform; acceptable for a demo.
 The unused 100 px/s detail waveform is no longer produced.
+Rendering (`buildWaveformBars` in `lib/waveform-utils.ts`): bar count = display width / 3 px (2 px bar + 1 px gap), each bar is the RMS of the 50 ms peak amplitudes it covers, scaled so the 99th percentile bar is full height. The stored format did not change.
 
 ## Demo data
 
@@ -189,3 +190,9 @@ with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration).
 - UI: `CommentsSection` (server prefetch + hydrated `useQuery`, so no loading flash; composer, threads, reply, delete with confirm), `CommentMarkers` (avatars under the hero waveform at `seconds / duration`), `usePlayAt` (load the track if needed, seek, play; a seek during loading is applied when the media is ready). Rendered as text (no HTML), `whitespace-pre-line`.
 - Tests: 13 integration (exact second stored, whole-second/in-track validation, threading + root attachment, replies cannot be timed, visibility, rate limit, 24 concurrent posters, moderation, `canDelete` flags, thread deletion counts, lock contract) and 4 e2e (public view + waveform markers, general comment, **exact-second capture by seeking via an existing comment's chip then posting**, opt-out of the time, replies, deletion). The opt-in R2 test additionally plays real audio and asserts the stored second matches the player's position at the click.
 - Known limits: no pagination beyond the newest 100 threads / 100 replies each; no edit; no comment likes (model exists); no notifications for new comments (model exists); deleting a user cascades their comments without adjusting `Track.commentCount` (same account-deletion caveat as likes).
+
+### Session 8 - waveform rendering (branch `waveform`)
+- Problem: long tracks rendered as a solid block. Each display bar took the **maximum** of the 50 ms windows it covered (about 14 per bar for a 3-4 min track at 2 px pitch); mastered music hits near full scale in almost every window, so every bar was full height. Short tracks (NiceFlex 1, 35 s, about 2 windows per bar) looked fine, which hid the bug.
+- Fix (render-only, no data/format change, no backfill): `buildWaveformBars(peaks, barCount)` takes the RMS of the per-window peak amplitude over each bar's interval, normalises to the 99th-percentile bar (floor 0.04 so near-silence is not blown up) and interpolates when a track has fewer windows than bars. `WaveformVisualizer` draws 2 px bars every 3 px snapped to device pixels, so the bar count depends on the width only (about 260 for a 780 px waveform, close to SoundCloud).
+- Chosen by rendering the real demo waveforms (max vs mean vs RMS, gamma 1 and 1.5) against SoundCloud screenshots of the same tracks: RMS with linear scaling matched the intros, breaks and ripple best; gamma 1.5 exaggerated drops. No library does this (wavesurfer.js / peaks.js also draw max peaks).
+- Tests: 5 new unit tests (bar count independent of length, quiet passages survive transients, polarity, interpolation, silence). Verified check-types, lint, 27 unit, 26 e2e, and screenshots of the track page with the real waveforms.

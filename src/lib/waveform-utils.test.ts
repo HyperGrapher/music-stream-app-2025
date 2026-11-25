@@ -3,7 +3,8 @@ import test from "node:test";
 
 import {
   parseAudiowaveformJson,
-  reduceWaveformPeaks,
+  buildWaveformBars,
+  type WaveformPeak,
 } from "./waveform-utils";
 
 test("parses audiowaveform min/max pairs without flattening them", () => {
@@ -24,21 +25,58 @@ test("parses audiowaveform min/max pairs without flattening them", () => {
   ]);
 });
 
-test("downsampling preserves interval extrema instead of averaging transients", () => {
-  const reduced = reduceWaveformPeaks(
+const flat = (amplitude: number): WaveformPeak => ({
+  min: -amplitude,
+  max: amplitude,
+});
+
+test("bar count follows the display, not the track length", () => {
+  const short = Array.from({ length: 700 }, () => flat(0.5));
+  const long = Array.from({ length: 12_000 }, () => flat(0.5));
+  assert.equal(buildWaveformBars(short, 260).length, 260);
+  assert.equal(buildWaveformBars(long, 260).length, 260);
+  assert.deepEqual(buildWaveformBars([], 260), []);
+});
+
+test("a loud track keeps its quiet passages visible", () => {
+  // Mastered music: every bar contains a near-full-scale transient, but the
+  // middle section is mostly quiet. Taking the maximum would flatten this.
+  const source: WaveformPeak[] = [];
+  for (let bar = 0; bar < 30; bar++) {
+    const quiet = bar >= 10 && bar < 20;
+    for (let window = 0; window < 14; window++) {
+      source.push(flat(window === 0 ? 0.98 : quiet ? 0.2 : 0.8));
+    }
+  }
+  const bars = buildWaveformBars(source, 30);
+  const loud = bars[0] ?? 0;
+  const soft = bars[15] ?? 0;
+  assert.ok(loud > 0.95, `loud bar is ${loud}`);
+  assert.ok(soft < 0.5, `quiet bar is ${soft}`);
+});
+
+test("uses the larger of both polarities and never exceeds 1", () => {
+  const bars = buildWaveformBars(
     [
-      { min: -0.1, max: 0.1 },
-      { min: -1, max: 0.95 },
-      { min: -0.2, max: 0.15 },
-      { min: -0.3, max: 0.4 },
+      { min: -0.8, max: 0.1 },
+      { min: -0.1, max: 0.4 },
     ],
     2,
   );
+  assert.deepEqual(bars, [1, 0.5]);
+});
 
-  assert.deepEqual(reduced, [
-    { min: -1, max: 0.95 },
-    { min: -0.3, max: 0.4 },
-  ]);
+test("short tracks are interpolated up to the bar count", () => {
+  const bars = buildWaveformBars([flat(0), flat(1)], 4);
+  assert.equal(bars.length, 4);
+  assert.equal(bars[0], 0);
+  assert.equal(bars[3], 1);
+  assert.ok((bars[1] ?? 0) < (bars[2] ?? 0));
+});
+
+test("near-silence is not amplified to full height", () => {
+  const bars = buildWaveformBars([flat(0.004), flat(0.002)], 2);
+  assert.ok(bars.every((bar) => bar <= 0.1));
 });
 
 test("rejects malformed or multi-channel payloads", () => {

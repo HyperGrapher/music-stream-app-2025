@@ -45,43 +45,70 @@ export function parseAudiowaveformJson(value: unknown): WaveformPeak[] {
   return peaks;
 }
 
+/** Bars quieter than this fraction of full scale are not scaled up to fill the height. */
+const MIN_NORMALIZATION_LEVEL = 0.04;
+/** Bars are scaled so this percentile reaches full height (ignores a few outliers). */
+const NORMALIZATION_PERCENTILE = 0.99;
+
 /**
- * Reduce a waveform to the available display columns without averaging away
- * transients. Every output column keeps the lowest minimum and highest maximum
- * from its source interval.
+ * Turn the stored overview (one min/max pair per 50 ms) into `barCount` bar
+ * heights between 0 and 1, SoundCloud style.
+ *
+ * Each bar is the RMS of the per-window peak amplitudes it covers, not their
+ * maximum. Mastered music hits near full scale somewhere in almost every
+ * second, so taking the maximum over a long track's bars (14+ windows each for
+ * a 3-4 minute track) flattens it into a solid block. The RMS follows how loud
+ * the passage actually is, so intros, breaks and drops stay visible, and the
+ * bar count depends only on the display width, never on the track length.
+ * Bars are then scaled so the 99th percentile fills the height.
  */
-export function reduceWaveformPeaks(
+export function buildWaveformBars(
   peaks: WaveformPeak[],
-  targetLength: number,
-): WaveformPeak[] {
-  const safeTarget = Math.max(1, Math.floor(targetLength));
-  if (peaks.length <= safeTarget) return peaks;
+  barCount: number,
+): number[] {
+  const count = Math.max(1, Math.floor(barCount));
+  const sourceLength = peaks.length;
+  if (!sourceLength) return [];
 
-  const result = new Array<WaveformPeak>(safeTarget);
-  for (let index = 0; index < safeTarget; index++) {
-    const start = Math.floor((index * peaks.length) / safeTarget);
-    const end = Math.max(
-      start + 1,
-      Math.floor(((index + 1) * peaks.length) / safeTarget),
-    );
-    let min = 1;
-    let max = -1;
+  const envelope = peaks.map((peak) => Math.max(0, -peak.min, peak.max));
+  const bars = new Array<number>(count);
 
-    for (let sourceIndex = start; sourceIndex < end; sourceIndex++) {
-      const peak = peaks[sourceIndex];
-      if (!peak) continue;
-      if (peak.min < min) min = peak.min;
-      if (peak.max > max) max = peak.max;
+  if (sourceLength < count) {
+    // Very short tracks: fewer windows than bars, interpolate between them.
+    for (let index = 0; index < count; index++) {
+      const position = Math.max(
+        0,
+        Math.min(
+          sourceLength - 1,
+          ((index + 0.5) * sourceLength) / count - 0.5,
+        ),
+      );
+      const left = Math.floor(position);
+      const right = Math.min(sourceLength - 1, left + 1);
+      const weight = position - left;
+      bars[index] =
+        (envelope[left] ?? 0) * (1 - weight) + (envelope[right] ?? 0) * weight;
     }
-    result[index] = { min, max };
+  } else {
+    for (let index = 0; index < count; index++) {
+      const start = Math.floor((index * sourceLength) / count);
+      const end = Math.max(
+        start + 1,
+        Math.floor(((index + 1) * sourceLength) / count),
+      );
+      let sumOfSquares = 0;
+      for (let sourceIndex = start; sourceIndex < end; sourceIndex++) {
+        const value = envelope[sourceIndex] ?? 0;
+        sumOfSquares += value * value;
+      }
+      bars[index] = Math.sqrt(sumOfSquares / (end - start));
+    }
   }
 
-  return result;
-}
-
-/** Compatibility adapter for older experimental visualizers. */
-export function processWaveformData(value: unknown): number[] {
-  return parseAudiowaveformJson(value).map((peak) =>
-    Math.max(Math.abs(peak.min), Math.abs(peak.max)),
+  const sorted = [...bars].sort((left, right) => left - right);
+  const reference = Math.max(
+    sorted[Math.round((sorted.length - 1) * NORMALIZATION_PERCENTILE)] ?? 0,
+    MIN_NORMALIZATION_LEVEL,
   );
+  return bars.map((value) => Math.min(1, value / reference));
 }

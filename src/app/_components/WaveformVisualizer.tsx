@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { formatDuration } from "@/lib/utils";
-import { reduceWaveformPeaks, type WaveformPeak } from "@/lib/waveform-utils";
+import { buildWaveformBars, type WaveformPeak } from "@/lib/waveform-utils";
 
 interface WaveformProps {
   waveformData: WaveformPeak[];
@@ -19,18 +19,13 @@ interface WaveformProps {
   progressReflectionColor?: string;
 }
 
-function robustMaximum(peaks: WaveformPeak[]) {
-  if (!peaks.length) return 1;
-  const values = peaks
-    .map((peak) => Math.max(Math.abs(peak.min), Math.abs(peak.max)))
-    .sort((left, right) => left - right);
-  const index = Math.min(values.length - 1, Math.floor(values.length * 0.995));
-  return Math.max(values[index] ?? 1, 0.04);
-}
+/** Horizontal space per bar in CSS pixels: a 2 px bar and a 1 px gap. */
+const BAR_PITCH = 3;
+const BAR_WIDTH = 2;
 
 function drawWaveform(
   canvas: HTMLCanvasElement,
-  peaks: WaveformPeak[],
+  bars: number[],
   width: number,
   height: number,
   pixelRatio: number,
@@ -52,26 +47,23 @@ function drawWaveform(
   const baseline = Math.round(height * (variant === "detail" ? 0.53 : 0.66));
   const topRoom = baseline - 3;
   const reflectionRoom = height - baseline - 3;
-  const pitch = width / Math.max(peaks.length, 1);
-  const barWidth = Math.max(1, Math.min(1.35, pitch * 0.68));
-  const scale = robustMaximum(peaks);
+  const pitch = width / Math.max(bars.length, 1);
+  const barWidth = Math.max(1, Math.min(BAR_WIDTH, pitch - 1));
+  // Snap to device pixels so every bar is equally sharp.
+  const snap = (value: number) => Math.round(value * pixelRatio) / pixelRatio;
 
   if (drawAxis) {
     context.fillStyle = "rgba(255, 255, 255, 0.18)";
     context.fillRect(0, baseline, width, 1);
   }
 
-  peaks.forEach((peak, index) => {
-    const amplitude = Math.min(
-      1,
-      Math.max(Math.abs(peak.min), Math.abs(peak.max)) / scale,
-    );
+  bars.forEach((amplitude, index) => {
     const upperHeight = Math.max(2, Math.round(amplitude * topRoom));
     const reflectionHeight = Math.max(
       1,
       Math.round(amplitude * reflectionRoom * 0.86),
     );
-    const x = index * pitch + (pitch - barWidth) / 2;
+    const x = snap(index * pitch + (pitch - barWidth) / 2);
 
     context.fillStyle = upperColor;
     context.fillRect(x, baseline - upperHeight, barWidth, upperHeight);
@@ -109,21 +101,22 @@ export default function WaveformVisualizer({
     return () => observer.disconnect();
   }, []);
 
-  const visiblePeaks = useMemo(() => {
-    const barPitch = variant === "detail" ? 2 : 2.15;
-    return reduceWaveformPeaks(
-      waveformData,
-      Math.max(1, Math.floor(width / barPitch)),
-    );
-  }, [variant, waveformData, width]);
+  const visibleBars = useMemo(
+    () =>
+      buildWaveformBars(
+        waveformData,
+        Math.max(1, Math.floor(width / BAR_PITCH)),
+      ),
+    [waveformData, width],
+  );
 
   useEffect(() => {
-    if (!width || !visiblePeaks.length) return;
+    if (!width || !visibleBars.length) return;
     const pixelRatio = window.devicePixelRatio || 1;
     if (baseCanvasRef.current) {
       drawWaveform(
         baseCanvasRef.current,
-        visiblePeaks,
+        visibleBars,
         width,
         height,
         pixelRatio,
@@ -136,7 +129,7 @@ export default function WaveformVisualizer({
     if (progressCanvasRef.current) {
       drawWaveform(
         progressCanvasRef.current,
-        visiblePeaks,
+        visibleBars,
         width,
         height,
         pixelRatio,
@@ -153,7 +146,7 @@ export default function WaveformVisualizer({
     progressReflectionColor,
     reflectionColor,
     variant,
-    visiblePeaks,
+    visibleBars,
     width,
   ]);
 
@@ -205,7 +198,7 @@ export default function WaveformVisualizer({
         />
       </div>
 
-      {!visiblePeaks.length && (
+      {!visibleBars.length && (
         <div className="absolute inset-0 flex items-center">
           <div
             className="h-2/3 w-full animate-pulse opacity-40"
@@ -220,7 +213,7 @@ export default function WaveformVisualizer({
         </div>
       )}
 
-      {hoverRatio !== null && visiblePeaks.length > 0 && (
+      {hoverRatio !== null && visibleBars.length > 0 && (
         <div
           className="pointer-events-none absolute inset-y-0 z-10 w-px bg-white/80"
           style={{ left: `${hoverRatio * 100}%` }}
