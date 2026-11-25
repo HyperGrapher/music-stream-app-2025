@@ -107,6 +107,7 @@ async function createTrackRow(
   audio: { mimeType: string; durationMs: number },
   artworkAssetId: string | null,
   at: Date,
+  { postActivity = true }: { postActivity?: boolean } = {},
 ) {
   const slug = await firstFree(
     slugBase(input.title),
@@ -136,7 +137,7 @@ async function createTrackRow(
       mimeType: audio.mimeType,
     },
   });
-  if (isPublic) {
+  if (isPublic && postActivity) {
     await tx.activity.create({ data: { actorId: userId, type: "TRACK_POSTED", trackId: track.id, createdAt: at } });
   }
   return track;
@@ -219,6 +220,8 @@ export async function publishCollection(db: PrismaClient, userId: string, input:
           audio.get(entry.mediaAssetId)!,
           input.artworkAssetId ?? null,
           at,
+          // A release shows up in feeds once, as the collection, not once per track.
+          { postActivity: false },
         );
         await tx.collectionTrack.create({
           data: { collectionId: collection.id, trackId: track.id, position, addedById: userId, addedAt: at },
