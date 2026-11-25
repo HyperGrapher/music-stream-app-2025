@@ -17,3 +17,10 @@ export function formatDuration(durationInSeconds: number) {
 
   return `${minutes}:${formattedSeconds}`;
 }
+
+export function formatCount(value: number) {
+  return new Intl.NumberFormat("en", {
+    notation: value >= 10_000 ? "compact" : "standard",
+    maximumFractionDigits: 1,
+  }).format(value);
+}

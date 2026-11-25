@@ -6,7 +6,7 @@ test.describe("public pages", () => {
   test("the home page loads", async ({ page }) => {
     const response = await page.goto("/");
     expect(response?.status()).toBe(200);
-    await expect(page.locator("body")).toContainText("Home");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("independent creators");
   });
 
   test("a creator profile lists public tracks only", async ({ page }) => {

@@ -80,55 +80,39 @@ export function Navbar({ initialUser }: NavbarProps) {
             </svg>
           </div>
         </Link>
-        <div className="hidden items-center space-x-6 md:flex">
+        <div className="flex items-center space-x-6">
           <Link
             href="/"
-            className="font-medium transition-colors hover:text-orange-500"
+            className="hidden font-medium transition-colors hover:text-orange-500 md:block"
           >
             Home
           </Link>
           <Link
-            href="/feed"
+            href="/discover"
             className="font-medium transition-colors hover:text-orange-500"
           >
-            Feed
-          </Link>
-          <Link
-            href="/library"
-            className="font-medium transition-colors hover:text-orange-500"
-          >
-            Library
+            Discover
           </Link>
         </div>
       </div>
 
       {/* Center section - Search */}
       <div className="mx-6 hidden max-w-md flex-1 md:flex">
-        <div className="relative w-full">
+        <form action="/discover" role="search" className="relative w-full">
           <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
           <Input
-            placeholder="Search"
+            name="q"
+            type="search"
+            maxLength={100}
+            aria-label="Search tracks and creators"
+            placeholder="Search tracks and creators"
             className="w-full rounded-md border-none bg-gray-800 py-2 pr-4 pl-10 text-white focus:ring-1 focus:ring-orange-500"
           />
-        </div>
+        </form>
       </div>
 
       {/* Right section - Actions */}
       <div className="flex items-center space-x-4">
-        <Button
-          variant="outline"
-          className="hidden border-orange-500 text-orange-500 transition-colors hover:bg-orange-500 hover:text-white md:flex"
-        >
-          Upgrade now
-        </Button>
-
-        <Link
-          href="/for-artists"
-          className="hidden text-sm text-gray-300 transition-colors hover:text-white md:block"
-        >
-          For Artists
-        </Link>
-
         <Button
           asChild
           variant="ghost"

@@ -43,8 +43,8 @@ pnpm install
 pnpm check-types   # tsc
 pnpm lint          # eslint, fails on any warning
 pnpm test          # unit tests, node:test, src/**/*.test.ts (23 tests, no DB)
-TEST_DATABASE_URL=postgresql://... pnpm test:integration   # 22 tests against a real Postgres (skips if unset)
-TEST_DATABASE_URL=postgresql://... pnpm test:e2e           # Playwright, WIPES that database, builds + starts the app (11 tests, +1 opt-in R2 test)
+TEST_DATABASE_URL=postgresql://... pnpm test:integration   # 29 tests against a real Postgres (skips if unset)
+TEST_DATABASE_URL=postgresql://... pnpm test:e2e           # Playwright, WIPES that database, builds + starts the app (20 tests, +1 opt-in R2 test)
 SKIP_ENV_VALIDATION=1 pnpm build   # no real env needed to build
 ```
 
@@ -161,3 +161,11 @@ with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration).
 ### Session 5 (cont.) - first production upload
 - Upload on Vercel failed with a CORS error: the R2 bucket's CORS policy only allowed `localhost:3000`. Fix is bucket config, not code: allow `PUT` + `Content-Type` from `https://music-stream-app-2025.vercel.app` (Cloudflare dashboard -> R2 -> bucket -> Settings -> CORS policy). Add one origin per deployment domain you upload from.
 - Also found while diagnosing: AWS SDK >= 3.729 defaults to `requestChecksumCalculation: "WHEN_SUPPORTED"`, which puts the CRC32 of an *empty* body into presigned PUT URLs (`x-amz-checksum-crc32=AAAAAA==`). R2 tolerated it but real S3 would reject every upload. `src/lib/r2.ts` now uses `WHEN_REQUIRED`; the real-R2 e2e test still passes.
+
+### Session 6 - browsable site (home + discover)
+- `discover` tRPC router (`tracks`: sort latest/popular, genre, search over title + creator name, limit <= 48; `genres`: public genres with counts) on top of `server/modules/tracks/discover.ts` (where/orderBy/select + the card DTO). Public tracks only; popular sorts by plays, likes, newest, id so ties are stable.
+- UI: `TrackCard`/`TrackGrid` (artwork, creator link, plays, genre, hover play button; the grid becomes the player queue). `/` is now a real landing page (hero, Trending now when anything has plays, New releases, empty state) and was moved into the `(player)` route group, because outside it there was no player bar. `/discover` has sort tabs, genre chips and `?q=` search; filters live in the URL.
+- Navbar: search box is a real GET form to `/discover?q=`; removed the dead Feed, Library, For Artists links and the non-functional Upgrade button; Discover stays visible on phones. Deleted the `/feed` stub.
+- Tests: 7 integration (visibility, sorting incl. tie-breaks, genre, case-insensitive search that never matches private titles, limit bounds, DTO shape, genre counts) and 9 e2e (home, card navigation, no dead links, card play points the player at the stream URL, discover sorting/genre chips/search, navbar search). Learned: e2e must wait for hydration before clicking hover-revealed buttons.
+- Visually checked desktop and phone screenshots against demo data.
+- Not done: pagination beyond 48 results, search over tags/genre text, per-genre pages as separate routes (filters are query params).

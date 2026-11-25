@@ -45,6 +45,8 @@ async function main() {
         creatorId: CREATOR_ID,
         audioAssetId: audio.id,
         title: track.title,
+        genre: track.genre,
+        playCount: track.playCount,
         visibility: visibilityOf[key],
       },
     });
