@@ -21,11 +21,12 @@ import { CommentMarkers } from "./CommentMarkers";
 import { LikeButton } from "./LikeButton";
 import WaveformVisualizer from "./WaveformVisualizer";
 import { ARTWORK_SIZES } from "@/lib/artwork";
+import { genreLabel } from "@/lib/genres";
 
 const roundActionClass =
   "flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700 bg-black/50 text-zinc-300 backdrop-blur transition hover:border-zinc-400 hover:text-white";
 
-export function TrackDetailHero({ track }: { track: PlayerTrack }) {
+export function TrackDetailHero({ track }: { track: PlayerTrack & { likedByMe?: boolean } }) {
   const { peaks, isLoading, error } = useTrackWaveform(
     track.waveformUrl,
     track.waveformStatus === "FAILED",
@@ -103,7 +104,7 @@ export function TrackDetailHero({ track }: { track: PlayerTrack }) {
               </h1>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-400">
                 <Link
-                  href={track.userId ? `/u/${track.userId}` : "#"}
+                  href={track.user?.username ? `/${track.user.username}` : "#"}
                   className="transition hover:text-orange-500"
                 >
                   {track.user?.name ?? "Unknown artist"}
@@ -111,7 +112,7 @@ export function TrackDetailHero({ track }: { track: PlayerTrack }) {
                 {track.genre && (
                   <>
                     <span>·</span>
-                    <span>{track.genre}</span>
+                    <span>{genreLabel(track.genre)}</span>
                   </>
                 )}
                 {track.createdAt && (
@@ -147,8 +148,11 @@ export function TrackDetailHero({ track }: { track: PlayerTrack }) {
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <LikeButton
               trackId={track.id}
+              creatorId={track.userId}
+              access={track.accessQuery}
+              isPrivate={track.isPrivate}
               initialLiked={track.likedByMe}
-              initialCount={track.likeCount}
+              initialCount={track.likeCount ?? 0}
               variant="round"
               className={roundActionClass}
             />

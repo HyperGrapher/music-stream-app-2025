@@ -20,10 +20,11 @@ import type { PlayerTrack as Track } from "@/types/player-track";
 import { LikeButton } from "./LikeButton";
 import WaveformVisualizer from "./WaveformVisualizer";
 import { ARTWORK_SIZES } from "@/lib/artwork";
+import { genreLabel } from "@/lib/genres";
 
 interface WaveformTrackItemProps {
   track: Track & {
-    user?: { name: string; image?: string | null };
+    user?: { name: string; username?: string; image?: string | null };
   };
   compact?: boolean;
   playlist?: Track[];
@@ -91,7 +92,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
     <article className="group border-b border-zinc-800/80 py-5 first:pt-0">
       <div className="flex gap-4 lg:gap-5">
         <Link
-          href={`/track/${track.id}`}
+          href={track.permalink ?? "#"}
           className={`${artworkSize} relative shrink-0 overflow-hidden rounded-sm bg-zinc-900`}
         >
           <img
@@ -123,13 +124,13 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
 
             <div className="min-w-0 flex-1">
               <Link
-                href={track.userId ? `/u/${track.userId}` : "#"}
+                href={track.user?.username ? `/${track.user.username}` : "#"}
                 className="block truncate text-sm font-medium text-zinc-500 transition hover:text-zinc-300"
               >
                 {artistName}
               </Link>
               <Link
-                href={`/track/${track.id}`}
+                href={track.permalink ?? "#"}
                 className="block truncate text-base font-semibold text-zinc-100 transition hover:text-orange-500"
               >
                 {track.title}
@@ -146,7 +147,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
               )}
               {track.genre && (
                 <span className="rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300">
-                  # {track.genre}
+                  # {genreLabel(track.genre)}
                 </span>
               )}
             </div>
@@ -172,8 +173,11 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
           <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
             <LikeButton
               trackId={track.id}
+              creatorId={track.userId}
+              access={track.accessQuery}
+              isPrivate={track.isPrivate}
               initialLiked={track.likedByMe}
-              initialCount={track.likeCount}
+              initialCount={track.likeCount ?? 0}
               variant="pill"
               className={actionClass}
             />

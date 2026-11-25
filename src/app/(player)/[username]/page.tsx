@@ -1,7 +1,6 @@
 import { formatDistanceToNow } from "date-fns";
 import {
   CalendarDays,
-  Link as LinkIcon,
   Mail,
   MapPin,
   MoreHorizontal,
@@ -10,12 +9,14 @@ import {
   UserPlus,
 } from "lucide-react";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import Link from "next/link";
+import { notFound, permanentRedirect } from "next/navigation";
 
 import { WaveformTrackItem } from "@/app/_components/WaveformTrackItem";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, HydrateClient } from "@/trpc/server";
+import { ARTWORK_SIZES } from "@/lib/artwork";
 import type { PlayerTrack } from "@/types/player-track";
 
 const tabClass =
@@ -33,42 +34,44 @@ function formatCount(value: number) {
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ artist: string }>;
+  params: Promise<{ username: string }>;
 }): Promise<Metadata> {
-  const { artist } = await params;
-  const artistData = await api.artist.getArtist({ artist });
-  if (!artistData) return { title: "Creator not found" };
+  const { username } = await params;
+  const result = await api.profiles.byUsername({ username });
+  if (result.status !== "ok") return { title: "Creator not found" };
+  const { profile } = result;
 
   return {
-    title: `${artistData.name} | Music Player`,
+    title: `${profile.name} | Music Stream`,
     description:
-      artistData.bio ??
-      `Listen to tracks and releases from ${artistData.name}.`,
+      profile.bio ?? `Listen to tracks and releases from ${profile.name}.`,
+    alternates: { canonical: `/${profile.username}` },
   };
 }
 
-export default async function ArtistPage({
+const placeholder = (text: string) => (
+  <div className="rounded border border-dashed border-zinc-800 py-20 text-center text-sm text-zinc-500">
+    {text}
+  </div>
+);
+
+export default async function ProfilePage({
   params,
 }: {
-  params: Promise<{ artist: string }>;
+  params: Promise<{ username: string }>;
 }) {
-  const { artist } = await params;
-  const artistData = await api.artist.getArtist({ artist });
-  if (!artistData) notFound();
+  const { username } = await params;
+  const result = await api.profiles.byUsername({ username });
+  if (result.status === "missing") notFound();
+  if (result.status === "redirect") permanentRedirect(result.to);
+  const { profile } = result;
 
-  const [latestTracks, popularTracks, releases] = await Promise.all([
-    api.artist.getLatestTracks({ artist, limit: 100 }).catch(() => []),
-    api.artist.getPopularTracks({ artist, limit: 5 }).catch(() => []),
-    api.artist.getReleases({ artist }).catch(() => []),
+  const [latestTracks, popularTracks, albums, sets] = await Promise.all([
+    api.profiles.tracks({ username, sort: "latest", limit: 100 }).catch(() => []),
+    api.profiles.tracks({ username, sort: "popular", limit: 5 }).catch(() => []),
+    api.profiles.collections({ username, kind: "albums" }).catch(() => []),
+    api.profiles.collections({ username, kind: "sets" }).catch(() => []),
   ]);
-
-  const addCreator = <T extends PlayerTrack>(track: T) => ({
-    ...track,
-    userId: artistData.id,
-    user: { name: artistData.name, image: artistData.image },
-  });
-  const latestPlaylist = latestTracks.map(addCreator);
-  const popularPlaylist = popularTracks.map(addCreator);
 
   const renderTracks = (tracks: PlayerTrack[]) =>
     tracks.length ? (
@@ -83,14 +86,47 @@ export default async function ArtistPage({
       </div>
     );
 
+  const renderCollections = (items: typeof albums, empty: string) =>
+    items.length ? (
+      <ul className="grid grid-cols-2 gap-5 sm:grid-cols-3 xl:grid-cols-4">
+        {items.map((item) => (
+          <li key={item.id} className="min-w-0">
+            <Link href={item.permalink} className="group block">
+              <div className="aspect-square overflow-hidden rounded-md bg-zinc-900">
+                <img
+                  src={item.artworkUrl ?? "/placeholder-track.jpg"}
+                  srcSet={item.artworkSrcSet ?? undefined}
+                  sizes={ARTWORK_SIZES.card}
+                  alt={`${item.title} artwork`}
+                  loading="lazy"
+                  className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                />
+              </div>
+              <p className="mt-2 truncate text-sm font-semibold group-hover:text-orange-400">
+                {item.title}
+              </p>
+              <p className="text-xs text-zinc-500">
+                {item.isPlaylist ? "Playlist" : item.type[0] + item.type.slice(1).toLowerCase()} ·{" "}
+                {item.trackCount} {item.trackCount === 1 ? "track" : "tracks"}
+              </p>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      placeholder(empty)
+    );
+
   return (
     <HydrateClient>
       <div className="min-h-screen bg-[#0d0d0d] pb-24 text-white">
         <div className="mx-auto max-w-[1240px] border-x border-zinc-900 bg-[#101010]">
           <section className="relative h-[250px] overflow-hidden bg-[radial-gradient(circle_at_72%_36%,#7c2d12_0%,#292524_32%,#09090b_74%)] sm:h-[290px]">
-            {artistData.profileImage && (
+            {profile.bannerUrl && (
               <img
-                src={artistData.profileImage}
+                src={profile.bannerUrl}
+                srcSet={profile.bannerSrcSet ?? undefined}
+                sizes="(min-width: 1240px) 1240px, 100vw"
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover opacity-65"
               />
@@ -99,26 +135,26 @@ export default async function ArtistPage({
             <div className="absolute inset-x-5 bottom-6 flex items-end gap-5 sm:inset-x-8 sm:bottom-8 sm:gap-7">
               <Avatar className="h-28 w-28 shrink-0 border-4 border-black/30 shadow-2xl sm:h-40 sm:w-40">
                 <AvatarImage
-                  src={artistData.image ?? ""}
-                  alt={artistData.name}
+                  src={profile.image ?? ""}
+                  alt={profile.name}
                 />
                 <AvatarFallback className="bg-zinc-800 text-4xl font-bold">
-                  {artistData.name.charAt(0).toUpperCase()}
+                  {profile.name.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="mb-1 min-w-0">
                 <h1 className="inline bg-black/80 decoration-clone px-3 py-1 text-2xl leading-[1.55] font-bold sm:text-4xl">
-                  {artistData.name}
+                  {profile.name}
                 </h1>
                 <div className="mt-2 flex flex-wrap gap-2 text-sm text-zinc-300">
-                  {artistData.location && (
+                  {profile.city && (
                     <span className="inline-flex items-center gap-1 bg-black/70 px-2 py-1">
-                      <MapPin className="h-3.5 w-3.5" /> {artistData.location}
+                      <MapPin className="h-3.5 w-3.5" /> {profile.city}
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1 bg-black/70 px-2 py-1">
                     <CalendarDays className="h-3.5 w-3.5" /> Joined{" "}
-                    {formatDistanceToNow(new Date(artistData.createdAt), {
+                    {formatDistanceToNow(new Date(profile.createdAt), {
                       addSuffix: true,
                     })}
                   </span>
@@ -183,51 +219,19 @@ export default async function ArtistPage({
             <div className="grid gap-8 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_290px] lg:px-7">
               <main className="min-w-0">
                 <TabsContent value="all" className="mt-0">
-                  {renderTracks(latestPlaylist)}
+                  {renderTracks(latestTracks)}
                 </TabsContent>
                 <TabsContent value="popular" className="mt-0">
-                  {renderTracks(popularPlaylist)}
+                  {renderTracks(popularTracks)}
                 </TabsContent>
                 <TabsContent value="tracks" className="mt-0">
-                  {renderTracks(latestPlaylist)}
+                  {renderTracks(latestTracks)}
                 </TabsContent>
-                <TabsContent value="albums" className="mt-0 space-y-9">
-                  {releases.length ? (
-                    releases.map((release) => (
-                      <section key={release.id}>
-                        <div className="mb-3 flex items-end justify-between border-b border-zinc-800 pb-3">
-                          <div>
-                            <p className="text-xs font-semibold tracking-widest text-orange-500 uppercase">
-                              {release.type}
-                            </p>
-                            <h2 className="mt-1 text-xl font-bold">
-                              {release.title}
-                            </h2>
-                          </div>
-                          <span className="text-xs text-zinc-500">
-                            {release.tracks.length} tracks
-                          </span>
-                        </div>
-                        {release.tracks.map((track) => (
-                          <WaveformTrackItem
-                            key={track.id}
-                            track={track}
-                            playlist={release.tracks}
-                            compact
-                          />
-                        ))}
-                      </section>
-                    ))
-                  ) : (
-                    <p className="text-sm text-zinc-500">
-                      No public releases yet.
-                    </p>
-                  )}
+                <TabsContent value="albums" className="mt-0">
+                  {renderCollections(albums, "No public releases yet.")}
                 </TabsContent>
                 <TabsContent value="playlists" className="mt-0">
-                  <div className="rounded border border-dashed border-zinc-800 py-20 text-center text-sm text-zinc-500">
-                    No public playlists yet.
-                  </div>
+                  {renderCollections(sets, "No public playlists yet.")}
                 </TabsContent>
                 <TabsContent value="reposts" className="mt-0">
                   <div className="rounded border border-dashed border-zinc-800 py-20 text-center text-sm text-zinc-500">
@@ -241,47 +245,34 @@ export default async function ArtistPage({
                   <div>
                     <p className="text-xs text-zinc-500">Followers</p>
                     <p className="mt-1 text-xl font-bold">
-                      {formatCount(artistData.followersCount)}
+                      {formatCount(profile.followerCount)}
                     </p>
                   </div>
                   <div className="pl-4">
                     <p className="text-xs text-zinc-500">Following</p>
                     <p className="mt-1 text-xl font-bold">
-                      {formatCount(artistData.followingCount)}
+                      {formatCount(profile.followingCount)}
                     </p>
                   </div>
                   <div className="pl-4">
                     <p className="text-xs text-zinc-500">Tracks</p>
                     <p className="mt-1 text-xl font-bold">
-                      {formatCount(artistData.trackCount)}
+                      {formatCount(profile.publicTrackCount)}
                     </p>
                   </div>
                 </div>
 
-                {artistData.bio && (
+                {profile.bio && (
                   <p className="text-sm leading-6 whitespace-pre-line text-zinc-300">
-                    {artistData.bio}
+                    {profile.bio}
                   </p>
                 )}
 
-                <div className="space-y-3 text-sm text-zinc-400">
-                  {artistData.location && (
-                    <p className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4" /> {artistData.location}
-                    </p>
-                  )}
-                  {artistData.website && (
-                    <a
-                      href={artistData.website}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-2 truncate transition hover:text-orange-500"
-                    >
-                      <LinkIcon className="h-4 w-4 shrink-0" />{" "}
-                      {artistData.website}
-                    </a>
-                  )}
-                </div>
+                {profile.city && (
+                  <p className="flex items-center gap-2 text-sm text-zinc-400">
+                    <MapPin className="h-4 w-4" /> {profile.city}
+                  </p>
+                )}
               </aside>
             </div>
           </Tabs>

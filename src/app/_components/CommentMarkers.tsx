@@ -3,12 +3,16 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { usePlayAt } from "@/hooks/usePlayAt";
 import { formatDuration } from "@/lib/utils";
+import { parseAccessQuery } from "@/lib/access-client";
 import { api } from "@/trpc/react";
 import type { PlayerTrack } from "@/types/player-track";
 
 /** Avatars under the waveform, one per timed comment, placed at the moment it was written. */
 export function CommentMarkers({ track }: { track: PlayerTrack }) {
-  const { data } = api.comments.list.useQuery({ trackId: track.id });
+  const { data } = api.comments.list.useQuery({
+    trackId: track.id,
+    access: parseAccessQuery(track.accessQuery),
+  });
   const playAt = usePlayAt(track);
   if (!track.duration || !data) return null;
 

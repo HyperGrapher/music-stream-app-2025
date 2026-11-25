@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,8 @@ import { analyzeAudioFile } from "@/lib/analyze-audio";
 import { X, AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-// Maximum file size in bytes (50MB)
-const MAX_FILE_SIZE = 50 * 1024 * 1024;
+// Maximum file size in bytes; mirrors `maxFileBytes` in server/modules/plans/entitlements.ts (100MB)
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 // Allowed audio mime types
 const ALLOWED_AUDIO_TYPES = [
@@ -44,18 +44,6 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
   const uploadUrlMutation = api.upload.getUploadUrl.useMutation();
   const markCompleteMutation = api.upload.markUploadComplete.useMutation();
   const cancelUploadMutation = api.upload.cancelUpload.useMutation();
-  const cleanupMediaAssetsMutation =
-    api.upload.cleanupMediaAssets.useMutation();
-
-  useEffect(() => {
-    cleanupMediaAssetsMutation.mutate(undefined, {
-      onError: (cleanupError) => {
-        console.error("Failed to clean up expired uploads:", cleanupError);
-      },
-    });
-    // Cleanup is opportunistic and should run only when the upload step mounts.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // When files are selected, start uploading them immediately
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -112,8 +100,8 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
   const uploadFile = async (file: File) => {
     const uploadingFile = addFile(file);
 
-    // Decode in the browser while the upload runs; a decode failure only
-    // means the track has no waveform, so it never blocks the upload.
+    // Decode in the browser while the upload runs. A file the browser cannot decode is rejected
+    // (PRD UP-F2): there is no "no waveform" state for new uploads.
     const analysisPromise = analyzeAudioFile(file).catch((analysisError) => {
       console.warn("Could not analyze audio in the browser:", analysisError);
       return undefined;
@@ -155,10 +143,16 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
             console.log("Upload successful, marking as complete");
 
             try {
+              const analysis = await analysisPromise;
+              if (!analysis) {
+                // Free the uploaded object right away; the daily cron would do it eventually.
+                cancelUploadMutation.mutate({ mediaAssetId });
+                throw new Error("Your browser can't read this file. Try MP3, WAV or FLAC.");
+              }
               // Mark the upload as complete in the database
               const result = await markCompleteMutation.mutateAsync({
                 mediaAssetId,
-                analysis: await analysisPromise,
+                analysis,
               });
               console.log("Mark upload complete response:", result);
 

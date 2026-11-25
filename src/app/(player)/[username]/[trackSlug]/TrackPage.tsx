@@ -1,43 +1,63 @@
 import { format } from "date-fns";
-import { Heart, MapPin, Play, Repeat2 } from "lucide-react";
+import { Heart, Lock, MapPin, Play, Repeat2 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 
 import { CommentsSection } from "@/app/_components/CommentsSection";
 import { TrackDetailHero } from "@/app/_components/TrackDetailHero";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { genreLabel } from "@/lib/genres";
 import { api, HydrateClient } from "@/trpc/server";
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}): Promise<Metadata> {
-  const { id } = await params;
-  const track = await api.artist.getTrack({ trackId: id }).catch(() => null);
-  if (!track) return { title: "Track not found" };
+export interface TrackPageParams {
+  username: string;
+  slug: string;
+  /** Secret link token without the `s-` prefix. */
+  secret?: string;
+}
+
+async function loadTrack({ username, slug, secret }: TrackPageParams) {
+  return api.tracks.byPermalink({ username, slug, secret }).catch(() => ({ status: "missing" as const }));
+}
+
+export async function trackMetadata(params: TrackPageParams): Promise<Metadata> {
+  const result = await loadTrack(params);
+  if (result.status !== "ok") return { title: "Track not found" };
+  const { track } = result;
+  const artist = track.artistName ?? track.user?.name ?? "";
   return {
-    title: `${track.title} by ${track.user.name}`,
-    description: track.description ?? `Listen to ${track.title}.`,
+    title: `${track.title} by ${artist} | Music Stream`,
+    description: track.description?.slice(0, 150) ?? `Listen to ${track.title} by ${artist}.`,
+    alternates: { canonical: track.permalink.replace(/\/s-[^/]+$/, "") },
+    // Hidden content must never be indexed, even when reached through its secret link.
+    robots: track.viaSecret || track.visibility !== "PUBLIC" ? { index: false, follow: false } : undefined,
   };
 }
 
-export default async function TrackPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-  const track = await api.artist.getTrack({ trackId: id }).catch(() => null);
-  if (!track) notFound();
-  await api.comments.list.prefetch({ trackId: id }); // hydrated into the client query: no loading flash
-  const release = track.releaseEntries[0]?.release;
+export async function TrackPage(params: TrackPageParams) {
+  const result = await loadTrack(params);
+  if (result.status === "missing") notFound();
+  if (result.status === "redirect") permanentRedirect(result.to);
+  const { track } = result;
+  // Hydrated into the client query: no loading flash. The input must match the client's.
+  await api.comments.list
+    .prefetch({ trackId: track.id, access: params.secret ? { secret: params.secret } : undefined })
+    .catch(() => undefined);
+  const release = track.collections.find((collection) => collection.isRelease) ?? track.collections[0];
 
   return (
     <HydrateClient>
       <div className="min-h-screen bg-[#0d0d0d] pb-24 text-white">
         <div className="mx-auto max-w-[1240px] px-4 py-5 sm:px-6">
+          {track.isOwner && track.visibility !== "PUBLIC" && (
+            <p className="mb-4 flex items-center gap-2 rounded border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              <Lock className="h-4 w-4 shrink-0" />
+              {track.visibility === "SCHEDULED"
+                ? `Scheduled for ${format(new Date(track.publishAt!), "d MMM yyyy, HH:mm")}. Only you and people with the secret link can listen until then.`
+                : "Private: only you and people with the secret link can listen."}
+            </p>
+          )}
           <TrackDetailHero track={track} />
 
           <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -63,14 +83,18 @@ export default async function TrackPage({
                   )}
                   {release && (
                     <div className="flex gap-2">
-                      <dt className="font-semibold">Release:</dt>
-                      <dd className="text-zinc-400">{release.title}</dd>
+                      <dt className="font-semibold">{release.isRelease ? "Release" : "Playlist"}:</dt>
+                      <dd className="text-zinc-400">
+                        <Link href={release.permalink} className="hover:text-orange-400">
+                          {release.title}
+                        </Link>
+                      </dd>
                     </div>
                   )}
                   {track.genre && (
                     <div className="flex gap-2">
                       <dt className="font-semibold">Genre:</dt>
-                      <dd className="text-zinc-400">{track.genre}</dd>
+                      <dd className="text-zinc-400">{genreLabel(track.genre)}</dd>
                     </div>
                   )}
                 </dl>
@@ -79,9 +103,9 @@ export default async function TrackPage({
                     {track.description}
                   </p>
                 )}
-                {track.tags.length > 0 && (
+                {(track.tags?.length ?? 0) > 0 && (
                   <div className="mt-5 flex flex-wrap gap-2">
-                    {track.tags.map((tag) => (
+                    {track.tags?.map((tag: string) => (
                       <span
                         key={tag}
                         className="rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300"
@@ -110,7 +134,7 @@ export default async function TrackPage({
                   </Avatar>
                   <div className="min-w-0">
                     <Link
-                      href={`/u/${track.creator.id}`}
+                      href={`/${track.creator.username}`}
                       className="truncate text-lg font-bold hover:text-orange-500"
                     >
                       {track.creator.name}
@@ -119,9 +143,9 @@ export default async function TrackPage({
                       {track.creator.followersCount} followers ·{" "}
                       {track.creator.trackCount} tracks
                     </p>
-                    {track.creator.location && (
+                    {track.creator.city && (
                       <p className="mt-1 flex items-center gap-1 text-xs text-zinc-500">
-                        <MapPin className="h-3 w-3" /> {track.creator.location}
+                        <MapPin className="h-3 w-3" /> {track.creator.city}
                       </p>
                     )}
                   </div>
@@ -144,21 +168,21 @@ export default async function TrackPage({
 
               <section className="grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-2 py-4">
-                  <p className="text-xl font-bold">{track.playCount}</p>
+                  <p className="text-xl font-bold">{track.playCount ?? 0}</p>
                   <p className="mt-1 text-[10px] text-zinc-500 uppercase">
                     <Play className="mr-1 inline h-3 w-3" />
                     Plays
                   </p>
                 </div>
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-2 py-4">
-                  <p className="text-xl font-bold">{track.likeCount}</p>
+                  <p className="text-xl font-bold">{track.likeCount ?? 0}</p>
                   <p className="mt-1 text-[10px] text-zinc-500 uppercase">
                     <Heart className="mr-1 inline h-3 w-3" />
                     Likes
                   </p>
                 </div>
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-2 py-4">
-                  <p className="text-xl font-bold">{track.repostCount}</p>
+                  <p className="text-xl font-bold">{track.repostCount ?? 0}</p>
                   <p className="mt-1 text-[10px] text-zinc-500 uppercase">
                     <Repeat2 className="mr-1 inline h-3 w-3" />
                     Reposts

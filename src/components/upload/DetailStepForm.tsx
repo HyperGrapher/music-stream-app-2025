@@ -43,7 +43,6 @@ export function DetailStepForm({
   const createTrackMutation = api.upload.createTrack.useMutation({
     onSuccess: () => {
       toast.success("Track uploaded successfully!");
-      console.log("createTrack onSuccess");
 
       clearFiles();
     },
@@ -52,10 +51,9 @@ export function DetailStepForm({
     },
   });
 
-  const createReleaseMutation = api.upload.createRelease.useMutation({
+  const createCollectionMutation = api.upload.createCollection.useMutation({
     onSuccess: () => {
       toast.success("Release published successfully!");
-      console.log("createRelease onSuccess");
 
       clearFiles();
     },
@@ -126,7 +124,7 @@ export function DetailStepForm({
       });
 
       // Submit to create the track
-      await createTrackMutation.mutateAsync({
+      const created = await createTrackMutation.mutateAsync({
         title: data.title,
         genre: data.genre,
         privacy: data.privacy,
@@ -136,8 +134,8 @@ export function DetailStepForm({
         artworkAssetId: data.artwork,
       });
 
-      // Add redirect after successful submission
-      router.push("/");
+      // Land on the new track's permalink page.
+      router.push(created.permalink);
     } catch (err: unknown) {
       // Error is handled in the mutation onError
       console.error("Track creation error:", err);
@@ -211,11 +209,11 @@ export function DetailStepForm({
       });
 
       // Submit to create the album with tracks
-      await createReleaseMutation.mutateAsync({
+      const created = await createCollectionMutation.mutateAsync({
         title: data.title,
         genre: data.genre,
         privacy: data.privacy,
-        releaseType: data.releaseType,
+        type: data.releaseType,
         description: data.description,
         tags: data.tags,
         // Use the prepared track inputs
@@ -223,8 +221,8 @@ export function DetailStepForm({
         artworkAssetId: data.artwork,
       });
 
-      // Add redirect after successful submission
-      router.push("/");
+      // Land on the new collection page.
+      router.push(created.permalink);
     } catch (err: unknown) {
       // Error is handled in the mutation onError
       console.error("Release creation error:", err);

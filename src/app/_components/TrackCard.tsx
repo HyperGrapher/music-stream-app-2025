@@ -40,7 +40,7 @@ export const TrackCard = memo(function TrackCard({ track, playlist }: TrackCardP
   return (
     <article className="group min-w-0">
       <div className="relative aspect-square overflow-hidden rounded-md bg-zinc-900">
-        <Link href={`/track/${track.id}`} className="block h-full w-full" tabIndex={-1}>
+        <Link href={track.permalink ?? "#"} className="block h-full w-full" tabIndex={-1}>
           <img
             src={track.artworkUrl ?? "/placeholder-track.jpg"}
             srcSet={track.artworkSrcSet ?? undefined}
@@ -78,15 +78,15 @@ export const TrackCard = memo(function TrackCard({ track, playlist }: TrackCardP
 
       <div className="mt-2.5 min-w-0">
         <Link
-          href={`/track/${track.id}`}
+          href={track.permalink ?? "#"}
           className="block truncate text-sm font-semibold text-white hover:text-orange-400"
           title={track.title}
         >
           {track.title}
         </Link>
-        {track.userId && track.user && (
+        {track.user?.username && (
           <Link
-            href={`/u/${track.userId}`}
+            href={`/${track.user.username}`}
             className="block truncate text-sm text-zinc-400 hover:text-white"
           >
             {track.user.name}

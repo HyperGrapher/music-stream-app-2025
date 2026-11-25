@@ -35,7 +35,7 @@ export interface PlayerTrack {
   isPrivate?: boolean;
   bpm?: number | null;
   key?: string | null;
-  tags?: string | string[] | null;
+  tags?: string[] | null;
   recordLabel?: string | null;
   albumId?: string | null;
   user?: {

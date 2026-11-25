@@ -10,6 +10,7 @@ import { useShallow } from "zustand/react/shallow";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { usePlayAt } from "@/hooks/usePlayAt";
 import { useUser } from "@/hooks/useUser";
+import { parseAccessQuery } from "@/lib/access-client";
 import { formatDuration } from "@/lib/utils";
 import { usePlayerStore } from "@/store/player";
 import { api, type RouterOutputs } from "@/trpc/react";
@@ -64,7 +65,12 @@ function Composer({
       onDone?.();
       await utils.comments.list.invalidate({ trackId: track.id });
     },
-    onError: (error) => toast.error(error.message || "Could not post your comment"),
+    onError: (error) =>
+      toast.error(
+        error.data?.appCode === "RATE_LIMITED"
+          ? `Slow down, try again in ${error.data.retryAfterSeconds ?? "a few"} s`
+          : error.message || "Could not post your comment",
+      ),
   });
 
   if (!user) {
@@ -84,6 +90,7 @@ function Composer({
     const timed = !parentId && attachTime && player.currentTrack?.id === track.id;
     create.mutate({
       trackId: track.id,
+      access: parseAccessQuery(track.accessQuery),
       content,
       ...(parentId ? { parentId } : {}),
       ...(timed ? { timestampSeconds: Math.floor(player.currentTime) } : {}),
@@ -169,7 +176,7 @@ function CommentRow({
   const playAt = usePlayAt(track);
   return (
     <article className="flex gap-3" data-testid="comment">
-      <Link href={`/u/${comment.author.id}`} className="shrink-0">
+      <Link href={`/${comment.author.username}`} className="shrink-0">
         <Avatar className="h-9 w-9">
           <AvatarImage src={comment.author.image ?? ""} alt="" />
           <AvatarFallback>{comment.author.name.charAt(0)}</AvatarFallback>
@@ -177,9 +184,14 @@ function CommentRow({
       </Link>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-          <Link href={`/u/${comment.author.id}`} className="font-semibold hover:text-orange-400">
+          <Link href={`/${comment.author.username}`} className="font-semibold hover:text-orange-400">
             {comment.author.name}
           </Link>
+          {"isCreator" in comment && comment.isCreator && (
+            <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-zinc-300 uppercase">
+              Creator
+            </span>
+          )}
           {comment.timestampSeconds !== null && (
             <>
               <span className="text-zinc-600">at</span>
@@ -250,8 +262,12 @@ function ThreadView({ thread, track }: { thread: Thread; track: PlayerTrack }) {
 }
 
 export function CommentsSection({ track }: { track: PlayerTrack }) {
-  const { data } = api.comments.list.useQuery({ trackId: track.id });
+  const { data } = api.comments.list.useQuery({
+    trackId: track.id,
+    access: parseAccessQuery(track.accessQuery),
+  });
   const threads = data?.comments ?? [];
+  const commentsEnabled = data?.commentsEnabled ?? true;
 
   return (
     <section aria-labelledby="comments-heading">
@@ -263,7 +279,13 @@ export function CommentsSection({ track }: { track: PlayerTrack }) {
       </div>
 
       <div className="mt-4">
-        <Composer track={track} />
+        {commentsEnabled ? (
+          <Composer track={track} />
+        ) : (
+          <p className="rounded border border-dashed border-zinc-700 p-4 text-sm text-zinc-400">
+            Comments are turned off for this track.
+          </p>
+        )}
       </div>
 
       {threads.length === 0 ? (
