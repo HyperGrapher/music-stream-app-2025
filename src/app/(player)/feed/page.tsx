@@ -13,7 +13,6 @@ export default async function FeedPage() {
             <div className="mt-8 flex flex-col items-center justify-center gap-4">
               <Link href="/">Home</Link>
               <Link href="/discover">Discover</Link>
-              <Link href="/p/1">Playlist</Link>
               <Link href="/Hypergraph">Hypergraph</Link>
 
               {/* <FileUpload /> */}
