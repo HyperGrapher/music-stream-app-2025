@@ -169,3 +169,8 @@ with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration).
 - Tests: 7 integration (visibility, sorting incl. tie-breaks, genre, case-insensitive search that never matches private titles, limit bounds, DTO shape, genre counts) and 9 e2e (home, card navigation, no dead links, card play points the player at the stream URL, discover sorting/genre chips/search, navbar search). Learned: e2e must wait for hydration before clicking hover-revealed buttons.
 - Visually checked desktop and phone screenshots against demo data.
 - Not done: pagination beyond 48 results, search over tags/genre text, per-genre pages as separate routes (filters are query params).
+
+### Session 6 (cont.) - README
+- Rewrote `README.md` as a portfolio page: live demo + CI badge, screenshots (`docs/screenshots/*.jpg`, JPEG to keep the repo small; regenerate with a Playwright script against the demo data after UI changes), an honest "what works / not built yet" list, Mermaid architecture + upload + playback diagrams (rendered and validated), decisions table, stack, layout, local setup, env table, deploy checklist, tests/CI/dependency updates.
+- `.env.example` rewritten: removed the media-worker variables, a personal Cloudflare dashboard URL and an email note, and the stale `directUrl` wording; `R2_PUBLIC_BASE_URL` is commented out (a placeholder URL would silently break artwork). The R2 account id remains in git history from older versions of that file; it is an identifier, not a credential.
+- Keep the README claims in sync with reality when features land (likes, comments, playlists are listed as not built yet).
