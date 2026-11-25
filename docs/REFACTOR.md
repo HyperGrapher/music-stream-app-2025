@@ -32,7 +32,7 @@ A pro-level portfolio demo (SoundCloud-style creator platform) that is:
 - [x] **Phase 2 - audio delivery**: presigned R2 redirect; private/unlisted authorization; `POST /api/tracks/:id/play`. Follow-up: dedupe/rate-limit play events (one per listener per track per window)
 - [x] **Phase 3 - waveform**: browser-side peaks + duration at upload; `media-worker` is now optional (backfill only; `pnpm dev:worker`)
 - [x] **Phase 4 - de-monorepo**: app hoisted to repo root; Turborepo, `packages/*` and the optional `media-worker` deleted (fresh app: no backfill needed)
-- [~] **Phase 5 - dependency upgrades** (done: in-range bumps, Better Auth 1.7, Next 16, Prisma 7; todo: zod 4 + resolvers, zustand 5, lucide/uuid/etc.) (one commit each, read current migration guides first): Next, React, Prisma (+ `generator` output path, deprecated in Prisma 7), Tailwind, Better Auth, zod, rest
+- [~] **Phase 5 - dependency upgrades** (done: in-range bumps, Better Auth 1.7, Next 16, Prisma 7, zod 4 + resolvers 7, zustand 5, lucide 1; skipped on purpose: TypeScript 7, ESLint 10, Prisma 8 RC) (one commit each, read current migration guides first): Next, React, Prisma (+ `generator` output path, deprecated in Prisma 7), Tailwind, Better Auth, zod, rest
 - [~] **Phase 6 - Neon + Vercel** (done by user: Neon project, `0_init` migration, Vercel project on `master`; todo: verify deployed app end to end): pooled `DATABASE_URL` at runtime, direct URL for migrations; switch `db push` to `prisma migrate`; verify custom `stream` schema on Neon; deploy
 - [ ] **Phase 7 - quality**: integration tests (asset claim races, release rollback, stream visibility, auth linking); clear remaining lint warnings (`no-unused-vars`, `<img>` -> `next/image`); README for the demo
 
@@ -131,3 +131,8 @@ with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration).
 - **Prisma 7 layout**: generator `prisma-client` -> `src/generated/prisma` (gitignored, created by `postinstall`/`pnpm db:generate`); datasource URLs live in `prisma.config.ts` (CLI uses `DATABASE_URL_UNPOOLED ?? DATABASE_URL`, loads `.env` via dotenv); app + seeds build clients via `src/server/prisma-client.ts` (pg adapter, pooled URL). `migrate dev` no longer generates, so `pnpm db:migrate:dev` runs `prisma generate` after it.
 - Correction: the pg adapter is enough for Neon on Vercel (pooled URL); a Neon-specific adapter would not help migrations from restricted networks, which use Prisma's schema engine over TCP.
 - `@neon/env` is in package.json from the Neon setup but unused by the app code.
+
+### Session 3 (cont.) - security / lockfile
+- Vercel blocked the deploy of `master` ("Vulnerable version of Next.js"): master still has Next 15.3.1. This branch is on Next 16.4.6; merging it fixes that.
+- `pnpm audit` showed 83 advisories even on this branch because `pnpm-lock.yaml` still carried phantom `apps/web` + `apps/media-worker` importers (pnpm kept them from `node_modules/.pnpm/lock.yaml` after the de-monorepo). Fix = delete `node_modules` and the lockfile, reinstall. Now 0 advisories; `effect` (Prisma CLI chain) is pinned via `pnpm.overrides` to `^3.22.1` (do NOT use `>=`, it jumps to an incompatible major and breaks `prisma generate`).
+- Zustand 5 + zod 4 + lucide 1 verified at runtime (playback advances through the R2 redirect, form validation messages, createTrack).
