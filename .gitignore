@@ -48,3 +48,7 @@ yarn-error.log*
 
 # generated Prisma client
 /src/generated
+
+# Playwright
+/test-results
+/playwright-report

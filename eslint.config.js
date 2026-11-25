@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-		ignores: ['.next', 'src/generated']
+		ignores: ['.next', 'src/generated', 'test-results', 'playwright-report']
 	},
   ...nextVitals,
   {

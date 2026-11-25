@@ -1,20 +1,30 @@
 name: CI
 
+# Runs on pull requests (so a change is tested BEFORE it reaches master, which Vercel deploys to production),
+# on pushes to master, and manually. Needs no secrets: tests use a throwaway Postgres service container,
+# never a real database, and the e2e build uses dummy credentials. The steps live in
+# .github/actions/{setup,verify} and are shared with the dependency-update workflow.
+# To block merging untested code, mark the "test" check as required in
+# GitHub -> Settings -> Branches (branch protection for master).
 on:
+  pull_request:
   push:
     branches: [master]
-  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # One run per PR / branch; a newer push cancels the older run.
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  verify:
+  test:
     runs-on: ubuntu-latest
-    env:
-      SKIP_ENV_VALIDATION: "1"
-      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/streamapp_test
+    timeout-minutes: 30
+
     services:
       postgres:
         image: postgres:16
@@ -28,19 +38,28 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/streamapp_test
+      NEXT_TELEMETRY_DISABLED: '1'
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: ./.github/actions/verify
+
+      - name: Upload test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
         with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm check-types
-      - run: pnpm lint
-      - run: pnpm test
-      - run: pnpm db:migrate
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/streamapp_test
-      - run: pnpm test:integration
-      - run: pnpm build
+          name: playwright-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7

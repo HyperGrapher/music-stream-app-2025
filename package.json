@@ -24,7 +24,8 @@
     "db:migrate:dev": "prisma migrate dev && prisma generate",
     "db:generate": "prisma generate",
     "test:integration": "node --import tsx --import ./tests/integration/setup.ts --test --test-concurrency=1 \"tests/integration/*.test.ts\"",
-    "vercel-build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy; fi && next build"
+    "vercel-build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy; fi && next build",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1177.0",
@@ -76,6 +77,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "^4.3.5",
     "@types/node": "^22.20.7",
     "@types/pg": "^8.23.1",

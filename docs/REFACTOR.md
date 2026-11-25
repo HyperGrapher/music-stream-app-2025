@@ -44,10 +44,11 @@ pnpm check-types   # tsc
 pnpm lint          # eslint, fails on any warning
 pnpm test          # unit tests, node:test, src/**/*.test.ts (23 tests, no DB)
 TEST_DATABASE_URL=postgresql://... pnpm test:integration   # 22 tests against a real Postgres (skips if unset)
+TEST_DATABASE_URL=postgresql://... pnpm test:e2e           # Playwright, WIPES that database, builds + starts the app (11 tests, +1 opt-in R2 test)
 SKIP_ENV_VALIDATION=1 pnpm build   # no real env needed to build
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same four steps on PRs and `master`.
+CI (`.github/workflows/ci.yml`) runs type check, lint, unit, migrations + drift guard, integration and e2e on PRs and `master`.
 
 ## Environment
 
@@ -149,3 +150,10 @@ with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration).
 - Plays are counted once per account or anonymous client per track per 30 min; the anonymous key is an HMAC (secret = `BETTER_AUTH_SECRET`) of ip + user agent, so no raw IP/UA is stored. Signed-in listeners are keyed by account only. The player reports a play after 5 s of playback (was: at load).
 - Tests: unit (hash, ip parsing) + integration (repeat, distinct clients, account dedupe across devices, window expiry, 5 rounds x 40 concurrent requests, no raw ids stored). Mutation-checked: removing the advisory lock makes the concurrency test fail.
 - Known limits: a bot rotating IPs and user agents can still inflate counts; real protection would need a rate limiter with shared state (Upstash/Vercel KV) or bot checks. Not worth it for a demo.
+
+### Session 5 - CI + automatic dependency updates (ported from HyperGrapher/monarch-next-template)
+- Adapted the template's workflows: shared composite actions `.github/actions/{setup,verify}`, `ci.yml`, `dependency-updates.yml` and `scripts/deps/*` (plan / apply / combine). Changes vs the template: default branch `master`; Node 22 and pnpm from `packageManager` (no workspace flag); Prisma instead of Payload (migrate on a throwaway DB + `prisma migrate diff --exit-code` drift guard; verified it fails with exit 2 on an unmigrated schema edit); lockstep groups `next`+`eslint-config-next`, `react`+`react-dom`, react types, tailwind pair, `prisma`+`@prisma/*`, `@trpc/*`; never auto-bump the major of `@types/node` (follows Node 22) and `typescript` (native-compiler major is adopted by hand).
+- New Playwright suite (`tests/e2e`, 11 tests + 1 opt-in): `server.mjs` wipes the test DB, migrates, seeds fixed fixtures, builds and starts the app with dummy credentials; covers pages, visibility (public/unlisted/private incl. owner vs stranger), the stream redirect, play dedupe, auth. `upload-playback.e2e.spec.ts` (opt-in, real R2) runs the full creator journey and cleans its R2 objects. Safety: refuses to run if `TEST_DATABASE_URL` equals `DATABASE_URL(_UNPOOLED)`, and overrides both for the app it starts (prisma.config.ts prefers the unpooled URL).
+- Better Auth's rate limiter (429 on repeated sign-ups) stays enabled in e2e; tests sign up once and share the session; the helper retries once after `x-retry-after`.
+- Verified locally: whole verify sequence on a fresh DB (23 unit, 22 integration, 11 e2e); planner against the real registry (currently proposes eslint 10, a minor batch, lockfile refresh); apply/combine with simulated passing and failing candidates. NOT verified: the workflows on GitHub itself (cannot run Actions from here).
+- Needs repo settings (GitHub -> Settings): Actions -> General -> "Allow GitHub Actions to create and approve pull requests" (for the PR fallback); optionally branch protection on `master` with the `test` check required. Pushes made by the dependency workflow use `GITHUB_TOKEN`, so CI does not re-run on them (the tree was just tested) but Vercel deploys them to production, where `vercel-build` applies pending migrations.
