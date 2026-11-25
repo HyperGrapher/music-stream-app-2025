@@ -1,56 +1,40 @@
-# Database Seed Script
+# Demo data (`pnpm db:seed`)
 
-This script populates the database with fake data for the SoundCloud-like music player application, including artists (users), tracks, albums, playlists, follows, likes, and comments.
-
-## What the Seed Script Creates
-
-- 10 artists (users) with names like "Muse", "Radiohead", etc.
-- 1-3 albums per artist
-- 5-15 tracks per artist
-- 1-3 playlists per artist with 5-20 tracks each
-- Follows between artists
-- Likes on tracks
-- Comments on tracks
-
-## Prerequisites
-
-Before running the seed script, ensure you have installed the required dependencies:
+Builds a believable demo world for local development (PRD section 20). It is **deterministic** (fixed random seed) and
+**re-runnable**: each run first deletes the accounts the previous run created (every `@example.test` user, with all their
+content, which cascades) and then rebuilds everything.
 
 ```bash
-pnpm install
+DATABASE_URL=postgresql://... pnpm db:seed
 ```
 
-## Running the Seed Script
+It refuses to run against what looks like production (Neon hosts, `NODE_ENV` / `VERCEL_ENV` = production) unless you pass
+`--force`. **Check `DATABASE_URL` before running it**: in cloud sessions the shell may point at the production database.
 
-1. Make sure your database connection is properly configured in your `.env` file with `DATABASE_URL`.
+## What it creates
 
-2. Run the seed script using:
+- 1 admin, the demo login, 12 creators (2 of them Pro, 2 verified) and 40 listeners, with avatars, banners, bios, cities;
+- about 80 public tracks, 3 private tracks (with secret links), 1 scheduled track (a Pro creator, publishes in 2 days);
+- 6 albums / EPs / singles / a compilation and 8 playlists (one private) mixing creators, plus Spotlight items;
+- a power-law follow graph, likes, reposts, timed comments with replies and comment likes, about 9000 play events over the
+  last 120 days (sources and countries), and the daily statistics derived from them (`pnpm db:recount` logic);
+- notifications for the demo login.
 
-```bash
-pnpm db:seed
-```
+## Logins
 
-## Warning
+| Account | Email | Password |
+|---|---|---|
+| Demo (creator + listener, has notifications) | `demo@example.test` | `DemoPassword123!` |
+| Admin | `admin@example.test` | `DemoPassword123!` |
 
-This script will delete all existing data in the tables it populates! Be careful when running it on a production database.
+Every seeded account uses the same password. All emails and names are fake.
 
-## Accessing the Seeded Data
+## Media
 
-Once the script has run, you can:
+Tracks play the demo audio and show the artwork pool that already live in the R2 bucket. On the first run the seed builds
+`demo/manifest.json` in R2: it copies the audio found under `uploads/` to `demo/audio/`, analyses it with `ffmpeg`
+(duration and waveform), and turns `random-artwork-images/` into renditions under `demo/{artwork,avatars,banners}/`. Later
+runs only read the manifest, so they need no `ffmpeg`. Several tracks share one audio file. Everything under `demo/` is
+protected from the deletion queue.
 
-1. Visit artist profiles at routes like `/muse` or `/radiohead` (lowercase, URL-friendly versions of the artist names)
-2. Visit individual tracks at routes like `/muse/song-name` (where song-name is the slugified version of the track title)
-3. View the data directly using Prisma Studio:
-
-```bash
-pnpm db:studio
-```
-
-## Customizing the Seed
-
-If you want to modify the seed data:
-
-1. Open `prisma/seed.ts`
-2. Adjust the arrays of artist names, genres, etc.
-3. Modify the number of items created by changing the parameters passed to `faker.number.int()`
-4. Run the seed script again 
+The seed prints the secret links of the private tracks and the scheduled track at the end.

@@ -26,7 +26,7 @@ export async function resolveUsername(db: Db, param: string): Promise<ResolvedUs
     where: { oldUsername: username },
     select: { user: { select: { id: true, username: true, status: true } } },
   });
-  return old && old.user.status === "ACTIVE" ? { status: "redirect", user: old.user } : { status: "missing" };
+  return old?.user.status === "ACTIVE" ? { status: "redirect", user: old.user } : { status: "missing" };
 }
 
 /** Same lookup for a track or collection slug under one owner, following `SlugRedirect`. */

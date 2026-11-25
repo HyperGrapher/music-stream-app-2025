@@ -41,14 +41,25 @@ export const profilesRouter = createTRPCRouter({
         bannerAsset: { select: { id: true, publicUrl: true, imageWidths: true } },
       },
     });
-    const { avatarAsset, bannerAsset, ...profile } = user;
+    const banner = imageUrls(user.bannerAsset);
     return {
       status: "ok" as const,
       profile: {
-        ...profile,
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        bio: user.bio,
+        city: user.city,
+        countryCode: user.countryCode,
+        verified: user.verified,
+        plan: user.plan,
+        followerCount: user.followerCount,
+        followingCount: user.followingCount,
+        publicTrackCount: user.publicTrackCount,
+        createdAt: user.createdAt,
         image: userAvatarUrl(user),
-        bannerUrl: imageUrls(bannerAsset).artworkUrl,
-        bannerSrcSet: imageUrls(bannerAsset).artworkSrcSet,
+        bannerUrl: banner.artworkUrl,
+        bannerSrcSet: banner.artworkSrcSet,
         isOwner: ctx.session?.user.id === user.id,
       },
     };

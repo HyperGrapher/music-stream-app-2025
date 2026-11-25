@@ -22,17 +22,20 @@ One Next.js app on **Vercel**, **Neon** Postgres and **Cloudflare R2**.
 ## What works today
 
 - **Accounts:** email + password and Google sign-in ([Better Auth](https://www.better-auth.com)).
-- **Uploading:** MP3, WAV, OGG, FLAC, AAC or M4A up to 50 MB, straight from the browser to R2. A single track, or several files as an album/EP release with ordered tracks and shared artwork.
-- **Artwork processing:** uploaded images (JPEG, PNG, WebP up to 10 MB) are centre-cropped to squares and stored as WebP at 96, 320 and 640 px with [sharp](https://sharp.pixelplumbing.com); the original is deleted. Every artwork `<img>` gets a `srcset` and `sizes`, so the player bar loads the 96 px file and nothing larger than 640 px ever exists.
+- **Uploading:** MP3, WAV, OGG, FLAC, AAC or M4A up to 100 MB, straight from the browser to R2. A single track, or several files as an album/EP collection with ordered tracks and shared artwork. A file the browser cannot decode is rejected.
+- **Permalinks:** every account gets a lowercase username; tracks live at `/{username}/{slug}` and collections (album, EP, single, compilation, playlist) at `/{username}/sets/{slug}`. Old `/track/{id}` and `/u/{id}` URLs redirect.
+- **Visibility and secret links:** public, private (owner only) or scheduled tracks (a Pro feature, evaluated at read time). Private tracks and collections open for anyone holding their secret link (`/…/s-{token}`), and nowhere else.
+- **Image processing:** uploaded images (JPEG, PNG, WebP up to 10 MB) are centre-cropped and stored as WebP renditions with [sharp](https://sharp.pixelplumbing.com): artwork 96/320/640 px, avatars 64/160/320 px (square), banners 1240/2480 px wide (2480x520 strip); the original is deleted. Every `<img>` gets a `srcset` and `sizes`.
 - **Waveforms without a media server:** the browser decodes the file (Web Audio) while it uploads and computes the duration and waveform peaks. The server validates them and stores a small JSON next to the audio.
-- **Streaming:** seeking works, audio never passes through the app server, and public / private visibility is enforced.
+- **Streaming:** seeking works, audio never passes through the app server, and visibility (including secret links) is enforced.
 - **Player:** one global player with a queue, next/previous, keyboard shortcuts and OS media controls (Media Session API).
-- **Browsing:** a landing page, `/discover` (latest or most played, genre filter, search over titles and creator names), creator profiles and track pages.
+- **Browsing:** a landing page, `/discover` (latest or most played, genre filter, search over titles and creator names), creator profiles, track pages and collection pages.
 - **Timed comments:** comment at the exact second you are listening to (read from the player at the moment you post), with one level of replies. Each timed comment shows as an avatar under the waveform and as a clickable time chip that jumps the player there. Authors and the track's creator can delete.
-- **Likes** on tracks (optimistic UI, safe against double clicks and races), shown as filled hearts for the signed-in listener.
-- **Play counts** that cannot be inflated by refreshing: one count per listener per track per 30 minutes.
+- **Likes** on tracks (optimistic UI, safe against double clicks and races, rate limited; you cannot like your own or a private track), shown as filled hearts for the signed-in listener.
+- **Play counts** that cannot be inflated by refreshing: one count per listener per track per 30 minutes; the owner's own plays are never counted. Daily statistics are kept for charts and insights.
+- **Platform plumbing:** Postgres-backed rate limiter, email module (Resend, or logged when no key is set), durable R2 deletion queue with a daily cron, simulated Free/Pro entitlements, injectable clock.
 
-**Not built yet** (the controls exist in the UI, the backend models exist in the schema): reposts, follows, playlists, and likes on comments. There is also no "unlisted" option in the upload form yet, although the data model and the stream/page access rules already support it.
+**Work in progress:** the product is being built out milestone by milestone against [`docs/PRD.md`](docs/PRD.md) (status in [`docs/REFACTOR.md`](docs/REFACTOR.md)). The data model already contains reposts, follows, blocks, notifications, reports, messages and insights tables, but the UI and procedures for them arrive in later milestones: some controls (follow, repost, add to playlist, share) are visible but not functional yet.
 
 ## How it works
 
@@ -88,9 +91,11 @@ sequenceDiagram
 | Audio is never proxied; the app redirects to short-lived presigned R2 URLs | Keeps audio off Vercel bandwidth, gets range requests for free, and still enforces private/unlisted access. |
 | Waveforms are computed in the browser | FFmpeg/audiowaveform do not fit serverless limits. The trade-off: peaks are client-supplied, so a creator could fake their own waveform (validated for shape and length). |
 | Media is a first-class model: `MediaAsset` goes `PENDING -> READY -> ATTACHED` | Uploads can be verified, cleaned up when abandoned, and claimed atomically so two requests cannot publish the same file. |
+| One `Collection` model (playlist, album, EP, single, compilation); private + secret link instead of "unlisted"; scheduling evaluated at read time | See [ADR 0002](docs/adr/0002-collections-secret-links-and-read-time-scheduling.md). One reviewed visibility module decides who sees what everywhere. |
+| R2 deletions go through a durable queue (`StorageDeletion`) | A lost `after()` or a failed delete is retried by the daily cron; shared demo media is protected. |
 | Play counts are deduped with an HMAC of IP + user agent and a Postgres advisory lock | No raw IPs stored, and concurrent requests cannot double count. |
 | Comments store `timestampSeconds` (whole seconds) read from the player when the user posts; writes are serialised per track with an advisory lock | `Track.commentCount` always equals the number of rows, even when a thread is deleted while replies arrive. Replies are one level deep and carry no timestamp. |
-| Artwork is stored as 96/320/640 px square WebP renditions and the original is deleted | 640 px covers the largest artwork box (the track page: 320 px on desktop, full width on phones) on a 2x screen. Keeping only what the UI can show keeps R2 small; the trade-off is that larger sizes cannot be regenerated later. |
+| Images are stored as WebP renditions per purpose (artwork 96/320/640, avatar 64/160/320, banner 1240/2480) and the original is deleted | Renditions cover the largest box each image appears in on a 2x screen. Keeping only what the UI can show keeps R2 small; the trade-off is that larger sizes cannot be regenerated later. |
 | `Track.likeCount` changes only when a `TrackLike` row is really inserted or deleted, in the same transaction | A denormalised counter that cannot drift from the rows, however often or concurrently the button is pressed. |
 | Prisma 7 with the `pg` adapter on Neon's pooled URL; migrations use the direct URL | Pooling for serverless traffic, a real connection for `migrate`. |
 
@@ -104,12 +109,16 @@ Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · tRPC 11 · Prism
 
 ```
 src/
-  app/                      routes: pages, route handlers (api/auth, api/trpc, api/tracks/[id]/{stream,waveform,artwork,play})
+  app/                      routes: pages ((player)/[username], [trackSlug], sets/[slug]), route handlers
+                            (api/auth, api/trpc, api/cron/daily, api/images/[assetId], api/tracks/[id]/{stream,waveform,artwork,play})
   components/               shared UI (upload flow, shadcn/ui)
   server/
-    api/                    tRPC routers (artist, discover, upload)
-    modules/tracks/         domain logic: access rules, discovery queries, plays, waveform validation
-  lib/                    auth, R2 client, waveform + audio analysis, helpers
+    api/                    tRPC routers (collections, comments, discover, engagement, profiles, tracks, upload)
+    modules/                domain logic: visibility, tracks (authorize, dto, likes, comments, plays), publishing,
+                            collections, profiles, plans (entitlements), rate-limit, email, storage (deletion queue),
+                            media (image pipeline), housekeeping (daily cron), stats, recount
+    clock.ts                injectable clock
+  lib/                    auth, R2 client, names (usernames/slugs), genres, waveform + audio analysis, helpers
   store/                    player and upload state (Zustand)
 prisma/                     schema, migrations, seed scripts
 tests/{integration,e2e}/    DB-backed tests and Playwright
@@ -124,7 +133,7 @@ Requirements: Node 22+, pnpm 10, a Postgres database, and (for uploads and playb
 pnpm install                # also generates the Prisma client
 cp .env.example .env        # fill in the values below
 pnpm db:migrate             # apply migrations
-pnpm db:seed:r2             # optional: register the audio already in your R2 bucket as demo tracks (needs ffprobe)
+pnpm db:seed                # optional: a demo world (users, tracks, albums, playlists, plays); see SEED_README.md
 pnpm dev                    # http://localhost:3000
 ```
 
@@ -136,9 +145,13 @@ pnpm dev                    # http://localhost:3000
 | `BETTER_AUTH_URL` | Public base URL, e.g. `http://localhost:3000`. Must be `https` in production: it determines the Google OAuth redirect URI |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client; register `<BETTER_AUTH_URL>/api/auth/callback/google` as a redirect URI |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` | R2 credentials and bucket |
-| `R2_PUBLIC_BASE_URL` | Optional public bucket URL for artwork; without it artwork is served through presigned redirects |
+| `R2_PUBLIC_BASE_URL` | Optional public bucket URL for images; without it images are served through presigned redirects |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Optional. Without a key every email is stored as `LOGGED` in `email_message` and printed to the server log |
+| `ADMIN_EMAILS` | Optional, comma-separated emails that get the ADMIN role when they sign in |
+| `CRON_SECRET` | Bearer secret of `/api/cron/daily` (`vercel.json` schedules it once a day); the endpoint refuses callers without it |
+| `NEXT_PUBLIC_APP_URL` | Optional absolute base URL for emails and meta tags (defaults to `BETTER_AUTH_URL`) |
 
-Artwork uploaded before processing existed can be converted with `pnpm artwork:backfill` (`--dry-run` to preview); it deletes users' original uploads and leaves shared demo sources in place.
+Counters (likes, plays, followers, track counts, daily statistics) can be repaired from their source rows with `pnpm db:recount`.
 
 The R2 bucket needs a **CORS rule** allowing `PUT` with the `Content-Type` header from each origin you upload from (`http://localhost:3000`, your production domain), otherwise browser uploads fail.
 

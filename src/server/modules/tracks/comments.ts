@@ -52,14 +52,18 @@ type CommentRow = {
 };
 
 function toItem(row: CommentRow, trackCreatorId: string, viewer: Viewer) {
-  const { avatarAsset: _avatar, ...author } = row.author;
   return {
     id: row.id,
     content: row.content,
     timestampSeconds: row.timestampSeconds,
     parentId: row.parentId,
     createdAt: row.createdAt,
-    author: { ...author, image: userAvatarUrl(row.author) },
+    author: {
+      id: row.author.id,
+      name: row.author.name,
+      username: row.author.username,
+      image: userAvatarUrl(row.author),
+    },
     isCreator: row.author.id === trackCreatorId,
     // Authors remove their own comments; the track's creator moderates their track.
     canDelete: !!viewer.id && (viewer.id === row.author.id || viewer.id === trackCreatorId),

@@ -142,7 +142,8 @@ test("upload, analyse in the browser, publish and play", async ({ page, baseURL 
     },
   });
   expect(published.ok()).toBe(true);
-  const track = await db.track.findFirstOrThrow({ where: { audioAssetId: asset.id } });
+  const track = await db.track.findFirstOrThrow({ where: { audioAssetId: asset.id }, include: { creator: true } });
+  expect(track.slug).toBe("e2e-tone");
 
   // The waveform route serves what the browser computed.
   const waveform = await page.request.get(`/api/tracks/${track.id}/waveform`);
@@ -157,7 +158,7 @@ test("upload, analyse in the browser, publish and play", async ({ page, baseURL 
     expect([meta.format, meta.width, meta.height]).toEqual(["webp", width, width]);
   }
 
-  await page.goto(`/track/${track.id}`);
+  await page.goto(`/${track.creator.username}/${track.slug}`);
   const hero = page.getByAltText("E2E Tone artwork");
   await expect(hero).toHaveAttribute("srcset", /\?w=96 96w, .*\?w=320 320w, .*\?w=640 640w/);
   // On this 1x desktop viewport the hero box is 320 px wide: the browser picks the 320 rendition.

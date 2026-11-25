@@ -4,7 +4,7 @@ import { CREATOR_ID, TRACKS } from "./fixtures";
 import { db, signUp } from "./helpers";
 
 const track = TRACKS.public; // seeded with a 30 s duration
-const trackUrl = `/track/${track.id}`;
+const trackUrl = track.path;
 
 let storageState: Awaited<ReturnType<BrowserContext["storageState"]>>;
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import sharp from "sharp";
 
-import { InvalidArtworkError, renderArtworkRenditions } from "./artwork-processing";
+import { InvalidArtworkError, renderArtworkRenditions, renderImageRenditions } from "./artwork-processing";
 
 const image = (width: number, height: number, format: "jpeg" | "png" = "jpeg") =>
   sharp({ create: { width, height, channels: 3, background: { r: 200, g: 40, b: 90 } } })
@@ -55,4 +55,32 @@ test("files that are not images, or are absurdly large, are refused", async () =
   await assert.rejects(renderArtworkRenditions(truncated), InvalidArtworkError);
   const huge = await sharp({ create: { width: 10000, height: 6000, channels: 3, background: "#000" } }).png({ compressionLevel: 1 }).toBuffer();
   await assert.rejects(renderArtworkRenditions(huge), InvalidArtworkError);
+});
+
+test("NF-3 avatars are square at 64/160/320 px", async () => {
+  const renditions = await renderImageRenditions(await image(1000, 700), "AVATAR");
+  assert.deepEqual(renditions.map((r) => r.width), [64, 160, 320]);
+  for (const r of renditions) {
+    const meta = await sharp(r.data).metadata();
+    assert.deepEqual([meta.format, meta.width, meta.height], ["webp", r.width, r.width]);
+  }
+});
+
+test("NF-3 banners are a 2480x520 strip rendered at 1240 and 2480 px wide", async () => {
+  const renditions = await renderImageRenditions(await image(3000, 800), "BANNER");
+  assert.deepEqual(renditions.map((r) => r.width), [1240, 2480]);
+  for (const r of renditions) {
+    const meta = await sharp(r.data).metadata();
+    assert.equal(meta.width, r.width);
+    assert.equal(meta.height, Math.round((r.width * 520) / 2480));
+  }
+});
+
+test("a banner source that is too short for the aspect ratio is cropped, never upscaled", async () => {
+  // 1000x600: the widest 2480:520 crop is 1000 px wide (height 210), so only a 1000 px rendition fits.
+  const renditions = await renderImageRenditions(await image(1000, 600), "BANNER");
+  assert.deepEqual(renditions.map((r) => r.width), [1000]);
+  // A source whose height limits the crop: 3000x300 gives a 1430 px wide strip (300 * 2480/520).
+  const limited = await renderImageRenditions(await image(3000, 300), "BANNER");
+  assert.deepEqual(limited.map((r) => r.width), [1240, 1430]);
 });

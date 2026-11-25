@@ -320,7 +320,7 @@ async function main() {
       genre,
     });
     for (let position = 0; position < release.tracks; position++) {
-      const track = addTrack(owner, { publishedAt, artworkAssetId: collection.artworkAssetId as string, genre });
+      const track = addTrack(owner, { publishedAt, artworkAssetId: collection.artworkAssetId!, genre });
       addToCollection(collection, track, position);
     }
   }
@@ -477,7 +477,7 @@ async function main() {
     const createdAt = new Date(between(Math.max(track.publishedAt!.getTime(), author.createdAt.getTime()), NOW.getTime()));
     comments.push({
       id, authorId: author.id, trackId: track.id, content: pick(COMMENT_LINES),
-      timestampSeconds: timed ? between(1, Math.floor(track.durationMs! / 1000)) : null, createdAt,
+      timestampSeconds: timed ? between(1, Math.floor(track.durationMs / 1000)) : null, createdAt,
     });
     if (faker.number.int(9) < 3) {
       for (let r = 0; r < between(1, 3); r++) {
@@ -516,7 +516,7 @@ async function main() {
       source: faker.helpers.weightedArrayElement(SOURCES),
       countryCode: faker.helpers.weightedArrayElement(COUNTRIES),
       counted: true,
-      listenedMs: completed ? Math.round(track.durationMs! * 0.95) : between(5_000, Math.max(6_000, Math.floor(track.durationMs! * 0.6))),
+      listenedMs: completed ? Math.round(track.durationMs * 0.95) : between(5_000, Math.max(6_000, Math.floor(track.durationMs * 0.6))),
       completed,
       createdAt,
     });
@@ -540,7 +540,7 @@ async function main() {
   if (demoComment) {
     notifications.push({
       recipientId: demo.id, actorId: demoComment.authorId, type: "COMMENT", trackId: demoComment.trackId, commentId: demoComment.id,
-      groupKey: `COMMENT:${demoComment.trackId}:${day(demoComment.createdAt as Date)}`, createdAt: demoComment.createdAt as Date,
+      groupKey: `COMMENT:${demoComment.trackId}:${day(demoComment.createdAt as Date)}`, createdAt: demoComment.createdAt,
     });
   }
   notifications.push({ recipientId: demo.id, type: "SYSTEM", message: "Welcome to Music Stream! This is the demo account.", groupKey: `SYSTEM:${demo.id}:${day(ago(60))}`, createdAt: ago(60), readAt: ago(59) });

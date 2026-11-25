@@ -135,7 +135,7 @@ async function buildImages(
 ): Promise<DemoImage[]> {
   const result: DemoImage[] = [];
   for (const source of sources) {
-    const n = source.key.match(/artwork-(\d+)\.webp$/)![1]!;
+    const n = /artwork-(\d+)\.webp$/.exec(source.key)![1]!;
     const processed = await processImageObject(r2, {
       bucket,
       sourceKey: source.key,

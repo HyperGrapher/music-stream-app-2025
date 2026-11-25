@@ -31,7 +31,8 @@ test("/profile redirects a signed-in user to their profile", async ({ browser, b
   const context = await signedIn(browser, baseURL!);
   const page = await context.newPage();
   await page.goto("/profile");
-  await expect(page).toHaveURL(new RegExp(`/u/${user.id}$`));
+  const { username } = await db.user.findUniqueOrThrow({ where: { id: user.id }, select: { username: true } });
+  await expect(page).toHaveURL(new RegExp(`/${username}$`));
   await context.close();
 });
 
@@ -40,16 +41,21 @@ test("an owner sees their private track; everyone else gets a 404", async ({ bro
 
   const owner = await signedIn(browser, baseURL!);
   const ownerPage = await owner.newPage();
-  const own = await ownerPage.goto(`/track/${track.id}`);
+  const own = await ownerPage.goto(track.path);
   expect(own?.status()).toBe(200);
   await expect(ownerPage.getByText("Owner Only Track").first()).toBeVisible();
   await owner.close();
 
   const stranger = await anonymousContext(browser);
   const strangerPage = await stranger.newPage();
-  const other = await strangerPage.goto(`${baseURL}/track/${track.id}`);
+  const other = await strangerPage.goto(`${baseURL}${track.path}`);
   expect(other?.status()).toBe(404);
   await stranger.close();
+});
+
+test("every account gets a permalink handle at sign-up", async () => {
+  const { username } = await db.user.findUniqueOrThrow({ where: { id: user.id }, select: { username: true } });
+  expect(username).toMatch(/^e2e_user/);
 });
 
 test("the upload page offers the file picker to a signed-in user", async ({ browser, baseURL }) => {

@@ -506,7 +506,7 @@ export const uploadRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const { tags, ...rest } = input;
       const track = await publishTrack(ctx.db, ctx.session.user.id, { ...rest, tags: splitTags(tags) });
-      const username = ctx.session.user.username as string;
+      const username = ctx.session.user.username!;
       return {
         track: { id: track.id, slug: track.slug },
         permalink: trackPermalink({ slug: track.slug, creator: { username } }),
@@ -542,7 +542,7 @@ export const uploadRouter = createTRPCRouter({
         ...rest,
         tags: splitTags(tags),
       });
-      const username = ctx.session.user.username as string;
+      const username = ctx.session.user.username!;
       return {
         collection: { id: collection.id, slug: collection.slug },
         permalink: `/${username}/sets/${collection.slug}`,

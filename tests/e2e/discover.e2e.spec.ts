@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { TRACKS } from "./fixtures";
+import { PUBLIC_TITLES, TRACKS } from "./fixtures";
 
 /** Titles of the track cards in the main content, in display order. */
 const cardTitles = (page: Page) => page.locator("article a[title]").allTextContents();
@@ -11,14 +11,14 @@ test.describe("home", () => {
     await expect(page.getByRole("heading", { name: "Trending now" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "New releases" })).toBeVisible();
     await expect(page.getByText(TRACKS.public.title).first()).toBeVisible();
-    await expect(page.getByText(TRACKS.unlisted.title)).toHaveCount(0);
     await expect(page.getByText(TRACKS.private.title)).toHaveCount(0);
+    await expect(page.getByText(TRACKS.scheduled.title)).toHaveCount(0);
   });
 
   test("a card opens its track page", async ({ page }) => {
     await page.goto("/");
     await page.locator(`article a[title="${TRACKS.public.title}"]`).first().click();
-    await expect(page).toHaveURL(new RegExp(`/track/${TRACKS.public.id}$`));
+    await expect(page).toHaveURL(new RegExp(`${TRACKS.public.path}$`));
   });
 
   test("the navigation has no dead links", async ({ page }) => {
@@ -59,9 +59,9 @@ test.describe("discover", () => {
     await page.goto("/discover");
     await expect(page.getByRole("heading", { name: "Discover" })).toBeVisible();
     const titles = await cardTitles(page);
-    expect(titles).toEqual(expect.arrayContaining([TRACKS.public.title, TRACKS.plays.title]));
-    expect(titles).not.toContain(TRACKS.unlisted.title);
+    expect(titles.sort()).toEqual([...PUBLIC_TITLES].sort());
     expect(titles).not.toContain(TRACKS.private.title);
+    expect(titles).not.toContain(TRACKS.scheduled.title);
   });
 
   test("most played puts the track with the most plays first", async ({ page }) => {
@@ -76,8 +76,9 @@ test.describe("discover", () => {
     const genres = page.getByRole("navigation", { name: "Genres" });
     await expect(genres.getByRole("link", { name: /Electronic/ })).toBeVisible();
     await expect(genres.getByRole("link", { name: /Ambient/ })).toBeVisible();
-    // jazz exists only on an unlisted and a private track
+    // jazz exists only on a private track, world only on a scheduled one
     await expect(genres.getByRole("link", { name: /Jazz/ })).toHaveCount(0);
+    await expect(genres.getByRole("link", { name: /World/ })).toHaveCount(0);
 
     await genres.getByRole("link", { name: /Ambient/ }).click();
     await expect(page).toHaveURL(/genre=ambient/);
@@ -91,7 +92,7 @@ test.describe("discover", () => {
     expect(await cardTitles(page)).toEqual([TRACKS.plays.title]);
 
     await page.goto("/discover?q=E2E%20Creator");
-    expect((await cardTitles(page)).length).toBe(2); // the two public seeded tracks
+    expect((await cardTitles(page)).length).toBe(PUBLIC_TITLES.length); // every public seeded track
 
     await page.goto("/discover?q=private");
     await expect(page.getByText("Nothing matches that")).toBeVisible();

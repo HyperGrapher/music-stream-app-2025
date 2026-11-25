@@ -9,5 +9,5 @@ export default async function ProfileRedirectPage() {
 
   if (!session) redirect("/");
 
-  redirect(`/${session.user.username as string}`);
+  redirect(`/${session.user.username!}`);
 }

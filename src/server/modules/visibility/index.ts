@@ -134,8 +134,7 @@ export function trackAccess(track: TrackAccessRow, ctx: TrackAccessContext): Tra
   if (tokensMatch(track.secretToken, ctx.secret)) return "secret";
   const via = ctx.viaCollection;
   if (
-    via &&
-    via.row.ownerId === track.creatorId &&
+    via?.row.ownerId === track.creatorId &&
     via.row.moderationState === "VISIBLE" &&
     via.row.owner.status === "ACTIVE" &&
     tokensMatch(via.row.secretToken, via.secret)

@@ -38,12 +38,13 @@ export async function anonymousContext(browser: Browser): Promise<BrowserContext
   return browser.newContext();
 }
 
-/** Creates an attached audio asset + track for `ownerId`. */
+/** Creates an attached audio asset + a published track for `ownerId`; returns the row with its permalink. */
 export async function createTrackFor(
   ownerId: string,
-  visibility: "PUBLIC" | "UNLISTED" | "PRIVATE",
+  visibility: "PUBLIC" | "PRIVATE",
   title: string,
 ) {
+  const owner = await db.user.findUniqueOrThrow({ where: { id: ownerId }, select: { username: true } });
   const audio = await db.mediaAsset.create({
     data: {
       ownerId,
@@ -55,8 +56,20 @@ export async function createTrackFor(
       mimeType: "audio/mpeg",
     },
   });
-  await db.audioAnalysis.create({ data: { audioAssetId: audio.id, status: "FAILED" } });
-  return db.track.create({
-    data: { creatorId: ownerId, audioAssetId: audio.id, title, visibility },
+  await db.audioAnalysis.create({ data: { audioAssetId: audio.id, status: "FAILED", durationMs: 30_000 } });
+  const slug = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${crypto.randomUUID().slice(0, 6)}`;
+  const track = await db.track.create({
+    data: {
+      creatorId: ownerId,
+      slug,
+      audioAssetId: audio.id,
+      title,
+      visibility,
+      publishedAt: visibility === "PUBLIC" ? new Date() : null,
+      secretToken: crypto.randomUUID().replaceAll("-", "").slice(0, 22),
+      durationMs: 30_000,
+      mimeType: "audio/mpeg",
+    },
   });
+  return { ...track, path: `/${owner.username}/${slug}` };
 }

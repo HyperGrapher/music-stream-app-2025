@@ -84,7 +84,7 @@ describe("usernames (IA-1) and roles (2.2)", () => {
       const mail = `it-hostile-${crypto.randomUUID()}@example.test`;
       // Better Auth refuses fields declared `input: false` and silently drops unknown ones.
       await auth.api
-        .signUpEmail({ body: { email: mail, password, name: "Hostile", ...extra } as never })
+        .signUpEmail({ body: { email: mail, password, name: "Hostile", ...extra } })
         .catch(() => undefined);
       // either way, no privileged account may exist
       const stored = await db.user.findUnique({ where: { email: mail } });
