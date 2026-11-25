@@ -31,6 +31,16 @@ export default tseslint.config(
   },
   },
   {
+    // Vendored shadcn/ui components use namespace imports that are only used as types.
+    files: ['src/components/ui/**'],
+    rules: { "@typescript-eslint/consistent-type-imports": "off" },
+  },
+  {
+    // Artwork lives behind R2 URLs (often presigned, so the URL changes). next/image
+    // would proxy and cache each variant and burn the image-optimization quota for no gain.
+    rules: { "@next/next/no-img-element": "off" },
+  },
+  {
     // node:test returns promises from top-level test()/describe() calls.
     files: ['**/*.test.ts'],
     rules: { "@typescript-eslint/no-floating-promises": "off" },

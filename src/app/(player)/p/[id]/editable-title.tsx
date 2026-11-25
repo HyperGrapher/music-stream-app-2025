@@ -5,10 +5,8 @@ import { Input } from '@/components/ui/input';
 // import { usePlaylist } from '@/app/hooks/use-playlist';
 
 export function EditableTitle({
-  playlistId,
   initialName,
 }: {
-  playlistId: string;
   initialName: string;
 }) {
   const [isEditing, setIsEditing] = useState(false);

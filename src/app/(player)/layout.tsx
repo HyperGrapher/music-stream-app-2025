@@ -1,4 +1,3 @@
-import { NowPlayingCard } from "../_components/NowPlayingCard";
 import { PlaybackControls } from "../_components/GlobalPlaybackControls";
 import { PlayerControllerWrapper } from "@/components/PlayerControllerWrapper";
 import { auth } from "@/lib/auth";
@@ -18,7 +17,6 @@ export default async function Layout({
         <>
             <main className="bg-zinc-950 min-h-[calc(100vh-190px)] relative">
                 {children}
-                {/* <NowPlayingCard /> */}
             </main>
             <PlaybackControls />
             <PlayerControllerWrapper initialUserId={userId} />

@@ -18,7 +18,6 @@ export function AuthProvider({ initialUser }: AuthProviderProps) {
   const {
     data: session,
     isPending,
-    error
   } = authClient.useSession();
 
   // Update store based on server-provided initial user on first render

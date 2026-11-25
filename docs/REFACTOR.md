@@ -34,15 +34,16 @@ A pro-level portfolio demo (SoundCloud-style creator platform) that is:
 - [x] **Phase 4 - de-monorepo**: app hoisted to repo root; Turborepo, `packages/*` and the optional `media-worker` deleted (fresh app: no backfill needed)
 - [~] **Phase 5 - dependency upgrades** (done: in-range bumps, Better Auth 1.7, Next 16, Prisma 7, zod 4 + resolvers 7, zustand 5, lucide 1; skipped on purpose: TypeScript 7, ESLint 10, Prisma 8 RC) (one commit each, read current migration guides first): Next, React, Prisma (+ `generator` output path, deprecated in Prisma 7), Tailwind, Better Auth, zod, rest
 - [~] **Phase 6 - Neon + Vercel** (done by user: Neon project, `0_init` migration, Vercel project on `master`; todo: verify deployed app end to end): pooled `DATABASE_URL` at runtime, direct URL for migrations; switch `db push` to `prisma migrate`; verify custom `stream` schema on Neon; deploy
-- [ ] **Phase 7 - quality**: integration tests (asset claim races, release rollback, stream visibility, auth linking); clear remaining lint warnings (`no-unused-vars`, `<img>` -> `next/image`); README for the demo
+- [x] **Phase 7 - quality**: 16 integration tests (claim race, rollback, ownership, visibility, auth), lint at 0 warnings (enforced), README. Remaining ideas: dedupe play events, rate limiting, E2E in CI, demo screenshots
 
 ## Commands
 
 ```bash
 pnpm install
 pnpm check-types   # tsc
-pnpm lint          # eslint - 0 errors, warnings tracked in Phase 7
-pnpm test          # node:test, src/**/*.test.ts (19 tests)
+pnpm lint          # eslint, fails on any warning
+pnpm test          # unit tests, node:test, src/**/*.test.ts (19 tests, no DB)
+TEST_DATABASE_URL=postgresql://... pnpm test:integration   # 16 tests against a real Postgres (skips if unset)
 SKIP_ENV_VALIDATION=1 pnpm build   # no real env needed to build
 ```
 
@@ -136,3 +137,9 @@ with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration).
 - Vercel blocked the deploy of `master` ("Vulnerable version of Next.js"): master still has Next 15.3.1. This branch is on Next 16.4.6; merging it fixes that.
 - `pnpm audit` showed 83 advisories even on this branch because `pnpm-lock.yaml` still carried phantom `apps/web` + `apps/media-worker` importers (pnpm kept them from `node_modules/.pnpm/lock.yaml` after the de-monorepo). Fix = delete `node_modules` and the lockfile, reinstall. Now 0 advisories; `effect` (Prisma CLI chain) is pinned via `pnpm.overrides` to `^3.22.1` (do NOT use `>=`, it jumps to an incompatible major and breaks `prisma generate`).
 - Zustand 5 + zod 4 + lucide 1 verified at runtime (playback advances through the R2 redirect, form validation messages, createTrack).
+
+### Session 3 (cont.) - Phase 7
+- `artist.getTrack` now uses the same visibility rule as the stream route (`canAccessTrack`): unlisted tracks open via link, private tracks only for their creator (previously both 404ed on the detail page while the stream worked).
+- Integration tests in `tests/integration/` (own `setup.ts` loaded via `node --import` so the app's db points at `TEST_DATABASE_URL`; refuses to run without it so dev/prod data is never touched; each test cleans up the users it created): concurrent publish of one asset (exactly one wins), cross-user asset rejected, pending asset rejected, rollback of the audio claim when artwork is not ready, release ordering + attach, release rollback with a foreign asset, duplicate file in one release, auth required, getTrack/listing visibility, Better Auth email sign-up/sign-in/duplicate. Not covered (needs R2 stub): cancel-vs-publish race.
+- CI now has a Postgres 16 service, runs `pnpm db:migrate` then `pnpm test:integration`.
+- Lint: 45 warnings -> 0 and `--max-warnings 0`. Decisions: shadcn `components/ui` exempt from `consistent-type-imports` (vendored); `@next/next/no-img-element` off because artwork is served from presigned R2 URLs that the Next image optimizer cannot cache usefully; removed dead `NowPlayingCard`.

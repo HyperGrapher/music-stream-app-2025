@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Shuffle } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { TrackTable } from './track-table';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -33,7 +33,7 @@ TRACKS.map(track => ({
     })
 */
 
-async function getPlaylistWithSongs(id: string) {
+async function getPlaylistWithSongs(_id: string) {
   await new Promise((resolve) => setTimeout(resolve, 1000));
   return {
     id: '1',
@@ -155,7 +155,7 @@ export default async function PlaylistPage({
       <div className="flex items-center py-3 px-4 space-x-3 ">
         <CoverImage url={playlist.coverUrl} playlistId={playlist.id} />
         <div>
-          <EditableTitle playlistId={playlist.id} initialName={playlist.name} />
+          <EditableTitle initialName={playlist.name} />
           <p className="text-xs sm:text-sm text-gray-400">
             {playlist.trackCount} tracks • {formatDuration(playlist.duration)}
           </p>

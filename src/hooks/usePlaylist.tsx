@@ -1,11 +1,13 @@
 'use client';
 
-import React, {
+import {
   createContext,
+  useCallback,
   useContext,
   useMemo,
   useOptimistic,
   use,
+  type ReactNode,
 } from 'react';
 
 type Playlist = {
@@ -35,7 +37,7 @@ export function PlaylistProvider({
   children,
   playlistsPromise,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   playlistsPromise: Promise<Playlist[]>;
 }) {
   const initialPlaylists = use(playlistsPromise);
@@ -58,13 +60,19 @@ export function PlaylistProvider({
     }
   );
 
-  const updatePlaylist = (id: string, updates: Partial<Playlist>) => {
-    setOptimisticPlaylists({ type: 'update', id, updates });
-  };
+  const updatePlaylist = useCallback(
+    (id: string, updates: Partial<Playlist>) => {
+      setOptimisticPlaylists({ type: 'update', id, updates });
+    },
+    [setOptimisticPlaylists],
+  );
 
-  const deletePlaylist = (id: string) => {
-    setOptimisticPlaylists({ type: 'delete', id });
-  };
+  const deletePlaylist = useCallback(
+    (id: string) => {
+      setOptimisticPlaylists({ type: 'delete', id });
+    },
+    [setOptimisticPlaylists],
+  );
 
   const value = useMemo(
     () => ({
@@ -72,7 +80,7 @@ export function PlaylistProvider({
       updatePlaylist,
       deletePlaylist,
     }),
-    [playlists]
+    [playlists, updatePlaylist, deletePlaylist]
   );
 
   return (

@@ -12,7 +12,6 @@ import {
   MediaKind,
   MediaStatus,
   Visibility,
-  type Prisma,
   type MediaAsset,
 } from "@/generated/prisma/client";
 import sanitizeFilename from "sanitize-filename";

@@ -8,7 +8,6 @@ import {
   Mail,
   MoreHorizontal,
   Search,
-  Upload,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -33,7 +32,7 @@ interface NavbarProps {
 }
 
 export function Navbar({ initialUser }: NavbarProps) {
-  const { user, signIn, signUp, signOut, authError } = useUser();
+  const { user, signIn, signUp, signOut } = useUser();
   const [isAuthLoading, setIsAuthLoading] = useState(false);
 
   // Use initial user data for first render, then use store data after hydration

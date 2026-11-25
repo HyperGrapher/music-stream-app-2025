@@ -1,8 +1,6 @@
-import { cn } from "@/lib/utils";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Suspense } from "react";
 import Link from "next/link";
-import FileUpload from "@/components/upload";
 
 export default async function FeedPage() {
   return (

@@ -29,7 +29,8 @@ Required env (validated in `src/env.js`): `DATABASE_URL` (pooled on Neon; `DATAB
 
 | Command | |
 |---------|--|
-| `pnpm check-types` / `pnpm lint` / `pnpm test` | typecheck, ESLint, node:test |
+| `pnpm check-types` / `pnpm lint` / `pnpm test` | typecheck, ESLint (no warnings allowed), unit tests |
+| `pnpm test:integration` | DB-backed tests; needs `TEST_DATABASE_URL` pointing at a migrated, disposable Postgres |
 | `SKIP_ENV_VALIDATION=1 pnpm build` | production build without real env |
 | `pnpm db:migrate` | apply committed migrations (use the **direct** Neon URL, not the pooler) |
 | `pnpm db:migrate:dev` | create a new migration after editing `prisma/schema.prisma` (also regenerates the client) |

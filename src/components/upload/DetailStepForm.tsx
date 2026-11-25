@@ -41,7 +41,7 @@ export function DetailStepForm({
 
   // Get the right mutation based on the number of files
   const createTrackMutation = api.upload.createTrack.useMutation({
-    onSuccess: (data) => {
+    onSuccess: () => {
       toast.success("Track uploaded successfully!");
       console.log("createTrack onSuccess");
 

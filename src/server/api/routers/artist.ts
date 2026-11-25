@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { trackUrls } from "@/server/modules/tracks/access";
+import { canAccessTrack, trackUrls } from "@/server/modules/tracks/access";
 
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
 
@@ -200,9 +200,11 @@ export const artistRouter = createTRPCRouter({
     .input(z.object({ trackId: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
       const track = await ctx.db.track.findFirst({
-        where: { id: input.trackId, visibility: "PUBLIC" },
+        where: { id: input.trackId },
         select: {
           id: true,
+          creatorId: true,
+          visibility: true,
           title: true,
           description: true,
           genre: true,
@@ -248,7 +250,8 @@ export const artistRouter = createTRPCRouter({
         },
       });
 
-      if (!track) return null;
+      // Same rule as the stream route: unlisted works via link, private is owner-only.
+      if (!track || !canAccessTrack(track, ctx.session?.user.id)) return null;
       const { artworkAsset, audioAsset, creator, ...trackData } = track;
       const analysis = audioAsset.audioAnalysis;
 
