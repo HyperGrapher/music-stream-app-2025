@@ -99,8 +99,7 @@ export function DetailStepForm({
     console.log("Selected uploadedFile:", uploadedFile);
 
     if (
-      !uploadedFile ||
-      !uploadedFile.mediaAssetId ||
+      !uploadedFile?.mediaAssetId ||
       uploadedFile.status !== "completed"
     ) {
       const reason = !uploadedFile
@@ -166,8 +165,7 @@ export function DetailStepForm({
     // Check if all files are properly uploaded and create trackInputs
     const trackInputs = uploadingFiles.flatMap((uploadedFile, index) => {
       if (
-        !uploadedFile ||
-        !uploadedFile.mediaAssetId ||
+        !uploadedFile?.mediaAssetId ||
         uploadedFile.status !== "completed"
       ) {
         const reason = !uploadedFile

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "next build",
-    "check": "next lint && tsc --noEmit",
+    "check": "eslint . && tsc --noEmit",
     "db:generate": "prisma migrate dev",
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
@@ -15,13 +15,14 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "postinstall": "prisma generate",
-    "lint": "next lint",
-    "lint:fix": "next lint --fix",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "preview": "next build && next start",
     "start": "next start",
     "test:upload-lifecycle": "node --import tsx --test src/server/api/routers/upload-lifecycle.test.ts",
     "test:waveform": "node --import tsx --test src/lib/waveform-utils.test.ts",
-    "typecheck": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "node --import tsx --test src/server/api/routers/upload-lifecycle.test.ts src/lib/waveform-utils.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.797.0",
@@ -50,7 +51,6 @@
     "@trpc/client": "^11.1.0",
     "@trpc/react-query": "^11.1.0",
     "@trpc/server": "^11.1.0",
-    "@wavesurfer/react": "1.0.11",
     "better-auth": "^1.2.7",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -70,7 +70,6 @@
     "three": "^0.175.0",
     "tw-animate-css": "^1.2.7",
     "uuid": "^11.0.1",
-    "wavesurfer.js": "^7.9.4",
     "zod": "^3.24.3",
     "zustand": "^4.5.6"
   },

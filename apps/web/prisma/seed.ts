@@ -68,6 +68,6 @@ main()
     console.error(error);
     process.exitCode = 1;
   })
-  .finally(async () => {
-    await prisma.$disconnect();
+  .finally(() => {
+    void prisma.$disconnect();
   });

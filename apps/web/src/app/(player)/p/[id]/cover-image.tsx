@@ -10,12 +10,12 @@ export function CoverImage({
   url: string | null;
   playlistId: string;
 }) {
-  let [state, formAction, pending] = useActionState((() => null), {
+  const [state, formAction, pending] = useActionState((() => null), {
     success: false,
     coverUrl: '',
   });
 
-  let currentUrl = state?.success ? state.coverUrl : url;
+  const currentUrl = state?.success ? state.coverUrl : url;
 
   if (currentUrl) {
     return (

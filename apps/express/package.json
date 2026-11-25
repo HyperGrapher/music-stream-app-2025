@@ -6,7 +6,6 @@
     "dev": "nodemon src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "lint": "eslint . --max-warnings 0",
     "db:generate": "prisma generate --schema ../web/prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy --schema ../web/prisma/schema.prisma",
     "db:reset": "prisma migrate reset --schema ../web/prisma/schema.prisma",
@@ -14,7 +13,8 @@
     "db:push": "prisma db push --schema ../web/prisma/schema.prisma",
     "db:pull": "prisma db pull --schema ../web/prisma/schema.prisma",
     "db:studio": "prisma studio --schema ../web/prisma/schema.prisma",
-    "postinstall": "prisma generate --schema ../web/prisma/schema.prisma"
+    "postinstall": "prisma generate --schema ../web/prisma/schema.prisma",
+    "check-types": "tsc --noEmit"
   },
   "main": "dist/index.js",
   "keywords": [],

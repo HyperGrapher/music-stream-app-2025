@@ -39,9 +39,6 @@ export default async function RootLayout({
 
   return (
     <html lang="en" className={`${geist.variable}`}>
-      <head>
-        <script src="https://unpkg.com/react-scan@latest/dist/auto.global.js" />
-      </head>
       <body className="dark">
         <TRPCReactProvider>
           <AuthProvider initialUser={user} />

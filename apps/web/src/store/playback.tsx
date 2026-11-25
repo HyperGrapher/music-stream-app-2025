@@ -204,12 +204,12 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     if (!currentTrack || playlist.length === 0) return;
     const currentIndex = playlist.findIndex((t) => t?.id === currentTrack.id);
     if (currentIndex === -1) {
-      if (playlist.length > 0) get().playTrack(playlist[0] as Track);
+      if (playlist.length > 0) get().playTrack(playlist[0]!);
       return;
     }
     const nextIndex = (currentIndex + 1) % playlist.length;
     if (playlist[nextIndex]) {
-      get().playTrack(playlist[nextIndex] as Track);
+      get().playTrack(playlist[nextIndex]);
     }
   },
 
@@ -218,13 +218,13 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     if (!currentTrack || playlist.length === 0) return;
     const currentIndex = playlist.findIndex((t) => t?.id === currentTrack.id);
     if (currentIndex === -1) {
-      if (playlist.length > 0) get().playTrack(playlist[0] as Track);
+      if (playlist.length > 0) get().playTrack(playlist[0]!);
       return;
     }
     const previousIndex =
       (currentIndex - 1 + playlist.length) % playlist.length;
     if (playlist[previousIndex]) {
-      get().playTrack(playlist[previousIndex] as Track);
+      get().playTrack(playlist[previousIndex]);
     }
   },
 
@@ -294,7 +294,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
         break;
     }
     if (nextIndex !== -1 && items[nextIndex]) {
-      (items[nextIndex] as HTMLElement)?.focus();
+      (items[nextIndex])?.focus();
     }
   },
 
@@ -395,7 +395,7 @@ const useGlobalKeyListeners = () => {
     }));
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      handleKeyNavigation(e as any);
+      handleKeyNavigation(e as unknown as React.KeyboardEvent);
       if (!e.defaultPrevented) {
         if (e.key === " " && e.target === document.body && currentTrack) {
           e.preventDefault();
@@ -465,7 +465,7 @@ const useMediaSession = () => {
         : [],
     });
     const playHandler = () => {
-      audio.play().catch((e) => {});
+      audio.play().catch(() => undefined);
       setImmediate(togglePlayPause);
     };
     const pauseHandler = () => {
@@ -514,7 +514,7 @@ const useMediaSession = () => {
             playbackRate: audio.playbackRate,
             position: audio.currentTime,
           });
-        } catch (error) {
+        } catch {
           /* Ignore */
         }
       }
@@ -678,8 +678,8 @@ export function PlaybackInitializer({
           .then(() => {
             console.log("Initializer: Playback started successfully.");
           })
-          .catch((error) => {
-            if (error.name === "AbortError") {
+          .catch((error: unknown) => {
+            if (error instanceof DOMException && error.name === "AbortError") {
               console.warn(
                 "Initializer: Playback aborted, likely due to new track selection.",
               );

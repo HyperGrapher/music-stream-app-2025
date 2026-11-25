@@ -34,7 +34,7 @@ export function NowPlayingCard() {
           label="Title"
         />
         <Trackinfo
-          title={currentTrack.userId}
+          title={currentTrack.userId ?? ''}
           trackId={currentTrack.id}
           label="Artist"
         />

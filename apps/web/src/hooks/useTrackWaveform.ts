@@ -31,7 +31,7 @@ export function useTrackWaveform(
           signal: controller.signal,
         });
         if (response.status === 202) {
-          if (!canceled) retryTimer = setTimeout(load, 3_000);
+          if (!canceled) retryTimer = setTimeout(() => void load(), 3_000);
           return;
         }
         if (!response.ok) {

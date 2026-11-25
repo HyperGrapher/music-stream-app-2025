@@ -62,7 +62,7 @@ export default async function ArtistPage({
     api.artist.getReleases({ artist }).catch(() => []),
   ]);
 
-  const addCreator = <T extends { id: string }>(track: T) => ({
+  const addCreator = <T extends PlayerTrack>(track: T) => ({
     ...track,
     userId: artistData.id,
     user: { name: artistData.name, image: artistData.image },

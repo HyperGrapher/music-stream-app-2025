@@ -26,11 +26,18 @@ export default tseslint.config(
     ],
     "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
     "@typescript-eslint/require-await": "off",
+    // `||` is intentional for empty-string fallbacks; `??` would change behavior.
+    "@typescript-eslint/prefer-nullish-coalescing": "off",
     "@typescript-eslint/no-misused-promises": [
       "error",
       { checksVoidReturn: { attributes: false } },
     ],
   },
+  },
+  {
+    // node:test returns promises from top-level test()/describe() calls.
+    files: ['**/*.test.ts'],
+    rules: { "@typescript-eslint/no-floating-promises": "off" },
   },
   {
 		linterOptions: {

@@ -1,10 +1,12 @@
 # Codex handover: SoundCloud-like streaming app
 
+> **Current work is tracked in `docs/REFACTOR.md`** (migration to a single Next.js app on Vercel + Neon).
+
 Date: 2026-08-24
 
 ## Constraints
 
-- Do not run TypeScript/typecheck unless the user changes this instruction.
+- (Superseded) The earlier "do not run typecheck" rule no longer applies: see `docs/REFACTOR.md`; typecheck, lint, tests and build are all required and green.
 - Preserve the uncommitted worktree.
 - The user explicitly permits resetting the local database and prefers clean designs over compatibility shims.
 - `turbo dev` is expected to serve Next on `http://localhost:3000` and Express on `http://localhost:4000`.

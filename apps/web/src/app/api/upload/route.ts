@@ -1,6 +1,6 @@
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { r2Client } from "@/lib/r2";
-import { NextResponse, NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/server/db";
 import { env } from "@/env";
 
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
         await r2Client.send(
             new PutObjectCommand({
-                Bucket: env.R2_BUCKET_NAME!,
+                Bucket: env.R2_BUCKET_NAME,
                 Key: filename,
                 Body: buffer,
                 ContentType: file instanceof File ? file.type : 'application/octet-stream',
