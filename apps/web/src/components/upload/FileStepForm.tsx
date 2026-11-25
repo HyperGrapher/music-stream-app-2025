@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useUploadStore } from "@/store/uploadStore";
 import { api } from "@/trpc/react";
+import { analyzeAudioFile } from "@/lib/analyze-audio";
 import { X, AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -111,6 +112,13 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
   const uploadFile = async (file: File) => {
     const uploadingFile = addFile(file);
 
+    // Decode in the browser while the upload runs; a decode failure only
+    // means the track has no waveform, so it never blocks the upload.
+    const analysisPromise = analyzeAudioFile(file).catch((analysisError) => {
+      console.warn("Could not analyze audio in the browser:", analysisError);
+      return undefined;
+    });
+
     try {
       console.log(`Created uploadingFile:`, uploadingFile);
 
@@ -150,6 +158,7 @@ export function FileStepForm({ onFilesSelected }: FileStepFormProps) {
               // Mark the upload as complete in the database
               const result = await markCompleteMutation.mutateAsync({
                 mediaAssetId,
+                analysis: await analysisPromise,
               });
               console.log("Mark upload complete response:", result);
 

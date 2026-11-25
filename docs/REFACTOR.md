@@ -30,7 +30,7 @@ A pro-level portfolio demo (SoundCloud-style creator platform) that is:
 - [x] **Phase 0 - safety net**: typecheck, lint (0 errors), tests, build, CI workflow
 - [x] **Phase 1 - consolidate**: Express routes ported to Next Route Handlers; `apps/express` deleted (socket.io was never used)
 - [x] **Phase 2 - audio delivery**: presigned R2 redirect; private/unlisted authorization; `POST /api/tracks/:id/play`. Follow-up: dedupe/rate-limit play events (one per listener per track per window)
-- [ ] **Phase 3 - waveform**: browser-side peaks + duration at upload; make `media-worker` optional
+- [x] **Phase 3 - waveform**: browser-side peaks + duration at upload; `media-worker` is now optional (backfill only; `pnpm dev:worker`)
 - [ ] **Phase 4 - de-monorepo**: hoist `apps/web` to root, remove Turborepo/`packages/*`; move worker to `worker/` if kept
 - [ ] **Phase 5 - dependency upgrades** (one commit each, read current migration guides first): Next, React, Prisma (+ `generator` output path, deprecated in Prisma 7), Tailwind, Better Auth, zod, rest
 - [ ] **Phase 6 - Neon + Vercel**: pooled `DATABASE_URL` at runtime, direct URL for migrations; switch `db push` to `prisma migrate`; verify custom `stream` schema on Neon; deploy
@@ -42,7 +42,7 @@ A pro-level portfolio demo (SoundCloud-style creator platform) that is:
 pnpm install
 pnpm check-types   # tsc on all workspaces
 pnpm lint          # eslint (web) - 0 errors, warnings tracked in Phase 7
-pnpm test          # node:test suites (12 tests)
+pnpm test          # node:test suites (19 tests)
 SKIP_ENV_VALIDATION=1 pnpm build   # no real env needed to build
 ```
 
@@ -68,6 +68,17 @@ All under `apps/web/src/app/api/tracks/[trackId]/`, logic in `src/server/modules
 Visibility: PUBLIC/UNLISTED = anyone with the link; PRIVATE = creator only. Denied and missing both return 404.
 The old JWT playback-token flow (`stream.getPlaybackToken`, `JWT_PLAYBACK_SECRET`) and the desktop auth-code exchange
 (`/auth/exchange-code`, in-memory map, incompatible with serverless) were dropped. The legacy unauthenticated `/api/upload` was removed.
+
+## Upload analysis (current design)
+
+`FileStepForm` decodes the file with Web Audio (`lib/analyze-audio.ts`) while it uploads to R2, computing duration and
+20 min/max pairs per second as signed 8-bit (`lib/waveform-compute.ts`). The result rides along on
+`upload.markUploadComplete({ mediaAssetId, analysis? })`. The server (`server/modules/tracks/analysis.ts`) validates it
+(ranges, peak count must match duration), writes audiowaveform-format JSON to `waveforms/{userId}/{audioAssetId}/v1/overview.json`,
+creates an `ATTACHED` WAVEFORM asset and a `READY` `AudioAnalysis` in one transaction. If the browser cannot decode the file
+the upload still succeeds with `AudioAnalysis.FAILED` (UI shows no waveform). Cancelling/expiring the audio also deletes its waveform.
+No `MediaProcessingJob` is queued anymore. Trust model: peaks are client-supplied, so a creator could fake their own waveform; acceptable for a demo.
+The unused 100 px/s detail waveform is no longer produced.
 
 ## Demo data
 
@@ -95,3 +106,9 @@ with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration).
 - URLs in the artist router are now same-origin (`/api/tracks/...`), via `trackUrls()`.
 - Added `access.test.ts` (visibility rules). 12/12 tests, 0 lint errors, build OK.
 - **Next up: Phase 3** (browser-side waveform at upload) then Phase 4 (hoist to root). The media-worker still works against the same DB/R2 for now.
+
+### Session 2 (cont.) - Phase 3
+- Browser-side analysis + server persistence as described in "Upload analysis". Verified in headless Chromium against real R2 (CORS on the bucket allows the presigned PUT from `localhost:3000`): 12 s tone -> `durationMs` 12000, 240 peaks, `AudioAnalysis.READY`, waveform served by `/api/tracks/:id/waveform`, cancel removes the waveform object + row, no worker job queued.
+- `pnpm dev` now starts only the web app; `pnpm dev:worker` runs the media-worker for backfilling old tracks. The worker moves to `worker/` or gets deleted in Phase 4.
+- Tests: 19 (new: peak computation, analysis schema, key layout).
+- **Next up: Phase 4** (hoist `apps/web` to repo root, drop Turborepo/`packages/*`).

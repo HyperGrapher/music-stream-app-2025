@@ -10,7 +10,6 @@ import { TRPCError } from "@trpc/server";
 import {
   AudioAnalysisStatus,
   MediaKind,
-  MediaProcessingJobStatus,
   MediaStatus,
   Visibility,
   type Prisma,
@@ -30,44 +29,16 @@ import {
   normalizeObjectContentType,
   type MediaAssetKind,
 } from "./upload-lifecycle";
+import {
+  clientAnalysisSchema,
+  serializeWaveform,
+  waveformStorageKey,
+} from "@/server/modules/tracks/analysis";
 
 // Maximum file size in bytes (50MB)
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const MAX_ARTWORK_FILE_SIZE = 10 * 1024 * 1024;
 const UNATTACHED_ASSET_TTL_MS = 24 * 60 * 60 * 1000;
-
-async function queueAudioProcessing(
-  transaction: Prisma.TransactionClient,
-  audioAssetId: string,
-) {
-  await transaction.audioAnalysis.upsert({
-    where: { audioAssetId },
-    create: {
-      audioAssetId,
-      status: AudioAnalysisStatus.QUEUED,
-    },
-    update: {
-      status: AudioAnalysisStatus.QUEUED,
-      completedAt: null,
-    },
-  });
-
-  await transaction.mediaProcessingJob.upsert({
-    where: { audioAssetId },
-    create: {
-      audioAssetId,
-      status: MediaProcessingJobStatus.QUEUED,
-    },
-    update: {
-      status: MediaProcessingJobStatus.QUEUED,
-      availableAt: new Date(),
-      lockedAt: null,
-      lockedBy: null,
-      lastError: null,
-      finishedAt: null,
-    },
-  });
-}
 
 // Allowed audio mime types
 const ALLOWED_AUDIO_TYPES = [
@@ -154,6 +125,18 @@ async function verifyUploadedObject(
 }
 
 async function claimAndDeleteMediaAsset(upload: MediaAsset): Promise<boolean> {
+  const generated =
+    upload.kind === MediaKind.AUDIO
+      ? await db.mediaAsset.findMany({
+          where: {
+            OR: [
+              { overviewWaveformFor: { audioAssetId: upload.id } },
+              { detailWaveformFor: { audioAssetId: upload.id } },
+            ],
+          },
+        })
+      : [];
+
   const claimed = await db.mediaAsset.updateMany({
     where: {
       id: upload.id,
@@ -183,6 +166,18 @@ async function claimAndDeleteMediaAsset(upload: MediaAsset): Promise<boolean> {
   }
 
   await db.mediaAsset.delete({ where: { id: upload.id } });
+
+  // Generated waveforms have no owner-facing lifecycle: they go with the audio.
+  for (const waveform of generated) {
+    try {
+      await r2Client.send(
+        new DeleteObjectCommand({ Bucket: waveform.bucket, Key: waveform.storageKey }),
+      );
+      await db.mediaAsset.delete({ where: { id: waveform.id } });
+    } catch (error) {
+      console.error(`Failed to delete waveform asset ${waveform.id}:`, error);
+    }
+  }
 
   return true;
 }
@@ -405,6 +400,8 @@ export const uploadRouter = createTRPCRouter({
     .input(
       z.object({
         mediaAssetId: z.string().uuid(),
+        /** Computed in the browser; omitted if the browser could not decode the file. */
+        analysis: clientAnalysisSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -421,6 +418,7 @@ export const uploadRouter = createTRPCRouter({
           select: {
             storageKey: true,
             bucket: true,
+            originalFilename: true,
           },
         });
 
@@ -444,26 +442,97 @@ export const uploadRouter = createTRPCRouter({
           "audio",
         );
 
-        const updated = await db.mediaAsset.updateMany({
-          where: {
-            id: input.mediaAssetId,
-            ownerId: userId,
-            kind: MediaKind.AUDIO,
-            status: MediaStatus.PENDING,
-          },
-          data: {
-            status: MediaStatus.READY,
-            byteSize: BigInt(metadata.byteSize),
-            mimeType: metadata.mimeType,
-            uploadedAt: new Date(),
-          },
-        });
+        const analysis = input.analysis;
+        const waveformJson = analysis ? serializeWaveform(analysis) : null;
+        const waveformKey = analysis
+          ? waveformStorageKey(userId, input.mediaAssetId)
+          : null;
 
-        if (updated.count !== 1) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "Upload is no longer available",
+        if (analysis && waveformKey) {
+          await r2Client.send(
+            new PutObjectCommand({
+              Bucket: mediaAsset.bucket,
+              Key: waveformKey,
+              Body: waveformJson!,
+              ContentType: "application/json",
+            }),
+          );
+        }
+
+        try {
+          await db.$transaction(async (transaction) => {
+            const updated = await transaction.mediaAsset.updateMany({
+              where: {
+                id: input.mediaAssetId,
+                ownerId: userId,
+                kind: MediaKind.AUDIO,
+                status: MediaStatus.PENDING,
+              },
+              data: {
+                status: MediaStatus.READY,
+                byteSize: BigInt(metadata.byteSize),
+                mimeType: metadata.mimeType,
+                uploadedAt: new Date(),
+              },
+            });
+
+            if (updated.count !== 1) {
+              throw new TRPCError({
+                code: "CONFLICT",
+                message: "Upload is no longer available",
+              });
+            }
+
+            if (!analysis || !waveformKey) {
+              // Browser could not decode the file: keep the upload, no waveform.
+              await transaction.audioAnalysis.create({
+                data: {
+                  audioAssetId: input.mediaAssetId,
+                  status: AudioAnalysisStatus.FAILED,
+                },
+              });
+              return;
+            }
+
+            const waveformAsset = await transaction.mediaAsset.create({
+              data: {
+                ownerId: userId,
+                kind: MediaKind.WAVEFORM,
+                status: MediaStatus.ATTACHED,
+                bucket: mediaAsset.bucket,
+                storageKey: waveformKey,
+                originalFilename: "overview.json",
+                mimeType: "application/json",
+                byteSize: BigInt(Buffer.byteLength(waveformJson!)),
+                uploadedAt: new Date(),
+                attachedAt: new Date(),
+              },
+            });
+            await transaction.audioAnalysis.create({
+              data: {
+                audioAssetId: input.mediaAssetId,
+                status: AudioAnalysisStatus.READY,
+                durationMs: analysis.durationMs,
+                sampleRate: analysis.sampleRate,
+                channels: analysis.channels,
+                overviewWaveformAssetId: waveformAsset.id,
+                overviewPixelsPerSecond: 20,
+                completedAt: new Date(),
+              },
+            });
           });
+        } catch (error) {
+          if (waveformKey) {
+            await r2Client
+              .send(
+                new DeleteObjectCommand({
+                  Bucket: mediaAsset.bucket,
+                  Key: waveformKey,
+                }),
+              )
+              .catch(() => undefined);
+          }
+          throw error;
         }
 
         return {
@@ -691,7 +760,6 @@ export const uploadRouter = createTRPCRouter({
             },
           });
 
-          await queueAudioProcessing(transaction, mediaAsset.id);
           return createdTrack;
         });
 
@@ -882,7 +950,6 @@ export const uploadRouter = createTRPCRouter({
                 creatorId: userId,
               },
             });
-            await queueAudioProcessing(transaction, mediaAsset.id);
             await transaction.releaseTrack.create({
               data: {
                 releaseId: createdRelease.id,
