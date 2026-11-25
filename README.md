@@ -1,112 +1,34 @@
-# Music Streaming App
-This Turborepo starter is maintained by the Turborepo core team.
+# Music Stream
 
-## What's inside?
+A SoundCloud-style creator platform: upload tracks and releases, waveform playback, profiles, likes and comments.
+Single Next.js app on Vercel + Neon Postgres + Cloudflare R2.
 
-This Turborepo includes the following packages/apps:
+**Stack:** Next.js 15 (App Router), tRPC, Prisma, Better Auth (Google + email/password), Tailwind 4 / shadcn, Zustand.
 
-### Apps and Packages
+## How it fits together
 
-- `express`: an [Express.js](https://expressjs.com/) app
-- `web`: main [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+- **Uploads** go straight from the browser to R2 via presigned PUT. The browser also decodes the audio (Web Audio) to compute duration and waveform peaks, which the server validates and stores as JSON in R2.
+- **Playback** never proxies audio: `/api/tracks/:id/stream` checks visibility and redirects to a short-lived presigned R2 URL (range requests handled by R2).
+- **Domain model** is in `CONTEXT.md` and `docs/adr/`. Progress and decisions are tracked in `docs/REFACTOR.md`.
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-pnpm build
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
-pnpm dev
-```
-## Installation
-
-### Prerequisites
-
-- Node.js v18+ (v22+ recomended)
-- PostgreSQL database (either local or free Supabase database)
-- [pnpm](https://pnpm.io/) for package management (recommended)
-- if you are not using `pnpm` replace `pnpm` shell commands with `npm` with proper commands
-
-### Creating database and user
-
-Make sure .env file is set up correctly (place you own params): 
-` DATABASE_URL="postgresql://[streamer]:[password]@localhost:5432/[streamapp]?schema=[stream]" `
-
-Based on the connection string above, adjust parameters and run commands:
+## Local development
 
 ```bash
-sudo -u postgres psql
+pnpm install
+cp .env.example .env        # fill in values (see below)
+pnpm db:push                # create tables
+pnpm db:seed:r2             # optional: demo tracks from the R2 bucket (needs ffprobe)
+pnpm dev                    # http://localhost:3000
 ```
 
-```sql
-CREATE DATABASE streamapp;
-CREATE USER streamer WITH PASSWORD 'password';
-ALTER USER streamer CREATEDB;
-GRANT ALL PRIVILEGES ON DATABASE sreamapp TO streamer;
-\q #quit command
-```
+Required env (validated in `src/env.js`): `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
+(optional `R2_PUBLIC_BASE_URL`). The R2 bucket needs a CORS rule allowing `PUT` from your app origin.
 
-psql -h localhost -p 5432 -U streamer -d streamapp
+## Scripts
 
-
-```ts
-// middleware.ts
-import { getSessionCookie } from "better-auth/cookies";
-import { NextRequest, NextResponse } from "next/server";
-
-export async function middleware(request: NextRequest) {
-    const sessionCookie = getSessionCookie(request); // Optionally pass config as the second argument if cookie name or prefix is customized.
-    if (!sessionCookie) {
-        return NextResponse.redirect(new URL("/", request.url));
-    }
-    return NextResponse.next();
-}
-
-export const config = {
-    matcher: ["/dashboard"],
-};
-
-```
-
-
-new one don't use this unless wanna use public schema:
-sudo -u postgres psql
-```sql
-
--- Grant usage and create privileges on the public schema
-GRANT USAGE, CREATE ON SCHEMA public TO streamer;
-
--- Grant permissions on all existing tables
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO streamer;
-
--- Grant permissions on all sequences
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO streamer;
-
--- Make future tables automatically accessible
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO streamer;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO streamer;
-
--- If you're using the stream schema too
-CREATE SCHEMA IF NOT EXISTS stream;
-GRANT USAGE, CREATE ON SCHEMA stream TO streamer;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA stream TO streamer;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA stream TO streamer;
-ALTER DEFAULT PRIVILEGES IN SCHEMA stream GRANT ALL PRIVILEGES ON TABLES TO streamer;
-ALTER DEFAULT PRIVILEGES IN SCHEMA stream GRANT ALL PRIVILEGES ON SEQUENCES TO streamer;
-
-
-```
+| Command | |
+|---------|--|
+| `pnpm check-types` / `pnpm lint` / `pnpm test` | typecheck, ESLint, node:test |
+| `SKIP_ENV_VALIDATION=1 pnpm build` | production build without real env |
+| `pnpm db:push` / `pnpm db:studio` | schema sync / Prisma Studio |

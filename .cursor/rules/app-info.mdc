@@ -4,7 +4,7 @@ globs:
 alwaysApply: false
 ---
 
-This is a turborepo consists of `web` which is a next.js v15.3 and `express` apps.
+This is a single Next.js v15 app (Prisma/Postgres, Better Auth, tRPC, Cloudflare R2).
 
 This app is a music player app similar to the `soundcloud.com`.
 

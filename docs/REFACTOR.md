@@ -1,6 +1,6 @@
 # Refactor: single Next.js app for Vercel + Neon
 
-Living document. **Read this first in a new session**, then `HANDOVER.md`, `CONTEXT.md`
+Living document. **Read this first in a new session**, then `CONTEXT.md`
 and `docs/adr/`. Update the checklist and the log at the end of every work session.
 
 Working branch: `refactor/single-nextjs-app` (do not use the auto-generated `claude/*` branches).
@@ -21,7 +21,7 @@ A pro-level portfolio demo (SoundCloud-style creator platform) that is:
 | 3 | Do not proxy audio through any server. Public tracks: R2 public/custom domain. Private/unlisted: Route Handler authorizes, then redirects to a short-lived presigned R2 GET | Keeps audio bytes off Vercel's free bandwidth; R2 supports range requests; likely fixes the old "chunk pending at 2 min" proxy bug; gives private/unlisted authorization |
 | 4 | Waveform peaks + duration computed in the browser at upload (Web Audio), stored as small JSON in R2. `media-worker` becomes optional (Docker/Actions) | FFmpeg/audiowaveform do not fit Vercel free (250MB function limit, daily-only cron) |
 | 5 | Drop socket.io (use polling/SSE if realtime is ever needed) | Not supported on Vercel functions |
-| 6 | Drop Turborepo when only one app remains; hoist `apps/web` to repo root; keep pnpm | One app does not need a task runner or workspaces |
+| 6 | Drop Turborepo when only one app remains; hoist the app to the repo root; keep pnpm | One app does not need a task runner or workspaces |
 | 7 | Migrate architecture on current versions first, then upgrade deps as separate commits | Failures stay attributable |
 | 8 | Domain logic in `server/modules/*` plain services, storage/queue behind small interfaces | Keeps the app extractable later |
 
@@ -31,7 +31,7 @@ A pro-level portfolio demo (SoundCloud-style creator platform) that is:
 - [x] **Phase 1 - consolidate**: Express routes ported to Next Route Handlers; `apps/express` deleted (socket.io was never used)
 - [x] **Phase 2 - audio delivery**: presigned R2 redirect; private/unlisted authorization; `POST /api/tracks/:id/play`. Follow-up: dedupe/rate-limit play events (one per listener per track per window)
 - [x] **Phase 3 - waveform**: browser-side peaks + duration at upload; `media-worker` is now optional (backfill only; `pnpm dev:worker`)
-- [ ] **Phase 4 - de-monorepo**: hoist `apps/web` to root, remove Turborepo/`packages/*`; move worker to `worker/` if kept
+- [x] **Phase 4 - de-monorepo**: app hoisted to repo root; Turborepo, `packages/*` and the optional `media-worker` deleted (fresh app: no backfill needed)
 - [ ] **Phase 5 - dependency upgrades** (one commit each, read current migration guides first): Next, React, Prisma (+ `generator` output path, deprecated in Prisma 7), Tailwind, Better Auth, zod, rest
 - [ ] **Phase 6 - Neon + Vercel**: pooled `DATABASE_URL` at runtime, direct URL for migrations; switch `db push` to `prisma migrate`; verify custom `stream` schema on Neon; deploy
 - [ ] **Phase 7 - quality**: integration tests (asset claim races, release rollback, stream visibility, auth linking); clear remaining lint warnings (`no-unused-vars`, `<img>` -> `next/image`); README for the demo
@@ -40,9 +40,9 @@ A pro-level portfolio demo (SoundCloud-style creator platform) that is:
 
 ```bash
 pnpm install
-pnpm check-types   # tsc on all workspaces
-pnpm lint          # eslint (web) - 0 errors, warnings tracked in Phase 7
-pnpm test          # node:test suites (19 tests)
+pnpm check-types   # tsc
+pnpm lint          # eslint - 0 errors, warnings tracked in Phase 7
+pnpm test          # node:test, src/**/*.test.ts (19 tests)
 SKIP_ENV_VALIDATION=1 pnpm build   # no real env needed to build
 ```
 
@@ -51,12 +51,12 @@ CI (`.github/workflows/ci.yml`) runs the same four steps on PRs and `master`.
 ## Environment
 
 Real secrets are configured in the cloud environment (not in the repo). Names are listed
-in `apps/web/.env.example`; validation schema is `apps/web/src/env.js`. A session started
+in `.env.example`; validation schema is `src/env.js`. A session started
 before the variables were added will not see them.
 
 ## Track delivery (current design)
 
-All under `apps/web/src/app/api/tracks/[trackId]/`, logic in `src/server/modules/tracks/`:
+All under `src/app/api/tracks/[trackId]/`, logic in `src/server/modules/tracks/`:
 
 | Route | Behaviour |
 |-------|-----------|
@@ -82,7 +82,7 @@ The unused 100 px/s detail waveform is no longer produced.
 
 ## Demo data
 
-`pnpm --filter web db:seed:r2` registers the audio, artwork and waveforms already in the R2 bucket as one "Demo Creator"
+`pnpm db:seed:r2` registers the audio, artwork and waveforms already in the R2 bucket as one "Demo Creator"
 with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration). Needs `ffprobe` and the `R2_*` + `DATABASE_URL` env.
 
 ## Log
@@ -112,3 +112,10 @@ with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration).
 - `pnpm dev` now starts only the web app; `pnpm dev:worker` runs the media-worker for backfilling old tracks. The worker moves to `worker/` or gets deleted in Phase 4.
 - Tests: 19 (new: peak computation, analysis schema, key layout).
 - **Next up: Phase 4** (hoist `apps/web` to repo root, drop Turborepo/`packages/*`).
+
+### Session 2 (cont.) - Phase 4
+- Hoisted `apps/web/*` to the repo root with `git mv` (history preserved). Deleted `apps/media-worker` (Phase 3 made it redundant; this is a fresh app, nothing to backfill), `packages/*` (`@repo/ui` was unused; tsconfig base inlined; ESLint config was already local), `turbo.json`, `pnpm-workspace.yaml`, `TODO.md` and the stale `HANDOVER.md` (superseded by this file, `CONTEXT.md` and the ADR).
+- `package.json`: name `music-stream-app`, `pnpm.onlyBuiltDependencies` allowlist (pnpm 10 skips build scripts otherwise), `test` is now a glob over `src/**/*.test.ts`, `dev:worker` removed. CI workflow unchanged and still valid.
+- Verified: check-types, lint (0 errors), 19/19 tests, build.
+- `.env` moved to the repo root (still gitignored). Remember to rebuild the Vercel project root to `/` (default).
+- **Next up: Phase 5** (dependency upgrades, one commit each) or Phase 6 (Neon + Vercel) - recommend 6 first so there is a deployed baseline, then upgrade.

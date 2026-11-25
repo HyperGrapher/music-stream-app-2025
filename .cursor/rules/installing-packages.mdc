@@ -9,9 +9,8 @@ globs:
 alwaysApply: false
 ---
 - Use `pnpm`.
-- Don't install in root. Install in `apps/web` for nextJS app and `apps/express` for expressJS app:
+- Single Next.js app at the repo root (no workspaces):
 
 ```sh
-cd apps/web
 pnpm add ...
 ```

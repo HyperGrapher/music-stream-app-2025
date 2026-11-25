@@ -12,10 +12,9 @@ alwaysApply: false
 
 ## Main Structure
 
-- We use Turborepo with pnpm workspaces
-- Main app is in `apps/web`
-- Packages are in the `packages` folder
-- Server actions are in `apps/web/utils/actions` folder
+- Single Next.js app at the repo root (pnpm, no monorepo)
+- Domain logic lives in `src/server/modules/*`; tRPC routers in `src/server/api/routers`; media delivery in `src/app/api/tracks`
+- Server actions are in `src/server/actions` folder
 
 ```tree
 .
@@ -91,8 +90,8 @@ alwaysApply: false
 
 ## New Pages
 
-- Create new pages at: `apps/web/app/(app)/PAGE_NAME/page.tsx`
-- Components for the page are either in `page.tsx` or in the `apps/web/app/(app)/PAGE_NAME` folder
+- Create new pages at: `src/app/(app)/PAGE_NAME/page.tsx`
+- Components for the page are either in `page.tsx` or in the `src/app/(app)/PAGE_NAME` folder
 - Pages are Server components for direct data loading
 - Use `swr` for data fetching in deeply nested components
 - Components with `onClick` must be client components with `use client` directive

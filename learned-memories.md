@@ -5,7 +5,7 @@ This file stores project-specific knowledge, conventions, and user preferences l
 ## Project Structure
 
 - **Type**: Next.js music player app similar to SoundCloud
-- **Root Directory**: `/apps/web/`
+- **Root Directory**: `/` (repo root)
 - **Route Groups**:
   - `(player)`: Contains the main music player experience routes
 
@@ -16,14 +16,14 @@ This file stores project-specific knowledge, conventions, and user preferences l
 - **Authentication**: Auth module available at `@/lib/auth`
 - **UI Components**: Using shadcn/ui component library
 - **State Management**: Use React hooks and context where appropriate
-- **Upload Component**: Implemented a two-step form process in `apps/web/src/components/upload/` to handle both single track and album uploads with appropriate fields for each.
+- **Upload Component**: Implemented a two-step form process in `src/components/upload/` to handle both single track and album uploads with appropriate fields for each.
 - **Form Structure**: Used react-hook-form with zod validation and shadcn components for the upload UI.
 - **Form Fields**:
   - Single track: title, link, artwork, genre, tags, description, privacy settings
   - Album: title, link, artwork, genre, album type, tags, description, privacy settings
 - **File Upload**: 
   - Files uploaded to Cloudflare R2 storage using presigned URLs.
-  - Filenames are sanitized once at the source in `apps/web/src/components/upload/FileStepForm.tsx`
+  - Filenames are sanitized once at the source in `src/components/upload/FileStepForm.tsx`
 
 
 ## Project Conventions
@@ -44,7 +44,7 @@ This file stores project-specific knowledge, conventions, and user preferences l
 
 ## Technical Decisions
 
-- **Player System**: The audio playback system uses a clean state management approach with Zustand in `apps/web/src/store/player.tsx`.
+- **Player System**: The audio playback system uses a clean state management approach with Zustand in `src/store/player.tsx`.
   - The player has distinct states: 'idle', 'loading', 'playing', 'paused', and 'error'.
   - The single global audio element is managed outside of React's lifecycle.
   - Uses a controller component pattern with token requests separated from the UI components.
