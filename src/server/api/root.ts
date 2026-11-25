@@ -1,5 +1,6 @@
 import { artistRouter } from "./routers/artist";
 import { discoverRouter } from "./routers/discover";
+import { engagementRouter } from "./routers/engagement";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 import { uploadRouter } from "./routers/upload";
 
@@ -11,6 +12,7 @@ import { uploadRouter } from "./routers/upload";
 export const appRouter = createTRPCRouter({
   artist: artistRouter,
   discover: discoverRouter,
+  engagement: engagementRouter,
   upload: uploadRouter,
 });
 

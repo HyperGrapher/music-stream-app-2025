@@ -4,7 +4,6 @@ import { memo, useCallback } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   Copy,
-  Heart,
   MessageCircle,
   MoreHorizontal,
   Pause,
@@ -18,6 +17,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useTrackWaveform } from "@/hooks/useTrackWaveform";
 import { usePlayerStore } from "@/store/player";
 import type { PlayerTrack as Track } from "@/types/player-track";
+import { LikeButton } from "./LikeButton";
 import WaveformVisualizer from "./WaveformVisualizer";
 
 interface WaveformTrackItemProps {
@@ -166,13 +166,13 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
           </div>
 
           <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
-            <button
-              type="button"
+            <LikeButton
+              trackId={track.id}
+              initialLiked={track.likedByMe}
+              initialCount={track.likeCount}
+              variant="pill"
               className={actionClass}
-              aria-label="Like track"
-            >
-              <Heart className="h-3.5 w-3.5" /> {track.likeCount ?? 0}
-            </button>
+            />
             <button
               type="button"
               className={actionClass}

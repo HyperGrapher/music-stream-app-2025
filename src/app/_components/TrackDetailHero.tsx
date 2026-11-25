@@ -3,7 +3,6 @@
 import { formatDistanceToNow } from "date-fns";
 import {
   Copy,
-  Heart,
   MoreHorizontal,
   Pause,
   Play,
@@ -18,6 +17,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useTrackWaveform } from "@/hooks/useTrackWaveform";
 import { usePlayerStore } from "@/store/player";
 import type { PlayerTrack } from "@/types/player-track";
+import { LikeButton } from "./LikeButton";
 import WaveformVisualizer from "./WaveformVisualizer";
 
 const roundActionClass =
@@ -140,16 +140,13 @@ export function TrackDetailHero({ track }: { track: PlayerTrack }) {
           </div>
 
           <div className="mt-5 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
+            <LikeButton
+              trackId={track.id}
+              initialLiked={track.likedByMe}
+              initialCount={track.likeCount}
+              variant="round"
               className={roundActionClass}
-              aria-label="Like track"
-            >
-              <Heart className="h-5 w-5" />
-            </button>
-            <span className="mr-2 text-sm font-semibold text-zinc-300">
-              {track.likeCount ?? 0}
-            </span>
+            />
             <button
               type="button"
               className={roundActionClass}

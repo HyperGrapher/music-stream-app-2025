@@ -14,6 +14,8 @@ export interface PlayerTrack {
   releaseDate?: Date | string | null;
   playCount?: number;
   likeCount?: number;
+  /** Whether the signed-in viewer liked this track (absent for anonymous viewers). */
+  likedByMe?: boolean;
   commentCount?: number;
   repostCount?: number;
   downloadCount?: number;

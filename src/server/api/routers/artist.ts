@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { canAccessTrack, trackUrls } from "@/server/modules/tracks/access";
+import { likedByMeSelect } from "@/server/modules/tracks/likes";
 
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
 
@@ -100,6 +101,7 @@ export const artistRouter = createTRPCRouter({
           },
           releaseDate: true,
           artworkAsset: { select: { publicUrl: true } },
+          ...likedByMeSelect(ctx.session?.user.id),
           playCount: true,
           likeCount: true,
           commentCount: true,
@@ -108,10 +110,11 @@ export const artistRouter = createTRPCRouter({
         },
       });
 
-      return tracks.map(({ artworkAsset, audioAsset, ...track }) => {
+      return tracks.map(({ artworkAsset, audioAsset, likes, ...track }) => {
         const analysis = audioAsset.audioAnalysis;
         return {
           ...track,
+          likedByMe: likes.length > 0,
           duration: analysis?.durationMs
             ? Math.round(analysis.durationMs / 1_000)
             : 0,
@@ -171,6 +174,7 @@ export const artistRouter = createTRPCRouter({
             },
           },
           artworkAsset: { select: { publicUrl: true } },
+          ...likedByMeSelect(ctx.session?.user.id),
           playCount: true,
           likeCount: true,
           commentCount: true,
@@ -179,10 +183,11 @@ export const artistRouter = createTRPCRouter({
         },
       });
 
-      return tracks.map(({ artworkAsset, audioAsset, ...track }) => {
+      return tracks.map(({ artworkAsset, audioAsset, likes, ...track }) => {
         const analysis = audioAsset.audioAnalysis;
         return {
           ...track,
+          likedByMe: likes.length > 0,
           duration: analysis?.durationMs
             ? Math.round(analysis.durationMs / 1_000)
             : 0,
@@ -217,6 +222,7 @@ export const artistRouter = createTRPCRouter({
           repostCount: true,
           commentCount: true,
           artworkAsset: { select: { publicUrl: true } },
+          ...likedByMeSelect(ctx.session?.user.id),
           audioAsset: {
             select: {
               audioAnalysis: {
@@ -252,11 +258,12 @@ export const artistRouter = createTRPCRouter({
 
       // Same rule as the stream route: unlisted works via link, private is owner-only.
       if (!track || !canAccessTrack(track, ctx.session?.user.id)) return null;
-      const { artworkAsset, audioAsset, creator, ...trackData } = track;
+      const { artworkAsset, audioAsset, creator, likes, ...trackData } = track;
       const analysis = audioAsset.audioAnalysis;
 
       return {
         ...trackData,
+        likedByMe: likes.length > 0,
         duration: analysis?.durationMs
           ? Math.round(analysis.durationMs / 1_000)
           : 0,
@@ -327,6 +334,7 @@ export const artistRouter = createTRPCRouter({
                   likeCount: true,
                   commentCount: true,
                   artworkAsset: { select: { publicUrl: true } },
+                  ...likedByMeSelect(ctx.session?.user.id),
                 },
               },
             },
@@ -341,11 +349,13 @@ export const artistRouter = createTRPCRouter({
           const {
             artworkAsset: trackArtwork,
             audioAsset,
+            likes,
             ...trackData
           } = track;
           const analysis = audioAsset.audioAnalysis;
           return {
             ...trackData,
+            likedByMe: likes.length > 0,
             duration: analysis?.durationMs
               ? Math.round(analysis.durationMs / 1_000)
               : 0,
