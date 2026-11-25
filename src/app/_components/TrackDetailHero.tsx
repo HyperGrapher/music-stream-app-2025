@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback } from "react";
-import { shallow } from "zustand/shallow";
+import { useShallow } from "zustand/react/shallow";
 
 import { useTrackWaveform } from "@/hooks/useTrackWaveform";
 import { usePlayerStore } from "@/store/player";
@@ -38,7 +38,7 @@ export function TrackDetailHero({ track }: { track: PlayerTrack }) {
     setPlaylist,
     togglePlay,
     seek,
-  } = usePlayerStore(
+  } = usePlayerStore(useShallow(
     (state) => ({
       isCurrentTrack: state.currentTrack?.id === track.id,
       isPlaying:
@@ -47,9 +47,7 @@ export function TrackDetailHero({ track }: { track: PlayerTrack }) {
       setPlaylist: state.setPlaylist,
       togglePlay: state.togglePlay,
       seek: state.seek,
-    }),
-    shallow,
-  );
+    })));
 
   const startTrack = useCallback(() => {
     setPlaylist([track]);

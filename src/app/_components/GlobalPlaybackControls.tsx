@@ -14,14 +14,14 @@ import {
 } from 'lucide-react';
 import { usePlayerStore } from '@/store/player';
 import { formatDuration } from '@/lib/utils';
-import { shallow } from 'zustand/shallow';
+import { useShallow } from 'zustand/react/shallow';
 import { usePathname } from 'next/navigation'
 
 // Using React.memo to prevent unnecessary re-renders
 function TrackInfo() {
-  const { currentTrack } = usePlayerStore(state => ({
+  const { currentTrack } = usePlayerStore(useShallow(state => ({
     currentTrack: state.currentTrack
-  }), shallow);
+  })));
 
   if (!currentTrack) return null;
 
@@ -60,13 +60,13 @@ const PlaybackButtons = memo(function PlaybackButtons() {
     previousTrack,
     nextTrack,
     togglePlay,
-  } = usePlayerStore(state => ({
+  } = usePlayerStore(useShallow(state => ({
     status: state.status,
     currentTrack: state.currentTrack,
     previousTrack: state.previousTrack,
     nextTrack: state.nextTrack,
     togglePlay: state.togglePlay,
-  }), shallow);
+  })));
 
   const isPlaying = status === 'playing';
 
@@ -137,11 +137,11 @@ function ProgressBar() {
     currentTime,
     duration,
     seek,
-  } = usePlayerStore(state => ({
+  } = usePlayerStore(useShallow(state => ({
     currentTime: state.currentTime,
     duration: state.duration,
     seek: state.seek,
-  }), shallow);
+  })));
 
   const progressBarRef = useRef<HTMLDivElement>(null);
 
@@ -195,13 +195,13 @@ const Volume = memo(function Volume() {
     isMuted,
     setVolume,
     toggleMute
-  } = usePlayerStore(state => ({
+  } = usePlayerStore(useShallow(state => ({
     currentTrack: state.currentTrack,
     volume: state.volume,
     isMuted: state.isMuted,
     setVolume: state.setVolume,
     toggleMute: state.toggleMute
-  }), shallow);
+  })));
 
   const volumeBarRef = useRef<HTMLDivElement>(null);
 

@@ -13,7 +13,7 @@ import {
   Share2,
 } from "lucide-react";
 import Link from "next/link";
-import { shallow } from "zustand/shallow";
+import { useShallow } from "zustand/react/shallow";
 
 import { useTrackWaveform } from "@/hooks/useTrackWaveform";
 import { usePlayerStore } from "@/store/player";
@@ -50,7 +50,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
     playTrack,
     setPlaylist,
     seek,
-  } = usePlayerStore(
+  } = usePlayerStore(useShallow(
     (state) => ({
       isCurrentTrack: state.currentTrack?.id === track.id,
       isPlaying:
@@ -59,9 +59,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
       playTrack: state.playTrack,
       setPlaylist: state.setPlaylist,
       seek: state.seek,
-    }),
-    shallow,
-  );
+    })));
 
   const playFromQueue = useCallback(() => {
     setPlaylist(playlist?.length ? playlist : [track]);

@@ -6,7 +6,7 @@ import { formatDuration } from "@/lib/utils";
 import { useEffect, useMemo, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Pause, Play, RefreshCw } from "lucide-react";
-import { shallow } from "zustand/shallow";
+import { useShallow } from "zustand/react/shallow";
 
 type PlaylistWithSongs = {
   id: string;
@@ -29,13 +29,11 @@ const TrackRow = memo(
     isCurrentPlaying: boolean;
   }) {
     // Consolidated store subscription with shallow equality
-    const { playTrack, status } = usePlayerStore(
+    const { playTrack, status } = usePlayerStore(useShallow(
       (state) => ({
         playTrack: state.playTrack,
         status: state.status,
-      }),
-      shallow, // Use shallow equality to prevent unnecessary re-renders
-    );
+      })));
 
     // Check if this track is playing based on the current status
     const isPlaying = status === "playing";
@@ -156,13 +154,11 @@ export function TrackTable({
   query?: string;
 }) {
   // Consolidated store subscription with shallow equality
-  const { setPlaylist, currentTrack } = usePlayerStore(
+  const { setPlaylist, currentTrack } = usePlayerStore(useShallow(
     (state) => ({
       setPlaylist: state.setPlaylist,
       currentTrack: state.currentTrack,
-    }),
-    shallow,
-  );
+    })));
 
   useEffect(() => {
     // Set the playlist in the store

@@ -4,7 +4,7 @@ import { create } from "zustand";
 import type { PlayerTrack as Track } from "@/types/player-track";
 import { toast } from "sonner";
 import { useEffect } from "react";
-import { shallow } from "zustand/shallow";
+import { useShallow } from "zustand/react/shallow";
 
 // Defined playback states for clear control flow
 type PlaybackStatus = "idle" | "loading" | "playing" | "paused" | "error";
@@ -420,7 +420,7 @@ export function useAudioEvents() {
 // MediaSession API support
 export function useMediaSession() {
   const { currentTrack, status, play, pause, nextTrack, previousTrack, seek } =
-    usePlayerStore(
+    usePlayerStore(useShallow(
       (state) => ({
         currentTrack: state.currentTrack,
         status: state.status,
@@ -429,9 +429,7 @@ export function useMediaSession() {
         nextTrack: state.nextTrack,
         previousTrack: state.previousTrack,
         seek: state.seek,
-      }),
-      shallow,
-    );
+      })));
 
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
@@ -490,14 +488,12 @@ export function useMediaSession() {
 
 // Keyboard navigation support
 export function useKeyboardControls() {
-  const { togglePlay, nextTrack, previousTrack } = usePlayerStore(
+  const { togglePlay, nextTrack, previousTrack } = usePlayerStore(useShallow(
     (state) => ({
       togglePlay: state.togglePlay,
       nextTrack: state.nextTrack,
       previousTrack: state.previousTrack,
-    }),
-    shallow,
-  );
+    })));
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -552,13 +548,11 @@ export function PlayerController({
   useKeyboardControls();
 
   // Get state and actions from store
-  const { currentTrack, status } = usePlayerStore(
+  const { currentTrack, status } = usePlayerStore(useShallow(
     (state) => ({
       currentTrack: state.currentTrack,
       status: state.status,
-    }),
-    shallow,
-  );
+    })));
 
   // Set up direct playback when track changes
   useEffect(() => {
