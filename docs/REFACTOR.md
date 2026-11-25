@@ -6,7 +6,57 @@ and `docs/adr/`.
 **Product scope:** the complete feature set to build next is specified in [`docs/PRD.md`](PRD.md)
 (milestones M0–M8). Where the PRD and `CONTEXT.md` disagree, the PRD wins; update `CONTEXT.md` in M0. Update the checklist and the log at the end of every work session.
 
-Working branch: `refactor/single-nextjs-app` (do not use the auto-generated `claude/*` branches).
+Working branch: **`dev`** (PRD implementation; push only to `origin/dev`). The older `refactor/single-nextjs-app` branch is history.
+
+## PRD implementation: status and handoff (READ THIS FIRST IN A NEW SESSION)
+
+Implementation of [`docs/PRD.md`](PRD.md) is in progress, milestone by milestone (PRD §19). Update this section at
+the end of every work session (checklist + "Next up" + gotchas), and add a dated entry to the Log at the bottom.
+
+**Owner decisions (apply to all milestones)**
+
+- Global client state uses **zustand** (already installed); add libraries freely when they remove code.
+- **Audio scope:** keep today's accepted formats (MP3 first; WAV/OGG/FLAC/AAC/M4A stay accepted as they are today). Do NOT add AIFF or other new formats (this narrows PRD UP-F1/§3.3).
+- Code only on `origin/dev`. No PRs unless asked.
+- When in doubt about product intent, ask the owner.
+
+**Milestone checklist** (PRD §19)
+
+| Milestone | State |
+|---|---|
+| M0 Foundation reset | in progress, see sub-steps below |
+| M1 Accounts & profiles | not started |
+| M2 Upload & editing | not started |
+| M3 Listening | not started |
+| M4 Social loop | not started |
+| M5 Discovery | not started |
+| M6 Creator tools & plans | not started |
+| M7 Trust & safety | not started |
+| M8 Polish | not started |
+
+**M0 sub-steps**
+
+- [ ] M0.1 Schema baseline (PRD §16) + fresh `0_init` migration
+- [ ] M0.2 Core modules: clock, names/slugs, visibility builders, entitlements, rate-limit, email, storage-deletion + cron, generic image pipeline
+- [ ] M0.3 Auth: username on user creation, session user fields, `ADMIN_EMAILS`, env vars
+- [ ] M0.4 Port server features onto the new model (upload, tracks, collections, comments, likes, plays, discover, route handlers with secret links)
+- [ ] M0.5 Permalink routing + UI port (`/[username]`, `/[username]/[trackSlug]`, `/[username]/sets/[slug]`, `s-token` variants, legacy redirects, upload form)
+- [ ] M0.6 New seed (PRD §20)
+- [ ] M0.7 Port unit/integration/e2e tests, all checks green, docs (`CONTEXT.md`, ADR, README)
+
+**Environment gotchas for agents (cloud sandbox)**
+
+- The sandbox's shell env has `DATABASE_URL` pointing at the **production Neon** database (and `DATABASE_URL_POOLED`). dotenv does NOT override real env vars, so a bare `pnpm prisma migrate ...` targets Neon (unreachable on TCP 5432 from here, but never rely on that). **Always prefix DB commands with the local URLs**:
+  `DATABASE_URL=postgresql://streamer:streamer@localhost:5432/streamapp DATABASE_URL_UNPOOLED=postgresql://streamer:streamer@localhost:5432/streamapp pnpm ...`
+  Tests: `TEST_DATABASE_URL=postgresql://streamer:streamer@localhost:5432/streamapp_test`.
+- Local Postgres 16: `service postgresql start`; if the role is missing: `su postgres -c "psql -c \"create role streamer login superuser password 'streamer'\" -c 'create database streamapp owner streamer' -c 'create database streamapp_test owner streamer'"`.
+- R2 is reachable from the sandbox with the env credentials (bucket has demo audio under `uploads/…`, artwork pool under `random-artwork-images/`). **Never delete objects in the shared demo prefixes.**
+- The production Neon database is NOT touched by `dev` work. M0 replaces the migration history with a fresh baseline; before `master` is ever deployed with it, the Neon schema must be reset (see "Open items for the owner" below).
+
+**Open items for the owner**
+
+- Before merging `dev` into `master`: reset the Neon database schema (`DROP SCHEMA public CASCADE; CREATE SCHEMA public;` on the direct URL) and let `prisma migrate deploy` apply the new `0_init`, because the baseline replaces migrations `0_init`..`2_artwork_image_widths`. Vercel's `vercel-build` would otherwise fail on the history mismatch.
+- Old user uploads in R2 (`uploads/<oldUserId>/…`, `artworks/<oldUserId>/…`, `waveforms/…`) become orphaned once the DB is reset. The seed copies the demo audio it needs to `demo/…`; the rest can be erased by the owner at their discretion (not done automatically).
 
 ## Goal
 

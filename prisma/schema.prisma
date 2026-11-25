@@ -1,3 +1,9 @@
+// Target data model of docs/PRD.md section 16. Conventions:
+//  - snake_case table names via @@map; ids are uuid strings (Better Auth tables use its own ids)
+//  - denormalised counters change ONLY by the number of rows really inserted/deleted, inside the
+//    same transaction (see PRD 16.4); `pnpm db:recount` can repair them
+//  - hand-written SQL that Prisma cannot express (CHECK constraints) is appended to the baseline
+//    migration; the full-text/trigram search columns arrive with M5
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -7,16 +13,73 @@ datasource db {
   provider = "postgresql"
 }
 
+// ---------------------------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------------------------
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Plan {
+  FREE
+  PRO
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum MessagePolicy {
+  EVERYONE
+  FOLLOWING
+  NOBODY
+}
+
+/// SCHEDULED is for tracks only (collections are PUBLIC or PRIVATE).
 enum Visibility {
   PUBLIC
-  UNLISTED
   PRIVATE
+  SCHEDULED
+}
+
+enum ModerationState {
+  VISIBLE
+  REMOVED
+}
+
+enum CollectionType {
+  PLAYLIST
+  ALBUM
+  EP
+  SINGLE
+  COMPILATION
+}
+
+enum License {
+  ALL_RIGHTS_RESERVED
+  CC0
+  CC_BY
+  CC_BY_SA
+  CC_BY_ND
+  CC_BY_NC
+  CC_BY_NC_SA
+  CC_BY_NC_ND
 }
 
 enum MediaKind {
   AUDIO
   IMAGE
   WAVEFORM
+}
+
+enum ImagePurpose {
+  ARTWORK
+  AVATAR
+  BANNER
 }
 
 enum MediaStatus {
@@ -32,77 +95,170 @@ enum StorageProvider {
 }
 
 enum AudioAnalysisStatus {
-  QUEUED
-  PROCESSING
   READY
   FAILED
 }
 
-enum MediaProcessingJobStatus {
-  QUEUED
-  RUNNING
-  SUCCEEDED
-  FAILED
+enum ActivityType {
+  TRACK_POSTED
+  COLLECTION_POSTED
+  TRACK_REPOSTED
+  COLLECTION_REPOSTED
 }
 
-enum ReleaseType {
-  ALBUM
-  EP
-  SINGLE
-  SET
-  COMPILATION
+enum PlaySource {
+  PROFILE
+  TRACK_PAGE
+  COLLECTION
+  FEED
+  HOME
+  DISCOVER
+  SEARCH
+  CHARTS
+  LIBRARY
+  HISTORY
+  STATION
+  EMBED
+  OTHER
 }
 
 enum NotificationType {
   FOLLOW
-  LIKE
+  TRACK_LIKE
+  COLLECTION_LIKE
+  TRACK_REPOST
+  COLLECTION_REPOST
   COMMENT
-  REPOST
+  REPLY
+  MENTION
+  COMMENT_LIKE
   PLAYLIST_ADD
+  NEW_RELEASE
   SYSTEM
 }
 
-enum NotificationEntityType {
-  USER
-  TRACK
-  RELEASE
-  PLAYLIST
-  COMMENT
+enum EmailFrequency {
+  OFF
+  DAILY
+  IMMEDIATE
 }
 
-model User {
-  id                String           @id
-  name              String
-  email             String           @unique
-  emailVerified     Boolean
-  image             String?
-  bio               String?          @db.Text
-  location          String?
-  website           String?
-  bannerUrl         String?
-  profileViews      Int              @default(0)
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  sessions          Session[]
-  accounts          Account[]
-  mediaAssets       MediaAsset[]
-  tracks            Track[]
-  releases          Release[]
-  playlists         Playlist[]
-  comments          Comment[]
-  commentLikes      CommentLike[]
-  trackLikes        TrackLike[]
-  releaseLikes      ReleaseLike[]
-  playlistLikes     PlaylistLike[]
-  trackReposts      TrackRepost[]
-  releaseReposts    ReleaseRepost[]
-  playlistReposts   PlaylistRepost[]
-  followers         Follow[]         @relation("followedUser")
-  following         Follow[]         @relation("followingUser")
-  playEvents        PlayEvent[]
-  notifications     Notification[]   @relation("notificationRecipient")
-  sentNotifications Notification[]   @relation("notificationActor")
+enum EmailStatus {
+  SENT
+  LOGGED
+  FAILED
+}
 
+enum ReportReason {
+  COPYRIGHT
+  SPAM
+  HARASSMENT
+  HATE
+  SEXUAL
+  VIOLENCE
+  IMPERSONATION
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum ReportTarget {
+  TRACK
+  COLLECTION
+  COMMENT
+  USER
+  MESSAGE
+}
+
+enum RedirectKind {
+  TRACK
+  COLLECTION
+}
+
+// ---------------------------------------------------------------------------------------------
+// Users and Better Auth tables (session / account / verification keep Better Auth's shape)
+// ---------------------------------------------------------------------------------------------
+
+model User {
+  id            String  @id
+  /// Display name (Better Auth's `name` field).
+  name          String
+  /// Permalink handle, always lowercase (CHECK constraint). Generated at sign-up, editable in M1.
+  username      String  @unique
+  email         String  @unique
+  emailVerified Boolean
+  /// OAuth avatar URL fallback.
+  image         String?
+
+  avatarAssetId String?
+  avatarAsset   MediaAsset? @relation("userAvatar", fields: [avatarAssetId], references: [id], onDelete: SetNull)
+  bannerAssetId String?
+  bannerAsset   MediaAsset? @relation("userBanner", fields: [bannerAssetId], references: [id], onDelete: SetNull)
+  bio           String?     @db.Text
+  city          String?
+  countryCode   String?
+  /// Verified badge, granted by admins.
+  verified      Boolean     @default(false)
+
+  role            Role          @default(USER)
+  plan            Plan          @default(FREE)
+  planChangedAt   DateTime?
+  status          AccountStatus @default(ACTIVE)
+  suspendedReason String?
+  onboardedAt     DateTime?
+
+  favoriteGenres       String[]       @default([])
+  historyClearedAt     DateTime?
+  messagePolicy        MessagePolicy  @default(FOLLOWING)
+  showLikes            Boolean        @default(true)
+  showInTopListeners   Boolean        @default(true)
+  emailFrequency       EmailFrequency @default(DAILY)
+  showWaveformComments Boolean        @default(true)
+  defaultLicense       License        @default(ALL_RIGHTS_RESERVED)
+
+  followerCount    Int @default(0)
+  followingCount   Int @default(0)
+  publicTrackCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions                Session[]
+  accounts                Account[]
+  mediaAssets             MediaAsset[]             @relation("assetOwner")
+  profileLinks            ProfileLink[]
+  usernameRedirects       UsernameRedirect[]
+  tracks                  Track[]
+  collections             Collection[]
+  collectionTracksAdded   CollectionTrack[]
+  comments                Comment[]
+  commentLikes            CommentLike[]
+  trackLikes              TrackLike[]
+  collectionLikes         CollectionLike[]
+  trackReposts            TrackRepost[]
+  collectionReposts       CollectionRepost[]
+  followers               Follow[]                 @relation("followedUser")
+  following               Follow[]                 @relation("followingUser")
+  blocking                Block[]                  @relation("blocker")
+  blockedBy               Block[]                  @relation("blocked")
+  activities              Activity[]
+  spotlightItems          SpotlightItem[]
+  playEvents              PlayEvent[]
+  userDailyStats          UserDailyStat[]
+  notifications           Notification[]           @relation("notificationRecipient")
+  sentNotifications       Notification[]           @relation("notificationActor")
+  notificationPreferences NotificationPreference[]
+  conversationMembers     ConversationMember[]
+  messages                Message[]
+  reportsFiled            Report[]                 @relation("reporter")
+  reportsResolved         Report[]                 @relation("reportResolver")
+  moderationActions       ModerationAction[]
+
+  @@index([status])
   @@map("user")
 }
 
@@ -117,6 +273,7 @@ model Session {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
   @@map("session")
 }
 
@@ -153,36 +310,74 @@ model Verification {
   @@map("verification")
 }
 
+model ProfileLink {
+  id       String  @id @default(uuid())
+  userId   String
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url      String
+  title    String?
+  position Int
+
+  @@index([userId, position])
+  @@map("profile_link")
+}
+
+/// Old usernames keep redirecting; a freed username is reusable 30 days after `createdAt`.
+model UsernameRedirect {
+  oldUsername String   @id
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@map("username_redirect")
+}
+
+model SlugRedirect {
+  ownerId  String
+  kind     RedirectKind
+  oldSlug  String
+  targetId String
+
+  @@id([ownerId, kind, oldSlug])
+  @@index([targetId])
+  @@map("slug_redirect")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Media: every binary object in R2 is a MediaAsset (PENDING -> READY -> ATTACHED)
+// ---------------------------------------------------------------------------------------------
+
 model MediaAsset {
-  id                  String                 @id @default(uuid())
-  ownerId             String
-  owner               User                   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  kind                MediaKind
-  status              MediaStatus            @default(PENDING)
-  provider            StorageProvider        @default(CLOUDFLARE_R2)
-  bucket              String
-  storageKey          String                 @unique
-  originalFilename    String
-  mimeType            String
-  byteSize            BigInt?
-  publicUrl           String?
-  /// Processed artwork: square WebP renditions stored next to `storageKey` (which is the largest).
-  /// Empty for audio, waveforms and legacy unprocessed images.
-  imageWidths         Int[]                  @default([])
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
-  uploadedAt          DateTime?
-  attachedAt          DateTime?
-  expiresAt           DateTime?
-  audioTrack          Track?                 @relation("trackAudio")
-  trackArtwork        Track[]                @relation("trackArtwork")
-  releaseArtwork      Release[]              @relation("releaseArtwork")
-  playlistArtwork     Playlist[]             @relation("playlistArtwork")
-  audioAnalysis       AudioAnalysis?         @relation("analysisAudioAsset")
-  processingJob       MediaProcessingJob?    @relation("processingJobAudioAsset")
-  detailWaveformFor   AudioAnalysis?         @relation("analysisDetailWaveform")
-  overviewWaveformFor AudioAnalysis?         @relation("analysisOverviewWaveform")
-  processingErrors    MediaProcessingError[]
+  id               String          @id @default(uuid())
+  ownerId          String
+  owner            User            @relation("assetOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  kind             MediaKind
+  imagePurpose     ImagePurpose?
+  status           MediaStatus     @default(PENDING)
+  provider         StorageProvider @default(CLOUDFLARE_R2)
+  bucket           String
+  storageKey       String          @unique
+  originalFilename String
+  mimeType         String
+  byteSize         BigInt?
+  publicUrl        String?
+  /// Processed images: renditions stored next to `storageKey` (which is the largest).
+  /// Empty for audio, waveforms and unprocessed images.
+  imageWidths      Int[]           @default([])
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  uploadedAt       DateTime?
+  attachedAt       DateTime?
+  expiresAt        DateTime?
+
+  audioTracks         Track[]        @relation("trackAudio")
+  trackArtwork        Track[]        @relation("trackArtwork")
+  collectionArtwork   Collection[]   @relation("collectionArtwork")
+  usersAsAvatar       User[]         @relation("userAvatar")
+  usersAsBanner       User[]         @relation("userBanner")
+  audioAnalysis       AudioAnalysis? @relation("analysisAudioAsset")
+  overviewWaveformFor AudioAnalysis? @relation("analysisOverviewWaveform")
 
   @@index([ownerId, status, expiresAt])
   @@index([kind, status])
@@ -193,187 +388,238 @@ model AudioAnalysis {
   id                      String              @id @default(uuid())
   audioAssetId            String              @unique
   audioAsset              MediaAsset          @relation("analysisAudioAsset", fields: [audioAssetId], references: [id], onDelete: Cascade)
-  status                  AudioAnalysisStatus @default(QUEUED)
+  status                  AudioAnalysisStatus
   durationMs              Int?
   sampleRate              Int?
   channels                Int?
-  codec                   String?
-  bitRate                 BigInt?
   waveformVersion         Int                 @default(1)
-  detailPixelsPerSecond   Int                 @default(100)
   overviewPixelsPerSecond Int                 @default(20)
-  waveformBits            Int                 @default(8)
-  detailWaveformAssetId   String?             @unique
-  detailWaveformAsset     MediaAsset?         @relation("analysisDetailWaveform", fields: [detailWaveformAssetId], references: [id], onDelete: SetNull)
   overviewWaveformAssetId String?             @unique
   overviewWaveformAsset   MediaAsset?         @relation("analysisOverviewWaveform", fields: [overviewWaveformAssetId], references: [id], onDelete: SetNull)
-  startedAt               DateTime?
   completedAt             DateTime?
   createdAt               DateTime            @default(now())
   updatedAt               DateTime            @updatedAt
 
-  @@index([status, updatedAt])
   @@map("audio_analysis")
 }
 
-model MediaProcessingJob {
-  id           String                   @id @default(uuid())
-  audioAssetId String                   @unique
-  audioAsset   MediaAsset               @relation("processingJobAudioAsset", fields: [audioAssetId], references: [id], onDelete: Cascade)
-  status       MediaProcessingJobStatus @default(QUEUED)
-  attempts     Int                      @default(0)
-  maxAttempts  Int                      @default(3)
-  availableAt  DateTime                 @default(now())
-  lockedAt     DateTime?
-  lockedBy     String?
-  lastError    String?                  @db.Text
-  finishedAt   DateTime?
-  createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @updatedAt
+/// Durable R2 delete queue: drained by `after()` hooks and the daily cron.
+model StorageDeletion {
+  id        String   @id @default(uuid())
+  bucket    String
+  key       String
+  attempts  Int      @default(0)
+  lastError String?  @db.Text
+  createdAt DateTime @default(now())
 
-  @@index([status, availableAt, createdAt])
-  @@map("media_processing_job")
+  @@unique([bucket, key])
+  @@index([createdAt])
+  @@map("storage_deletion")
 }
 
-model Track {
-  id               String                 @id @default(uuid())
-  creatorId        String
-  creator          User                   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  audioAssetId     String                 @unique
-  audioAsset       MediaAsset             @relation("trackAudio", fields: [audioAssetId], references: [id], onDelete: Restrict)
-  artworkAssetId   String?
-  artworkAsset     MediaAsset?            @relation("trackArtwork", fields: [artworkAssetId], references: [id], onDelete: SetNull)
-  title            String
-  description      String?                @db.Text
-  visibility       Visibility             @default(PUBLIC)
-  isOriginal       Boolean                @default(true)
-  genre            String?
-  bpm              Int?
-  musicalKey       String?
-  tags             String[]               @default([])
-  releaseDate      DateTime?
-  recordLabel      String?
-  playCount        Int                    @default(0)
-  downloadCount    Int                    @default(0)
-  likeCount        Int                    @default(0)
-  repostCount      Int                    @default(0)
-  commentCount     Int                    @default(0)
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
-  releaseEntries   ReleaseTrack[]
-  playlistEntries  PlaylistTrack[]
-  comments         Comment[]
-  likes            TrackLike[]
-  reposts          TrackRepost[]
-  playEvents       PlayEvent[]
-  processingErrors MediaProcessingError[]
+// ---------------------------------------------------------------------------------------------
+// Content
+// ---------------------------------------------------------------------------------------------
 
-  @@index([creatorId, createdAt])
-  @@index([visibility, createdAt])
+model Track {
+  id             String      @id @default(uuid())
+  creatorId      String
+  creator        User        @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  /// Unique per creator; part of the permalink /{username}/{slug}.
+  slug           String
+  /// Not unique: demo content may share one audio file between tracks.
+  audioAssetId   String
+  audioAsset     MediaAsset  @relation("trackAudio", fields: [audioAssetId], references: [id], onDelete: Restrict)
+  artworkAssetId String?
+  artworkAsset   MediaAsset? @relation("trackArtwork", fields: [artworkAssetId], references: [id], onDelete: SetNull)
+
+  title           String
+  artistName      String?
+  featuredArtists String?
+  description     String?  @db.Text
+  /// Genre slug (see src/lib/genres.ts) or a custom lowercase slug.
+  genre           String?
+  tags            String[] @default([])
+
+  visibility       Visibility      @default(PUBLIC)
+  /// 22-char URL-safe token of the secret link (/{username}/{slug}/s-{token}); reset invalidates the old one.
+  secretToken      String
+  /// SCHEDULED tracks become public when publishAt <= now (evaluated at read time, no cron).
+  publishAt        DateTime?
+  /// First moment the track became effectively public (for SCHEDULED: publishAt). Profile order.
+  publishedAt      DateTime?
+  moderationState  ModerationState @default(VISIBLE)
+  moderationReason String?
+
+  releaseDate DateTime?
+  isrc        String?
+  recordLabel String?
+  publisher   String?
+  buyUrl      String?
+  buyTitle    String?
+  license     License   @default(ALL_RIGHTS_RESERVED)
+  bpm         Int?
+  musicalKey  String?
+  explicit    Boolean   @default(false)
+
+  previewStartMs  Int     @default(0)
+  downloadable    Boolean @default(false)
+  commentsEnabled Boolean @default(true)
+  statsPublic     Boolean @default(true)
+  embeddable      Boolean @default(true)
+
+  durationMs Int
+  mimeType   String
+
+  playCount     Int @default(0)
+  likeCount     Int @default(0)
+  repostCount   Int @default(0)
+  commentCount  Int @default(0)
+  downloadCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  collectionEntries CollectionTrack[]
+  comments          Comment[]
+  likes             TrackLike[]
+  reposts           TrackRepost[]
+  playEvents        PlayEvent[]
+  activities        Activity[]
+  spotlightItems    SpotlightItem[]
+  dailyStats        TrackDailyStat[]
+  notifications     Notification[]
+
+  @@unique([creatorId, slug])
+  @@index([creatorId, publishedAt])
+  @@index([visibility, publishedAt])
+  @@index([visibility, publishAt])
   @@index([genre])
+  @@index([tags], type: Gin)
   @@map("track")
 }
 
-model Release {
-  id             String          @id @default(uuid())
-  creatorId      String
-  creator        User            @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  artworkAssetId String?
-  artworkAsset   MediaAsset?     @relation("releaseArtwork", fields: [artworkAssetId], references: [id], onDelete: SetNull)
+/// Playlist, album, EP, single or compilation: one model, `type` decides presentation.
+model Collection {
+  id             String         @id @default(uuid())
+  ownerId        String
+  owner          User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  slug           String
+  type           CollectionType
   title          String
-  description    String?         @db.Text
-  type           ReleaseType     @default(SET)
-  visibility     Visibility      @default(PUBLIC)
-  releaseDate    DateTime?
-  playCount      Int             @default(0)
-  likeCount      Int             @default(0)
-  repostCount    Int             @default(0)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  tracks         ReleaseTrack[]
-  likes          ReleaseLike[]
-  reposts        ReleaseRepost[]
+  description    String?        @db.Text
+  artworkAssetId String?
+  artworkAsset   MediaAsset?    @relation("collectionArtwork", fields: [artworkAssetId], references: [id], onDelete: SetNull)
+  genre          String?
+  tags           String[]       @default([])
 
-  @@index([creatorId, createdAt])
-  @@index([visibility, releaseDate])
-  @@map("release")
-}
+  /// PUBLIC or PRIVATE only (CHECK constraint); collections cannot be scheduled.
+  visibility       Visibility
+  secretToken      String
+  publishedAt      DateTime?
+  /// Required unless type = PLAYLIST (service + CHECK constraint).
+  releaseDate      DateTime?
+  recordLabel      String?
+  publisher        String?
+  license          License?
+  moderationState  ModerationState @default(VISIBLE)
+  moderationReason String?
 
-model ReleaseTrack {
-  id        String   @id @default(uuid())
-  releaseId String
-  release   Release  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
-  trackId   String
-  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  position  Int
+  likeCount   Int @default(0)
+  repostCount Int @default(0)
+  playCount   Int @default(0)
+  trackCount  Int @default(0)
+  durationMs  Int @default(0)
+
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@unique([releaseId, trackId])
-  @@unique([releaseId, position])
-  @@index([trackId])
-  @@map("release_track")
+  tracks         CollectionTrack[]
+  likes          CollectionLike[]
+  reposts        CollectionRepost[]
+  activities     Activity[]
+  spotlightItems SpotlightItem[]
+  playEvents     PlayEvent[]
+  notifications  Notification[]
+
+  @@unique([ownerId, slug])
+  @@index([ownerId, publishedAt])
+  @@index([visibility, publishedAt])
+  @@index([type])
+  @@index([tags], type: Gin)
+  @@map("collection")
 }
 
-model Playlist {
-  id              String           @id @default(uuid())
-  ownerId         String
-  owner           User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  artworkAssetId  String?
-  artworkAsset    MediaAsset?      @relation("playlistArtwork", fields: [artworkAssetId], references: [id], onDelete: SetNull)
-  title           String
-  description     String?          @db.Text
-  visibility      Visibility       @default(PUBLIC)
-  isCollaborative Boolean          @default(false)
-  playCount       Int              @default(0)
-  likeCount       Int              @default(0)
-  repostCount     Int              @default(0)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  tracks          PlaylistTrack[]
-  likes           PlaylistLike[]
-  reposts         PlaylistRepost[]
+/// Positions are dense 0..n-1 and rewritten in one transaction under a per-collection advisory lock
+/// (so there is deliberately no unique constraint on position).
+model CollectionTrack {
+  collectionId String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  trackId      String
+  track        Track      @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  position     Int
+  addedById    String?
+  addedBy      User?      @relation(fields: [addedById], references: [id], onDelete: SetNull)
+  addedAt      DateTime   @default(now())
 
-  @@index([ownerId, createdAt])
-  @@index([visibility, createdAt])
-  @@map("playlist")
-}
-
-model PlaylistTrack {
-  id         String   @id @default(uuid())
-  playlistId String
-  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  trackId    String
-  track      Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  position   Int
-  addedById  String?
-  createdAt  DateTime @default(now())
-
-  @@unique([playlistId, trackId])
-  @@unique([playlistId, position])
+  @@id([collectionId, trackId])
+  @@index([collectionId, position])
   @@index([trackId])
-  @@map("playlist_track")
+  @@map("collection_track")
 }
 
 model Comment {
-  id               String        @id @default(uuid())
+  id               String         @id @default(uuid())
   authorId         String
-  author           User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author           User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
   trackId          String
-  track            Track         @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  track            Track          @relation(fields: [trackId], references: [id], onDelete: Cascade)
   parentId         String?
-  parent           Comment?      @relation("commentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies          Comment[]     @relation("commentReplies")
-  content          String        @db.Text
+  parent           Comment?       @relation("commentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies          Comment[]      @relation("commentReplies")
+  content          String         @db.Text
+  /// Whole seconds into the track when posted; null for a general comment or a reply.
   timestampSeconds Int?
-  likeCount        Int           @default(0)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  likeCount        Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
   likes            CommentLike[]
+  notifications    Notification[]
 
   @@index([trackId, createdAt])
   @@index([authorId])
   @@index([parentId])
   @@map("comment")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Engagement and social graph
+// ---------------------------------------------------------------------------------------------
+
+model TrackLike {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trackId   String
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, trackId])
+  @@index([trackId])
+  @@index([userId, createdAt])
+  @@map("track_like")
+}
+
+model CollectionLike {
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  collectionId String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@id([userId, collectionId])
+  @@index([collectionId])
+  @@index([userId, createdAt])
+  @@map("collection_like")
 }
 
 model CommentLike {
@@ -388,78 +634,35 @@ model CommentLike {
   @@map("comment_like")
 }
 
-model TrackLike {
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trackId   String
-  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-
-  @@id([userId, trackId])
-  @@index([trackId])
-  @@map("track_like")
-}
-
-model ReleaseLike {
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  releaseId String
-  release   Release  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-
-  @@id([userId, releaseId])
-  @@index([releaseId])
-  @@map("release_like")
-}
-
-model PlaylistLike {
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  playlistId String
-  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
-
-  @@id([userId, playlistId])
-  @@index([playlistId])
-  @@map("playlist_like")
-}
-
 model TrackRepost {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   trackId   String
   track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  caption   String?
   createdAt DateTime @default(now())
 
   @@id([userId, trackId])
   @@index([trackId])
+  @@index([userId, createdAt])
   @@map("track_repost")
 }
 
-model ReleaseRepost {
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  releaseId String
-  release   Release  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+model CollectionRepost {
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  collectionId String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  caption      String?
+  createdAt    DateTime   @default(now())
 
-  @@id([userId, releaseId])
-  @@index([releaseId])
-  @@map("release_repost")
+  @@id([userId, collectionId])
+  @@index([collectionId])
+  @@index([userId, createdAt])
+  @@map("collection_repost")
 }
 
-model PlaylistRepost {
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  playlistId String
-  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
-
-  @@id([userId, playlistId])
-  @@index([playlistId])
-  @@map("playlist_repost")
-}
-
+/// follower != following (CHECK constraint).
 model Follow {
   followerId  String
   follower    User     @relation("followingUser", fields: [followerId], references: [id], onDelete: Cascade)
@@ -468,57 +671,249 @@ model Follow {
   createdAt   DateTime @default(now())
 
   @@id([followerId, followingId])
-  @@index([followingId])
+  @@index([followingId, createdAt])
+  @@index([followerId, createdAt])
   @@map("follow")
 }
 
-model PlayEvent {
-  id              String   @id @default(uuid())
-  listenerId      String?
-  listener        User?    @relation(fields: [listenerId], references: [id], onDelete: SetNull)
-  trackId         String
-  track           Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  listenedSeconds Int      @default(0)
-  completed       Boolean  @default(false)
-  /// Keyed hash of ip + user agent for anonymous listeners (never the raw values); used to dedupe plays.
-  clientHash      String?
-  createdAt       DateTime @default(now())
+model Block {
+  blockerId String
+  blocker   User     @relation("blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   User     @relation("blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
-  @@index([listenerId, createdAt])
+  @@id([blockerId, blockedId])
+  @@index([blockedId])
+  @@map("block")
+}
+
+/// Written on publish (createdAt = publishAt for scheduled tracks) and on repost; deleted on unrepost/delete.
+/// The feed is `actorId IN following`.
+model Activity {
+  id           String       @id @default(uuid())
+  actorId      String
+  actor        User         @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  type         ActivityType
+  trackId      String?
+  track        Track?       @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  collectionId String?
+  collection   Collection?  @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime     @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([trackId])
+  @@index([collectionId])
+  @@map("activity")
+}
+
+/// At most 5 per user (entitlements); exactly one target (CHECK constraint).
+model SpotlightItem {
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  position     Int
+  trackId      String?
+  track        Track?      @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  collectionId String?
+  collection   Collection? @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, position])
+  @@map("spotlight_item")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Plays and statistics
+// ---------------------------------------------------------------------------------------------
+
+model PlayEvent {
+  id           String      @id @default(uuid())
+  listenerId   String?
+  listener     User?       @relation(fields: [listenerId], references: [id], onDelete: SetNull)
+  trackId      String
+  track        Track       @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  collectionId String?
+  collection   Collection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  source       PlaySource  @default(OTHER)
+  countryCode  String?
+  /// Keyed hash of ip + user agent for anonymous listeners (never the raw values); dedupes plays.
+  clientHash   String?
+  /// false for the owner's own plays (kept for history, never counted).
+  counted      Boolean     @default(true)
+  listenedMs   Int         @default(0)
+  completed    Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+
   @@index([trackId, createdAt])
+  @@index([trackId, counted, createdAt])
+  @@index([listenerId, createdAt])
   @@index([trackId, clientHash, createdAt])
   @@map("play_event")
 }
 
-model Notification {
-  id          String                  @id @default(uuid())
-  recipientId String
-  recipient   User                    @relation("notificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  actorId     String?
-  actor       User?                   @relation("notificationActor", fields: [actorId], references: [id], onDelete: SetNull)
-  type        NotificationType
-  entityType  NotificationEntityType?
-  entityId    String?
-  message     String
-  readAt      DateTime?
-  createdAt   DateTime                @default(now())
+model TrackDailyStat {
+  trackId   String
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  day       DateTime @db.Date
+  plays     Int      @default(0)
+  likes     Int      @default(0)
+  reposts   Int      @default(0)
+  comments  Int      @default(0)
+  downloads Int      @default(0)
 
-  @@index([recipientId, readAt, createdAt])
+  @@id([trackId, day])
+  @@index([day])
+  @@map("track_daily_stat")
+}
+
+model UserDailyStat {
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day           DateTime @db.Date
+  newFollowers  Int      @default(0)
+  lostFollowers Int      @default(0)
+
+  @@id([userId, day])
+  @@map("user_daily_stat")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Notifications, messages, trust & safety, infrastructure
+// ---------------------------------------------------------------------------------------------
+
+model Notification {
+  id           String           @id @default(uuid())
+  recipientId  String
+  recipient    User             @relation("notificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actorId      String?
+  actor        User?            @relation("notificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  type         NotificationType
+  trackId      String?
+  track        Track?           @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  collectionId String?
+  collection   Collection?      @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  commentId    String?
+  comment      Comment?         @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  /// `type:targetId:YYYY-MM-DD(UTC)`: grouped at read time.
+  groupKey     String
+  /// Free text for SYSTEM notifications.
+  message      String?
+  readAt       DateTime?
+  emailedAt    DateTime?
+  createdAt    DateTime         @default(now())
+
+  @@index([recipientId, createdAt])
+  @@index([recipientId, readAt])
+  @@index([recipientId, groupKey])
   @@map("notification")
 }
 
-model MediaProcessingError {
-  id        String      @id @default(uuid())
-  trackId   String?
-  track     Track?      @relation(fields: [trackId], references: [id], onDelete: SetNull)
-  assetId   String?
-  asset     MediaAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
-  requestId String?
-  operation String
-  reason    String      @db.Text
-  createdAt DateTime    @default(now())
+model NotificationPreference {
+  userId String
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   NotificationType
+  inApp  Boolean          @default(true)
+  email  Boolean          @default(false)
 
-  @@index([trackId, createdAt])
-  @@index([assetId, createdAt])
-  @@map("media_processing_error")
+  @@id([userId, type])
+  @@map("notification_preference")
+}
+
+model Conversation {
+  id        String               @id @default(uuid())
+  createdAt DateTime             @default(now())
+  members   ConversationMember[]
+  messages  Message[]
+
+  @@map("conversation")
+}
+
+model ConversationMember {
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime?
+  hiddenAt       DateTime?
+
+  @@id([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_member")
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body           String       @db.Text
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("message")
+}
+
+model Report {
+  id           String       @id @default(uuid())
+  reporterId   String
+  reporter     User         @relation("reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetType   ReportTarget
+  targetId     String
+  reason       ReportReason
+  details      String?      @db.Text
+  extra        Json?
+  status       ReportStatus @default(OPEN)
+  resolvedById String?
+  resolvedBy   User?        @relation("reportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolution   String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+  @@index([reporterId, targetType, targetId, status])
+  @@map("report")
+}
+
+model ModerationAction {
+  id         String       @id @default(uuid())
+  adminId    String
+  admin      User         @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  action     String
+  targetType ReportTarget
+  targetId   String
+  reason     String?
+  createdAt  DateTime     @default(now())
+
+  @@index([targetType, targetId, createdAt])
+  @@map("moderation_action")
+}
+
+/// Every email attempt. Without RESEND_API_KEY the status is LOGGED (tests read links from here).
+model EmailMessage {
+  id         String      @id @default(uuid())
+  to         String
+  template   String
+  subject    String
+  status     EmailStatus
+  providerId String?
+  error      String?
+  /// Pruned after 7 days by the daily cron.
+  bodyHtml   String?     @db.Text
+  createdAt  DateTime    @default(now())
+
+  @@index([to, createdAt])
+  @@index([template, createdAt])
+  @@map("email_message")
+}
+
+/// Postgres-backed fixed-window rate limiter (see src/server/modules/rate-limit).
+model RateLimitBucket {
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@id([key, windowStart])
+  @@index([windowStart])
+  @@map("rate_limit_bucket")
 }
