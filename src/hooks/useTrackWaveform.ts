@@ -7,18 +7,22 @@ import {
   type WaveformPeak,
 } from "@/lib/waveform-utils";
 
+interface WaveformResult {
+  /** The waveform URL this result belongs to. */
+  url: string;
+  peaks: WaveformPeak[];
+  error: string | null;
+}
+
 export function useTrackWaveform(
   waveformUrl: string | null | undefined,
   processingFailed = false,
 ) {
-  const [peaks, setPeaks] = useState<WaveformPeak[]>([]);
-  const [isLoading, setIsLoading] = useState(Boolean(waveformUrl));
-  const [error, setError] = useState<string | null>(null);
+  // Results are keyed by URL so a stale result is ignored when the URL changes,
+  // without resetting state synchronously inside the effect.
+  const [result, setResult] = useState<WaveformResult | null>(null);
 
   useEffect(() => {
-    setPeaks([]);
-    setError(null);
-    setIsLoading(Boolean(waveformUrl) && !processingFailed);
     if (!waveformUrl || processingFailed) return;
 
     let canceled = false;
@@ -41,15 +45,16 @@ export function useTrackWaveform(
         const parsed = parseAudiowaveformJson(await response.json());
         if (!parsed.length) throw new Error("Waveform response was malformed");
         if (!canceled) {
-          setPeaks(parsed);
-          setIsLoading(false);
+          setResult({ url: waveformUrl, peaks: parsed, error: null });
         }
       } catch (loadError) {
         if (canceled || controller.signal.aborted) return;
-        setError(
-          loadError instanceof Error ? loadError.message : String(loadError),
-        );
-        setIsLoading(false);
+        setResult({
+          url: waveformUrl,
+          peaks: [],
+          error:
+            loadError instanceof Error ? loadError.message : String(loadError),
+        });
       }
     };
 
@@ -61,5 +66,10 @@ export function useTrackWaveform(
     };
   }, [processingFailed, waveformUrl]);
 
-  return { peaks, isLoading, error };
+  const current = result?.url === waveformUrl ? result : null;
+  return {
+    peaks: current?.peaks ?? [],
+    isLoading: Boolean(waveformUrl) && !processingFailed && !current,
+    error: current?.error ?? null,
+  };
 }
