@@ -40,5 +40,8 @@
         "^test"
       ]
     }
-  }
+  },
+  "globalPassThroughEnv": [
+    "SKIP_ENV_VALIDATION"
+  ]
 }
