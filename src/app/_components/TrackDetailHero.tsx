@@ -17,6 +17,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useTrackWaveform } from "@/hooks/useTrackWaveform";
 import { usePlayerStore } from "@/store/player";
 import type { PlayerTrack } from "@/types/player-track";
+import { CommentMarkers } from "./CommentMarkers";
 import { LikeButton } from "./LikeButton";
 import WaveformVisualizer from "./WaveformVisualizer";
 
@@ -134,6 +135,7 @@ export function TrackDetailHero({ track }: { track: PlayerTrack }) {
               variant="detail"
               isLoading={isLoading}
             />
+            <CommentMarkers track={track} />
             {error && (
               <p className="mt-2 text-xs text-red-400">Waveform unavailable</p>
             )}

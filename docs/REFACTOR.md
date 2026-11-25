@@ -43,8 +43,8 @@ pnpm install
 pnpm check-types   # tsc
 pnpm lint          # eslint, fails on any warning
 pnpm test          # unit tests, node:test, src/**/*.test.ts (23 tests, no DB)
-TEST_DATABASE_URL=postgresql://... pnpm test:integration   # 29 tests against a real Postgres (skips if unset)
-TEST_DATABASE_URL=postgresql://... pnpm test:e2e           # Playwright, WIPES that database, builds + starts the app (20 tests, +1 opt-in R2 test)
+TEST_DATABASE_URL=postgresql://... pnpm test:integration   # 49 tests against a real Postgres (skips if unset)
+TEST_DATABASE_URL=postgresql://... pnpm test:e2e           # Playwright, WIPES that database, builds + starts the app (26 tests, +1 opt-in R2 test)
 SKIP_ENV_VALIDATION=1 pnpm build   # no real env needed to build
 ```
 
@@ -181,3 +181,11 @@ with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration).
 - Client: `useTrackLike` (optimistic flip, server count replaces it, rollback + toast on error, "Sign in to like tracks" toast when signed out; state resyncs from props without an effect) and `LikeButton` (pill in lists, round in the track hero).
 - Tests: 7 integration (idempotence, per-user counting, 20 parallel same-user requests, 12 concurrent distinct users, like/unlike storm, auth, private/unlisted rules, unknown ids, `likedByMe` per viewer across the queries) and 2 e2e (anonymous prompt; like/unlike with reload persistence, DB counter checked). Counter-equals-rows is asserted after every scenario.
 - Known gap: deleting a user cascades their `TrackLike` rows but does not decrement `Track.likeCount` (no account-deletion feature exists yet; when it does, recount in the same transaction). Notifications for likes are not created yet.
+
+### Session 7 - timed comments
+- Uses the existing `Comment` model; no migration. `timestampSeconds Int?` = whole seconds into the track, null for a general comment. The client reads `usePlayerStore.getState().currentTime` **at the moment of posting** (not when typing starts), floors it, and only attaches it when this track is the one loaded in the player (a "Comment at m:ss" checkbox shows the live position and can be switched off). Finer than whole seconds would need a column change.
+- Server (`server/modules/tracks/comments.ts`, router `comments`): `list` (newest 100 threads, replies oldest first, per-viewer `canDelete`; hidden tracks list nothing), `create`, `delete`. Rules: same visibility rule as streaming; content trimmed, 1-1000 chars; timestamp must be an integer within the track (0..ceil(duration), 4 h cap when duration is unknown) and is rejected on replies; replies are one level deep (a reply to a reply attaches to the root); at most 8 comments per author per minute (TOO_MANY_REQUESTS); authors and the track's creator may delete, anyone else gets FORBIDDEN; deleting a thread removes its replies and lowers `commentCount` by exactly the thread size (`GREATEST(0, ...)`).
+- Consistency: create and delete take `pg_advisory_xact_lock(hashtextextended('comments:<trackId>'))` so `commentCount` always equals the rows. The random race (delete a thread while replies arrive) is too narrow to hit by brute force, so the test is deterministic: it holds the lock in the test and proves create and delete wait for it while other tracks do not. Mutation-checked: fails without the lock, passes with it.
+- UI: `CommentsSection` (server prefetch + hydrated `useQuery`, so no loading flash; composer, threads, reply, delete with confirm), `CommentMarkers` (avatars under the hero waveform at `seconds / duration`), `usePlayAt` (load the track if needed, seek, play; a seek during loading is applied when the media is ready). Rendered as text (no HTML), `whitespace-pre-line`.
+- Tests: 13 integration (exact second stored, whole-second/in-track validation, threading + root attachment, replies cannot be timed, visibility, rate limit, 24 concurrent posters, moderation, `canDelete` flags, thread deletion counts, lock contract) and 4 e2e (public view + waveform markers, general comment, **exact-second capture by seeking via an existing comment's chip then posting**, opt-out of the time, replies, deletion). The opt-in R2 test additionally plays real audio and asserts the stored second matches the player's position at the click.
+- Known limits: no pagination beyond the newest 100 threads / 100 replies each; no edit; no comment likes (model exists); no notifications for new comments (model exists); deleting a user cascades their comments without adjusting `Track.commentCount` (same account-deletion caveat as likes).

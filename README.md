@@ -27,10 +27,11 @@ One Next.js app on **Vercel**, **Neon** Postgres and **Cloudflare R2**.
 - **Streaming:** seeking works, audio never passes through the app server, and public / private visibility is enforced.
 - **Player:** one global player with a queue, next/previous, keyboard shortcuts and OS media controls (Media Session API).
 - **Browsing:** a landing page, `/discover` (latest or most played, genre filter, search over titles and creator names), creator profiles and track pages.
+- **Timed comments:** comment at the exact second you are listening to (read from the player at the moment you post), with one level of replies. Each timed comment shows as an avatar under the waveform and as a clickable time chip that jumps the player there. Authors and the track's creator can delete.
 - **Likes** on tracks (optimistic UI, safe against double clicks and races), shown as filled hearts for the signed-in listener.
 - **Play counts** that cannot be inflated by refreshing: one count per listener per track per 30 minutes.
 
-**Not built yet** (the controls exist in the UI, the backend models exist in the schema): reposts, comments, follows and playlists. There is also no "unlisted" option in the upload form yet, although the data model and the stream/page access rules already support it.
+**Not built yet** (the controls exist in the UI, the backend models exist in the schema): reposts, follows, playlists, and likes on comments. There is also no "unlisted" option in the upload form yet, although the data model and the stream/page access rules already support it.
 
 ## How it works
 
@@ -87,6 +88,7 @@ sequenceDiagram
 | Waveforms are computed in the browser | FFmpeg/audiowaveform do not fit serverless limits. The trade-off: peaks are client-supplied, so a creator could fake their own waveform (validated for shape and length). |
 | Media is a first-class model: `MediaAsset` goes `PENDING -> READY -> ATTACHED` | Uploads can be verified, cleaned up when abandoned, and claimed atomically so two requests cannot publish the same file. |
 | Play counts are deduped with an HMAC of IP + user agent and a Postgres advisory lock | No raw IPs stored, and concurrent requests cannot double count. |
+| Comments store `timestampSeconds` (whole seconds) read from the player when the user posts; writes are serialised per track with an advisory lock | `Track.commentCount` always equals the number of rows, even when a thread is deleted while replies arrive. Replies are one level deep and carry no timestamp. |
 | `Track.likeCount` changes only when a `TrackLike` row is really inserted or deleted, in the same transaction | A denormalised counter that cannot drift from the rows, however often or concurrently the button is pressed. |
 | Prisma 7 with the `pg` adapter on Neon's pooled URL; migrations use the direct URL | Pooling for serverless traffic, a real connection for `migrate`. |
 
@@ -148,7 +150,7 @@ The R2 bucket needs a **CORS rule** allowing `PUT` with the `Content-Type` heade
 | --- | --- |
 | `pnpm check-types` / `pnpm lint` | TypeScript and ESLint (no warnings allowed) |
 | `pnpm test` | unit tests (`node:test`, no database) |
-| `pnpm test:integration` | DB-backed tests: publish races, rollbacks, visibility, discovery, play counting, auth. Needs `TEST_DATABASE_URL` pointing at a migrated, disposable Postgres |
+| `pnpm test:integration` | DB-backed tests: publish races, rollbacks, visibility, discovery, play counting, likes, comments, auth. Needs `TEST_DATABASE_URL` pointing at a migrated, disposable Postgres |
 | `pnpm test:e2e` | Playwright against a production build on a **wiped** `TEST_DATABASE_URL` database (`pnpm exec playwright install chromium` once) |
 
 The opt-in `tests/e2e/upload-playback.e2e.spec.ts` runs the whole creator journey against real R2: upload, in-browser analysis, publish, play (`E2E_R2=1 E2E_PORT=3000 pnpm test:e2e`).

@@ -1,9 +1,10 @@
 import { format } from "date-fns";
-import { Heart, MapPin, MessageCircle, Play, Repeat2 } from "lucide-react";
+import { Heart, MapPin, Play, Repeat2 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CommentsSection } from "@/app/_components/CommentsSection";
 import { TrackDetailHero } from "@/app/_components/TrackDetailHero";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { api, HydrateClient } from "@/trpc/server";
@@ -30,6 +31,7 @@ export default async function TrackPage({
   const { id } = await params;
   const track = await api.artist.getTrack({ trackId: id }).catch(() => null);
   if (!track) notFound();
+  await api.comments.list.prefetch({ trackId: id }); // hydrated into the client query: no loading flash
   const release = track.releaseEntries[0]?.release;
 
   return (
@@ -91,33 +93,7 @@ export default async function TrackPage({
                 )}
               </section>
 
-              <section>
-                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                  <h2 className="text-xs font-bold tracking-wide uppercase">
-                    {track.commentCount} comments
-                  </h2>
-                  <span className="text-xs text-zinc-500">Newest</span>
-                </div>
-                <div className="mt-4 flex items-center gap-4 rounded border border-dashed border-zinc-700 p-5">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-zinc-800">
-                    <MessageCircle className="h-6 w-6 text-zinc-400" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold">
-                      Be the first to comment on this track.
-                    </p>
-                    <p className="mt-1 text-sm text-zinc-500">
-                      Start a conversation at a specific moment in the waveform.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="rounded-full border border-zinc-600 px-4 py-2 text-sm font-semibold hover:border-zinc-400"
-                  >
-                    Comment
-                  </button>
-                </div>
-              </section>
+              <CommentsSection track={track} />
             </main>
 
             <aside className="space-y-3">

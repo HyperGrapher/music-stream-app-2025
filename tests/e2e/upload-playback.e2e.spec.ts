@@ -128,4 +128,22 @@ test("upload, analyse in the browser, publish and play", async ({ page, baseURL 
       page.evaluate(() => (window as unknown as { __audios: HTMLAudioElement[] }).__audios[0]?.currentTime ?? 0),
     )
     .toBeGreaterThan(0.5);
+
+  // A comment posted while listening is stored with the second the player was at, to the second.
+  const position = () =>
+    page.evaluate(() => (window as unknown as { __audios: HTMLAudioElement[] }).__audios[0]?.currentTime ?? 0);
+  await expect.poll(position, { timeout: 15_000 }).toBeGreaterThan(1);
+  await expect(page.getByLabel(/Comment at/)).toBeChecked();
+  await page.getByRole("textbox", { name: "Write a comment" }).fill("right here");
+  const before = await position();
+  await page.getByRole("button", { name: "Post", exact: true }).click();
+  const after = await position();
+  await expect(page.getByTestId("comment").filter({ hasText: "right here" })).toBeVisible();
+
+  const comment = await db.comment.findFirstOrThrow({ where: { trackId: track.id } });
+  expect(comment.timestampSeconds).not.toBeNull();
+  // The audio keeps playing while the request is in flight, so allow the span of that moment.
+  expect(comment.timestampSeconds!).toBeGreaterThanOrEqual(Math.floor(before));
+  expect(comment.timestampSeconds!).toBeLessThanOrEqual(Math.ceil(after) + 1);
+  expect(comment.timestampSeconds!).toBeLessThanOrEqual(3); // the track is 3 s long
 });
