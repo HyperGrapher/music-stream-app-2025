@@ -477,10 +477,13 @@ model PlayEvent {
   track           Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
   listenedSeconds Int      @default(0)
   completed       Boolean  @default(false)
+  /// Keyed hash of ip + user agent for anonymous listeners (never the raw values); used to dedupe plays.
+  clientHash      String?
   createdAt       DateTime @default(now())
 
   @@index([listenerId, createdAt])
   @@index([trackId, createdAt])
+  @@index([trackId, clientHash, createdAt])
   @@map("play_event")
 }
 

@@ -72,7 +72,11 @@ const getAudioElement = (): HTMLAudioElement => {
 const getTrackStreamUrl = (trackId: string) =>
   `/api/tracks/${encodeURIComponent(trackId)}/stream`;
 
-// One play per playback start; the audio itself is served by R2 via redirect.
+// A play is reported once the listener has actually heard a few seconds, so
+// skipping through a queue does not inflate counts. The server dedupes further.
+const PLAY_REPORT_AFTER_SECONDS = 5;
+let playReportedFor: string | null = null;
+
 const recordPlay = (trackId: string) => {
   void fetch(`/api/tracks/${encodeURIComponent(trackId)}/play`, {
     method: "POST",
@@ -324,6 +328,17 @@ export function useAudioEvents() {
     const handleTimeUpdate = () => {
       if (!isCurrentAudioSource(audio)) return;
       usePlayerStore.setState({ currentTime: audio.currentTime });
+
+      const track = usePlayerStore.getState().currentTrack;
+      if (
+        track &&
+        playReportedFor !== track.id &&
+        !audio.paused &&
+        audio.currentTime >= PLAY_REPORT_AFTER_SECONDS
+      ) {
+        playReportedFor = track.id;
+        recordPlay(track.id);
+      }
     };
 
     const handleDurationChange = () => {
@@ -564,7 +579,7 @@ export function PlayerController({
       // Set the audio source
       audio.src = streamUrl;
       audio.load();
-      recordPlay(requestedTrackId);
+      playReportedFor = null; // a (re)started track can be reported again
 
       const playPromise = audio.play();
       if (playPromise !== undefined) {

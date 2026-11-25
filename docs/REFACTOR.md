@@ -29,7 +29,7 @@ A pro-level portfolio demo (SoundCloud-style creator platform) that is:
 
 - [x] **Phase 0 - safety net**: typecheck, lint (0 errors), tests, build, CI workflow
 - [x] **Phase 1 - consolidate**: Express routes ported to Next Route Handlers; `apps/express` deleted (socket.io was never used)
-- [x] **Phase 2 - audio delivery**: presigned R2 redirect; private/unlisted authorization; `POST /api/tracks/:id/play`. Follow-up: dedupe/rate-limit play events (one per listener per track per window)
+- [x] **Phase 2 - audio delivery**: presigned R2 redirect; private/unlisted authorization; `POST /api/tracks/:id/play`. Play dedupe done (see Track delivery)
 - [x] **Phase 3 - waveform**: browser-side peaks + duration at upload; `media-worker` is now optional (backfill only; `pnpm dev:worker`)
 - [x] **Phase 4 - de-monorepo**: app hoisted to repo root; Turborepo, `packages/*` and the optional `media-worker` deleted (fresh app: no backfill needed)
 - [~] **Phase 5 - dependency upgrades** (done: in-range bumps, Better Auth 1.7, Next 16, Prisma 7, zod 4 + resolvers 7, zustand 5, lucide 1; skipped on purpose: TypeScript 7, ESLint 10, Prisma 8 RC) (one commit each, read current migration guides first): Next, React, Prisma (+ `generator` output path, deprecated in Prisma 7), Tailwind, Better Auth, zod, rest
@@ -42,8 +42,8 @@ A pro-level portfolio demo (SoundCloud-style creator platform) that is:
 pnpm install
 pnpm check-types   # tsc
 pnpm lint          # eslint, fails on any warning
-pnpm test          # unit tests, node:test, src/**/*.test.ts (19 tests, no DB)
-TEST_DATABASE_URL=postgresql://... pnpm test:integration   # 16 tests against a real Postgres (skips if unset)
+pnpm test          # unit tests, node:test, src/**/*.test.ts (23 tests, no DB)
+TEST_DATABASE_URL=postgresql://... pnpm test:integration   # 22 tests against a real Postgres (skips if unset)
 SKIP_ENV_VALIDATION=1 pnpm build   # no real env needed to build
 ```
 
@@ -64,7 +64,7 @@ All under `src/app/api/tracks/[trackId]/`, logic in `src/server/modules/tracks/`
 | `GET stream` | visibility check -> `307` to presigned R2 GET (1 h). Range/seek handled by R2 |
 | `GET waveform` | overview JSON streamed through the function (small, immutable, `public` cache only for PUBLIC tracks) |
 | `GET artwork` | `307` to `publicUrl` or presigned URL (fallback when `R2_PUBLIC_BASE_URL` is unset) |
-| `POST play` | increments `playCount` + inserts `PlayEvent` (listener from session if any); called once per playback start by the player store |
+| `POST play` | `recordPlay()` in `server/modules/tracks/plays.ts`: one counted play per listener (account, else HMAC(ip+user-agent)) per track per 30 min, serialised with a Postgres advisory lock; always answers 204 for a viewable track. The player calls it after 5 s of real listening |
 
 Visibility: PUBLIC/UNLISTED = anyone with the link; PRIVATE = creator only. Denied and missing both return 404.
 The old JWT playback-token flow (`stream.getPlaybackToken`, `JWT_PLAYBACK_SECRET`) and the desktop auth-code exchange
@@ -143,3 +143,9 @@ with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration).
 - Integration tests in `tests/integration/` (own `setup.ts` loaded via `node --import` so the app's db points at `TEST_DATABASE_URL`; refuses to run without it so dev/prod data is never touched; each test cleans up the users it created): concurrent publish of one asset (exactly one wins), cross-user asset rejected, pending asset rejected, rollback of the audio claim when artwork is not ready, release ordering + attach, release rollback with a foreign asset, duplicate file in one release, auth required, getTrack/listing visibility, Better Auth email sign-up/sign-in/duplicate. Not covered (needs R2 stub): cancel-vs-publish race.
 - CI now has a Postgres 16 service, runs `pnpm db:migrate` then `pnpm test:integration`.
 - Lint: 45 warnings -> 0 and `--max-warnings 0`. Decisions: shadcn `components/ui` exempt from `consistent-type-imports` (vendored); `@next/next/no-img-element` off because artwork is served from presigned R2 URLs that the Next image optimizer cannot cache usefully; removed dead `NowPlayingCard`.
+
+### Session 4 - play counting
+- `PlayEvent.clientHash` (+ index) via migration `1_play_event_client_hash` (hand-written, `migrate diff` shows no drift). **Run `pnpm db:migrate` against Neon (direct URL) before deploying code that includes it**, otherwise `/play` returns 500 (client ignores it, nothing else breaks).
+- Plays are counted once per account or anonymous client per track per 30 min; the anonymous key is an HMAC (secret = `BETTER_AUTH_SECRET`) of ip + user agent, so no raw IP/UA is stored. Signed-in listeners are keyed by account only. The player reports a play after 5 s of playback (was: at load).
+- Tests: unit (hash, ip parsing) + integration (repeat, distinct clients, account dedupe across devices, window expiry, 5 rounds x 40 concurrent requests, no raw ids stored). Mutation-checked: removing the advisory lock makes the concurrency test fail.
+- Known limits: a bot rotating IPs and user agents can still inflate counts; real protection would need a rate limiter with shared state (Upstash/Vercel KV) or bot checks. Not worth it for a demo.
