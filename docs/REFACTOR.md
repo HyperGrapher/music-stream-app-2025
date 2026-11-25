@@ -1,7 +1,10 @@
 # Refactor: single Next.js app for Vercel + Neon
 
 Living document. **Read this first in a new session**, then `CONTEXT.md`
-and `docs/adr/`. Update the checklist and the log at the end of every work session.
+and `docs/adr/`.
+
+**Product scope:** the complete feature set to build next is specified in [`docs/PRD.md`](PRD.md)
+(milestones M0–M8). Where the PRD and `CONTEXT.md` disagree, the PRD wins; update `CONTEXT.md` in M0. Update the checklist and the log at the end of every work session.
 
 Working branch: `refactor/single-nextjs-app` (do not use the auto-generated `claude/*` branches).
 
