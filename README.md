@@ -23,6 +23,7 @@ One Next.js app on **Vercel**, **Neon** Postgres and **Cloudflare R2**.
 
 - **Accounts:** email + password and Google sign-in ([Better Auth](https://www.better-auth.com)).
 - **Uploading:** MP3, WAV, OGG, FLAC, AAC or M4A up to 50 MB, straight from the browser to R2. A single track, or several files as an album/EP release with ordered tracks and shared artwork.
+- **Artwork processing:** uploaded images (JPEG, PNG, WebP up to 10 MB) are centre-cropped to squares and stored as WebP at 96, 320 and 640 px with [sharp](https://sharp.pixelplumbing.com); the original is deleted. Every artwork `<img>` gets a `srcset` and `sizes`, so the player bar loads the 96 px file and nothing larger than 640 px ever exists.
 - **Waveforms without a media server:** the browser decodes the file (Web Audio) while it uploads and computes the duration and waveform peaks. The server validates them and stores a small JSON next to the audio.
 - **Streaming:** seeking works, audio never passes through the app server, and public / private visibility is enforced.
 - **Player:** one global player with a queue, next/previous, keyboard shortcuts and OS media controls (Media Session API).
@@ -89,6 +90,7 @@ sequenceDiagram
 | Media is a first-class model: `MediaAsset` goes `PENDING -> READY -> ATTACHED` | Uploads can be verified, cleaned up when abandoned, and claimed atomically so two requests cannot publish the same file. |
 | Play counts are deduped with an HMAC of IP + user agent and a Postgres advisory lock | No raw IPs stored, and concurrent requests cannot double count. |
 | Comments store `timestampSeconds` (whole seconds) read from the player when the user posts; writes are serialised per track with an advisory lock | `Track.commentCount` always equals the number of rows, even when a thread is deleted while replies arrive. Replies are one level deep and carry no timestamp. |
+| Artwork is stored as 96/320/640 px square WebP renditions and the original is deleted | 640 px covers the largest artwork box (the track page: 320 px on desktop, full width on phones) on a 2x screen. Keeping only what the UI can show keeps R2 small; the trade-off is that larger sizes cannot be regenerated later. |
 | `Track.likeCount` changes only when a `TrackLike` row is really inserted or deleted, in the same transaction | A denormalised counter that cannot drift from the rows, however often or concurrently the button is pressed. |
 | Prisma 7 with the `pg` adapter on Neon's pooled URL; migrations use the direct URL | Pooling for serverless traffic, a real connection for `migrate`. |
 
@@ -135,6 +137,8 @@ pnpm dev                    # http://localhost:3000
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client; register `<BETTER_AUTH_URL>/api/auth/callback/google` as a redirect URI |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` | R2 credentials and bucket |
 | `R2_PUBLIC_BASE_URL` | Optional public bucket URL for artwork; without it artwork is served through presigned redirects |
+
+Artwork uploaded before processing existed can be converted with `pnpm artwork:backfill` (`--dry-run` to preview); it deletes users' original uploads and leaves shared demo sources in place.
 
 The R2 bucket needs a **CORS rule** allowing `PUT` with the `Content-Type` header from each origin you upload from (`http://localhost:3000`, your production domain), otherwise browser uploads fail.
 

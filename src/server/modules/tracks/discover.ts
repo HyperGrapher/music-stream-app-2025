@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { artworkAssetSelect, trackArtwork } from "./artwork";
 
 import { trackUrls } from "./access";
 
@@ -48,7 +49,7 @@ export const trackListSelect = {
   likeCount: true,
   commentCount: true,
   creator: { select: { id: true, name: true, image: true } },
-  artworkAsset: { select: { publicUrl: true } },
+  artworkAsset: artworkAssetSelect,
   audioAsset: {
     select: {
       audioAnalysis: {
@@ -73,8 +74,6 @@ export function toTrackListItem(row: TrackListRow) {
     duration: analysis?.durationMs ? Math.round(analysis.durationMs / 1_000) : 0,
     waveformStatus: analysis?.status ?? ("QUEUED" as const),
     waveformUrl: trackUrls(track.id, analysis?.waveformVersion).waveformUrl,
-    artworkUrl: artworkAsset
-      ? (artworkAsset.publicUrl ?? trackUrls(track.id).artworkFallbackUrl)
-      : null,
+    ...trackArtwork(track.id, artworkAsset),
   };
 }

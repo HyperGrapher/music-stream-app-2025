@@ -9,6 +9,7 @@ import { genreLabel } from "@/lib/genres";
 import { formatCount, formatDuration } from "@/lib/utils";
 import { usePlayerStore } from "@/store/player";
 import type { PlayerTrack } from "@/types/player-track";
+import { ARTWORK_SIZES } from "@/lib/artwork";
 
 type CardTrack = PlayerTrack & { user?: { name: string; image?: string | null } };
 
@@ -42,7 +43,10 @@ export const TrackCard = memo(function TrackCard({ track, playlist }: TrackCardP
         <Link href={`/track/${track.id}`} className="block h-full w-full" tabIndex={-1}>
           <img
             src={track.artworkUrl ?? "/placeholder-track.jpg"}
+            srcSet={track.artworkSrcSet ?? undefined}
+            sizes={ARTWORK_SIZES.card}
             alt={`${track.title} artwork`}
+            loading="lazy"
             className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
           />
         </Link>

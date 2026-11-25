@@ -1,5 +1,6 @@
 import { DeleteObjectsCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import { expect, test } from "@playwright/test";
+import sharp from "sharp";
 
 import { db, signUp } from "./helpers";
 
@@ -14,23 +15,25 @@ import { db, signUp } from "./helpers";
 test.skip(process.env.E2E_R2 !== "1", "needs real R2 credentials and bucket CORS for this origin");
 
 let userId: string | undefined;
+const r2 = () =>
+  new S3Client({
+    region: "auto",
+    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    },
+  });
 
 test.afterAll(async () => {
   if (userId) {
-    const r2 = new S3Client({
-      region: "auto",
-      endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-      },
-    });
+    const client = r2();
     for (const prefix of ["uploads", "waveforms", "artworks"]) {
-      const listed = await r2.send(
+      const listed = await client.send(
         new ListObjectsV2Command({ Bucket: process.env.R2_BUCKET_NAME, Prefix: `${prefix}/${userId}/` }),
       );
       if (listed.Contents?.length) {
-        await r2.send(
+        await client.send(
           new DeleteObjectsCommand({
             Bucket: process.env.R2_BUCKET_NAME,
             Delete: { Objects: listed.Contents.map((o) => ({ Key: o.Key })) },
@@ -97,10 +100,45 @@ test("upload, analyse in the browser, publish and play", async ({ page, baseURL 
   expect(asset.audioAnalysis?.durationMs).toBe(3000);
   expect(asset.audioAnalysis?.overviewWaveformAssetId).not.toBeNull();
 
+  // Artwork: a 1500x1000 JPEG becomes square WebP renditions; the original is deleted.
+  const jpeg = await sharp({
+    create: { width: 1500, height: 1000, channels: 3, background: { r: 230, g: 90, b: 20 } },
+  })
+    .jpeg()
+    .toBuffer();
+  await page.getByRole("button", { name: "Continue to Details" }).click();
+  await page.locator('input[type="file"][accept*="image"]').setInputFiles({
+    name: "cover.jpg",
+    mimeType: "image/jpeg",
+    buffer: jpeg,
+  });
+  await page.getByRole("button", { name: "Upload Artwork" }).click();
+  await expect(page.getByAltText("Artwork preview")).toBeVisible({ timeout: 30_000 });
+  const artwork = await db.mediaAsset.findFirstOrThrow({
+    where: { ownerId: user.id, kind: "IMAGE", status: "READY" },
+  });
+  expect(artwork.imageWidths).toEqual([96, 320, 640]);
+  expect(artwork.mimeType).toBe("image/webp");
+  expect(artwork.storageKey).toBe(`artworks/${user.id}/${artwork.id}/640.webp`);
+  const stored = await r2().send(
+    new ListObjectsV2Command({ Bucket: process.env.R2_BUCKET_NAME, Prefix: `artworks/${user.id}/` }),
+  );
+  expect((stored.Contents ?? []).map((o) => o.Key).sort()).toEqual(
+    [96, 320, 640].map((w) => `artworks/${user.id}/${artwork.id}/${w}.webp`).sort(),
+  );
+
   const published = await page.request.post("/api/trpc/upload.createTrack?batch=1", {
     headers: { origin: baseURL! },
     data: {
-      0: { json: { title: "E2E Tone", mediaAssetId: asset.id, genre: "electronic", privacy: "public" } },
+      0: {
+        json: {
+          title: "E2E Tone",
+          mediaAssetId: asset.id,
+          artworkAssetId: artwork.id,
+          genre: "electronic",
+          privacy: "public",
+        },
+      },
     },
   });
   expect(published.ok()).toBe(true);
@@ -111,7 +149,19 @@ test("upload, analyse in the browser, publish and play", async ({ page, baseURL 
   expect(waveform.status()).toBe(200);
   expect(((await waveform.json()) as { length: number }).length).toBe(60); // 3 s x 20 px/s
 
+  // Each rendition is reachable through the redirect route, at its real size.
+  for (const width of [96, 320, 640]) {
+    const response = await page.request.get(`/api/tracks/${track.id}/artwork?w=${width}`);
+    expect(response.status()).toBe(200);
+    const meta = await sharp(await response.body()).metadata();
+    expect([meta.format, meta.width, meta.height]).toEqual(["webp", width, width]);
+  }
+
   await page.goto(`/track/${track.id}`);
+  const hero = page.getByAltText("E2E Tone artwork");
+  await expect(hero).toHaveAttribute("srcset", /\?w=96 96w, .*\?w=320 320w, .*\?w=640 640w/);
+  // On this 1x desktop viewport the hero box is 320 px wide: the browser picks the 320 rendition.
+  await expect.poll(() => hero.evaluate((img: HTMLImageElement) => img.currentSrc)).toMatch(/\?w=320$/);
   await page.locator("button:has(svg.lucide-play)").first().click();
   await expect
     .poll(

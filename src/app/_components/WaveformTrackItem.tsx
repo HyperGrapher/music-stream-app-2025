@@ -19,6 +19,7 @@ import { usePlayerStore } from "@/store/player";
 import type { PlayerTrack as Track } from "@/types/player-track";
 import { LikeButton } from "./LikeButton";
 import WaveformVisualizer from "./WaveformVisualizer";
+import { ARTWORK_SIZES } from "@/lib/artwork";
 
 interface WaveformTrackItemProps {
   track: Track & {
@@ -95,7 +96,10 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
         >
           <img
             src={track.artworkUrl ?? "/placeholder-track.jpg"}
+            srcSet={track.artworkSrcSet ?? undefined}
+            sizes={ARTWORK_SIZES.listItem}
             alt={`${track.title} artwork`}
+            loading="lazy"
             className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
           />
         </Link>

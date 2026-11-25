@@ -118,6 +118,48 @@ describe("discover.tracks", () => {
     assert.match(item?.user.name ?? "", /^it-disc-dto$/);
     assert.equal(item?.artworkUrl, null);
     assert.equal(item?.waveformUrl, `/api/tracks/${track.id}/waveform?v=1`);
+    assert.equal(item?.artworkSrcSet, null);
+  });
+
+  it("serves processed artwork as a srcset of its renditions, legacy artwork as one url", async () => {
+    const owner = await createUser("disc-art");
+    const processed = await makeTrack(owner, "art-new");
+    const legacy = await makeTrack(owner, "art-old");
+    const assetId = crypto.randomUUID();
+    await db.mediaAsset.create({
+      data: {
+        id: assetId,
+        ownerId: owner,
+        kind: "IMAGE",
+        status: "ATTACHED",
+        bucket: "test-bucket",
+        storageKey: `artworks/${owner}/${assetId}/640.webp`,
+        imageWidths: [96, 320, 640],
+        originalFilename: "cover.jpg",
+        mimeType: "image/webp",
+      },
+    });
+    await db.track.update({ where: { id: processed.id }, data: { artworkAssetId: assetId } });
+    const legacyArt = await createAsset(owner, { kind: "IMAGE", status: "ATTACHED" });
+    await db.track.update({ where: { id: legacy.id }, data: { artworkAssetId: legacyArt.id } });
+
+    const items = [
+      ...(await api().discover.tracks({ q: title("art-new"), limit: 5 })),
+      ...(await api().discover.tracks({ q: title("art-old"), limit: 5 })),
+    ];
+    const route = (id: string) => `/api/tracks/${id}/artwork`;
+    const byId = new Map(items.map((i) => [i.id, i]));
+    assert.equal(byId.get(processed.id)?.artworkUrl, `${route(processed.id)}?w=640`);
+    assert.equal(
+      byId.get(processed.id)?.artworkSrcSet,
+      `${route(processed.id)}?w=96 96w, ${route(processed.id)}?w=320 320w, ${route(processed.id)}?w=640 640w`,
+    );
+    assert.equal(byId.get(legacy.id)?.artworkUrl, route(legacy.id));
+    assert.equal(byId.get(legacy.id)?.artworkSrcSet, null);
+
+    // the track page and profile feed use the same mapping
+    const page = await api().artist.getTrack({ trackId: processed.id });
+    assert.equal(page?.artworkSrcSet, byId.get(processed.id)?.artworkSrcSet);
   });
 });
 

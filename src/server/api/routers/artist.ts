@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { canAccessTrack, trackUrls } from "@/server/modules/tracks/access";
 import { likedByMeSelect } from "@/server/modules/tracks/likes";
+import { artworkAssetSelect, trackArtwork } from "@/server/modules/tracks/artwork";
 
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
 
@@ -100,7 +101,7 @@ export const artistRouter = createTRPCRouter({
             },
           },
           releaseDate: true,
-          artworkAsset: { select: { publicUrl: true } },
+          artworkAsset: artworkAssetSelect,
           ...likedByMeSelect(ctx.session?.user.id),
           playCount: true,
           likeCount: true,
@@ -120,10 +121,7 @@ export const artistRouter = createTRPCRouter({
             : 0,
           waveformStatus: analysis?.status ?? "QUEUED",
           waveformUrl: trackUrls(track.id, analysis?.waveformVersion).waveformUrl,
-          artworkUrl: artworkAsset
-            ? (artworkAsset.publicUrl ??
-              trackUrls(track.id).artworkFallbackUrl)
-            : null,
+          ...trackArtwork(track.id, artworkAsset),
         };
       });
     }),
@@ -173,7 +171,7 @@ export const artistRouter = createTRPCRouter({
               },
             },
           },
-          artworkAsset: { select: { publicUrl: true } },
+          artworkAsset: artworkAssetSelect,
           ...likedByMeSelect(ctx.session?.user.id),
           playCount: true,
           likeCount: true,
@@ -193,10 +191,7 @@ export const artistRouter = createTRPCRouter({
             : 0,
           waveformStatus: analysis?.status ?? "QUEUED",
           waveformUrl: trackUrls(track.id, analysis?.waveformVersion).waveformUrl,
-          artworkUrl: artworkAsset
-            ? (artworkAsset.publicUrl ??
-              trackUrls(track.id).artworkFallbackUrl)
-            : null,
+          ...trackArtwork(track.id, artworkAsset),
         };
       });
     }),
@@ -221,7 +216,7 @@ export const artistRouter = createTRPCRouter({
           likeCount: true,
           repostCount: true,
           commentCount: true,
-          artworkAsset: { select: { publicUrl: true } },
+          artworkAsset: artworkAssetSelect,
           ...likedByMeSelect(ctx.session?.user.id),
           audioAsset: {
             select: {
@@ -269,10 +264,7 @@ export const artistRouter = createTRPCRouter({
           : 0,
         waveformStatus: analysis?.status ?? "QUEUED",
         waveformUrl: trackUrls(track.id, analysis?.waveformVersion).waveformUrl,
-        artworkUrl: artworkAsset
-          ? (artworkAsset.publicUrl ??
-            trackUrls(track.id).artworkFallbackUrl)
-          : null,
+        ...trackArtwork(track.id, artworkAsset),
         userId: creator.id,
         user: { name: creator.name, image: creator.image },
         creator: {
@@ -308,7 +300,7 @@ export const artistRouter = createTRPCRouter({
           description: true,
           releaseDate: true,
           createdAt: true,
-          artworkAsset: { select: { publicUrl: true } },
+          artworkAsset: artworkAssetSelect,
           tracks: {
             orderBy: { position: "asc" },
             select: {
@@ -333,7 +325,7 @@ export const artistRouter = createTRPCRouter({
                   playCount: true,
                   likeCount: true,
                   commentCount: true,
-                  artworkAsset: { select: { publicUrl: true } },
+                  artworkAsset: artworkAssetSelect,
                   ...likedByMeSelect(ctx.session?.user.id),
                 },
               },
@@ -347,7 +339,7 @@ export const artistRouter = createTRPCRouter({
         artworkUrl: artworkAsset?.publicUrl ?? null,
         tracks: tracks.map(({ track }) => {
           const {
-            artworkAsset: trackArtwork,
+            artworkAsset: trackArtworkAsset,
             audioAsset,
             likes,
             ...trackData
@@ -363,10 +355,7 @@ export const artistRouter = createTRPCRouter({
             waveformUrl: trackUrls(track.id, analysis?.waveformVersion).waveformUrl,
             userId: creator.id,
             user: { name: creator.name, image: creator.image },
-            artworkUrl: trackArtwork
-              ? (trackArtwork.publicUrl ??
-                trackUrls(track.id).artworkFallbackUrl)
-              : null,
+            ...trackArtwork(track.id, trackArtworkAsset),
           };
         }),
       }));

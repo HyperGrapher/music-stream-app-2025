@@ -58,7 +58,7 @@ export function SingleTrackForm({ form }: SingleTrackFormProps) {
               />
             </FormControl>
             <FormDescription>
-              Upload a square image (recommended: 1000x1000px)
+              A square image of at least 640 × 640 px works best (it is cropped to a square)
             </FormDescription>
             <FormMessage />
           </FormItem>

@@ -166,6 +166,9 @@ model MediaAsset {
   mimeType            String
   byteSize            BigInt?
   publicUrl           String?
+  /// Processed artwork: square WebP renditions stored next to `storageKey` (which is the largest).
+  /// Empty for audio, waveforms and legacy unprocessed images.
+  imageWidths         Int[]                  @default([])
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt
   uploadedAt          DateTime?

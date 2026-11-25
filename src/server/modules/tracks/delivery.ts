@@ -27,6 +27,24 @@ export function presignGet(
 }
 
 /**
+ * A presigned URL that stays identical for `windowSeconds` (signed at the start of the window,
+ * valid for two windows), so browsers can cache the object behind it instead of downloading it
+ * again for every new signature. Always valid for at least one more window.
+ */
+export function presignGetStable(
+  asset: { bucket: string; storageKey: string },
+  windowSeconds: number,
+  now = Date.now(),
+) {
+  const windowMs = windowSeconds * 1000;
+  return getSignedUrl(
+    r2Client,
+    new GetObjectCommand({ Bucket: asset.bucket, Key: asset.storageKey }),
+    { expiresIn: windowSeconds * 2, signingDate: new Date(Math.floor(now / windowMs) * windowMs) },
+  );
+}
+
+/**
  * Applies visibility rules to a loaded track. Callers answer 404 (not 403) when
  * this is false so private tracks are not discoverable by probing ids.
  */

@@ -455,15 +455,9 @@ export function useMediaSession() {
         title: currentTrack.title,
         artist: currentTrack.userId ?? "Unknown Artist",
         album: currentTrack.albumId ?? "",
-        artwork: currentTrack.artworkUrl
-          ? [
-              {
-                src: currentTrack.artworkUrl,
-                sizes: "512x512",
-                type: "image/jpeg",
-              },
-            ]
-          : [],
+        // Type and size are left for the browser to detect: artwork may be a WebP rendition or
+        // a legacy upload of any size.
+        artwork: currentTrack.artworkUrl ? [{ src: currentTrack.artworkUrl }] : [],
       });
     } else {
       navigator.mediaSession.metadata = null;

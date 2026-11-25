@@ -1,7 +1,7 @@
 /**
  * Registers media that already exists in the R2 bucket as demo content:
  * one creator, one track per uploads/*.mp3|ogg with its waveform, and a distinct
- * random artwork from random-artwork-images/artwork-NNN.webp.
+ * random artwork from random-artwork-images/artwork-NNN.webp (processed into renditions).
  *
  * Idempotent (keyed on storageKey). Waveforms carry no link to their audio, so
  * they are paired by duration: overview.json length / 20 px per second vs the
@@ -11,6 +11,7 @@
  */
 import { GetObjectCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import "dotenv/config";
+import { processArtworkObject } from "../src/server/modules/media/artwork-processing";
 import { createPrismaClient } from "../src/server/prisma-client";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -72,7 +73,7 @@ async function probeSeconds(key: string): Promise<number> {
 async function main() {
   const objects = await listAll();
   const audio = objects.filter((o) => /^uploads\/.+\.(mp3|ogg)$/.test(o.key));
-  // Shuffled so each new track gets a different image (storageKey is unique per asset).
+  // Shuffled so each new track gets a different image.
   const artworks = objects.filter((o) => /^random-artwork-images\/artwork-\d+\.webp$/.test(o.key));
   for (let i = artworks.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -117,13 +118,28 @@ async function main() {
       data: { ...base, kind: "AUDIO", storageKey: a.key, originalFilename: a.key.split("/").pop()!, mimeType: mime(a.key), byteSize: BigInt(a.size) },
     });
 
+    // Renditions are made from the pool image like a real upload; the pool itself stays.
     let artworkAssetId: string | undefined;
     const art = artworks[artIdx++ % Math.max(artworks.length, 1)];
     if (art) {
-      const existing = await prisma.mediaAsset.findUnique({ where: { storageKey: art.key } });
-      artworkAssetId = (existing ?? (await prisma.mediaAsset.create({
-        data: { ...base, kind: "IMAGE", storageKey: art.key, originalFilename: art.key.split("/").pop()!, mimeType: mime(art.key), byteSize: BigInt(art.size) },
-      }))).id;
+      artworkAssetId = crypto.randomUUID();
+      const processed = await processArtworkObject(r2, {
+        bucket,
+        sourceKey: art.key,
+        base: `artworks/${user.id}/${artworkAssetId}`,
+      });
+      await prisma.mediaAsset.create({
+        data: {
+          ...base,
+          id: artworkAssetId,
+          kind: "IMAGE",
+          storageKey: processed.storageKey,
+          imageWidths: processed.imageWidths,
+          originalFilename: art.key.split("/").pop()!,
+          mimeType: processed.mimeType,
+          byteSize: BigInt(processed.byteSize),
+        },
+      });
     }
 
     let overviewId: string | undefined;

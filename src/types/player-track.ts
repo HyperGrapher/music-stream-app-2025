@@ -5,6 +5,8 @@ export interface PlayerTrack {
   duration: number;
   userId?: string;
   artworkUrl?: string | null;
+  /** `srcset` of the artwork renditions (absent for legacy single-size images). */
+  artworkSrcSet?: string | null;
   waveformUrl?: string | null;
   waveformStatus?: "QUEUED" | "PROCESSING" | "READY" | "FAILED";
   description?: string | null;

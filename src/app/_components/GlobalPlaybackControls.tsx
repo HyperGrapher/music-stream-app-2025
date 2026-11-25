@@ -16,6 +16,7 @@ import { usePlayerStore } from '@/store/player';
 import { formatDuration } from '@/lib/utils';
 import { useShallow } from 'zustand/react/shallow';
 import { usePathname } from 'next/navigation'
+import { ARTWORK_SIZES } from "@/lib/artwork";
 
 // Using React.memo to prevent unnecessary re-renders
 function TrackInfo() {
@@ -29,6 +30,8 @@ function TrackInfo() {
     <div className="flex items-center space-x-3 flex-shrink min-w-0">
       <img
         src={currentTrack.artworkUrl ?? '/placeholder-track.jpg'}
+        srcSet={currentTrack.artworkSrcSet ?? undefined}
+        sizes={ARTWORK_SIZES.thumbnail}
         alt="Now playing"
         className="w-10 h-10 object-cover rounded-sm flex-shrink-0"
       />

@@ -20,6 +20,7 @@ import type { PlayerTrack } from "@/types/player-track";
 import { CommentMarkers } from "./CommentMarkers";
 import { LikeButton } from "./LikeButton";
 import WaveformVisualizer from "./WaveformVisualizer";
+import { ARTWORK_SIZES } from "@/lib/artwork";
 
 const roundActionClass =
   "flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700 bg-black/50 text-zinc-300 backdrop-blur transition hover:border-zinc-400 hover:text-white";
@@ -71,6 +72,8 @@ export function TrackDetailHero({ track }: { track: PlayerTrack }) {
       {track.artworkUrl && (
         <img
           src={track.artworkUrl}
+          srcSet={track.artworkSrcSet ?? undefined}
+          sizes={ARTWORK_SIZES.backdrop}
           alt=""
           className="absolute inset-0 h-full w-full scale-110 object-cover opacity-20 blur-3xl"
         />
@@ -193,6 +196,8 @@ export function TrackDetailHero({ track }: { track: PlayerTrack }) {
         >
           <img
             src={track.artworkUrl ?? "/placeholder-track.jpg"}
+            srcSet={track.artworkSrcSet ?? undefined}
+            sizes={ARTWORK_SIZES.hero}
             alt={`${track.title} artwork`}
             className="h-full w-full object-cover"
           />

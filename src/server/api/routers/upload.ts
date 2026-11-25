@@ -33,6 +33,13 @@ import {
   serializeWaveform,
   waveformStorageKey,
 } from "@/server/modules/tracks/analysis";
+import { imageObjectKeys } from "@/lib/artwork";
+import {
+  deleteObjects,
+  InvalidArtworkError,
+  processArtworkObject,
+  type ProcessedArtwork,
+} from "@/server/modules/media/artwork-processing";
 
 // Maximum file size in bytes (50MB)
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -150,12 +157,7 @@ async function claimAndDeleteMediaAsset(upload: MediaAsset): Promise<boolean> {
   if (claimed.count !== 1) return false;
 
   try {
-    await r2Client.send(
-      new DeleteObjectCommand({
-        Bucket: upload.bucket,
-        Key: upload.storageKey,
-      }),
-    );
+    await deleteObjects(r2Client, upload.bucket, imageObjectKeys(upload));
   } catch (storageError) {
     await db.mediaAsset.updateMany({
       where: { id: upload.id, status: MediaStatus.DELETING },
@@ -586,11 +588,30 @@ export const uploadRouter = createTRPCRouter({
           });
         }
 
-        const metadata = await verifyUploadedObject(
+        await verifyUploadedObject(
           mediaAsset.bucket,
           mediaAsset.storageKey,
           "artwork",
         );
+
+        // Square WebP renditions (96/320/640 px) replace the original, which is then deleted.
+        let processed: ProcessedArtwork;
+        try {
+          processed = await processArtworkObject(r2Client, {
+            bucket: mediaAsset.bucket,
+            sourceKey: mediaAsset.storageKey,
+            base: `artworks/${userId}/${input.mediaAssetId}`,
+          });
+        } catch (error) {
+          if (error instanceof InvalidArtworkError) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "The artwork could not be read as an image",
+              cause: error,
+            });
+          }
+          throw error;
+        }
 
         const updated = await db.mediaAsset.updateMany({
           where: {
@@ -598,21 +619,34 @@ export const uploadRouter = createTRPCRouter({
             ownerId: userId,
             kind: MediaKind.IMAGE,
             status: MediaStatus.PENDING,
+            storageKey: mediaAsset.storageKey,
           },
           data: {
             status: MediaStatus.READY,
-            byteSize: BigInt(metadata.byteSize),
-            mimeType: metadata.mimeType,
+            storageKey: processed.storageKey,
+            imageWidths: processed.imageWidths,
+            byteSize: BigInt(processed.byteSize),
+            mimeType: processed.mimeType,
+            publicUrl: env.R2_PUBLIC_BASE_URL
+              ? buildPublicObjectUrl(env.R2_PUBLIC_BASE_URL, processed.storageKey)
+              : null,
             uploadedAt: new Date(),
           },
         });
 
         if (updated.count !== 1) {
+          // A concurrent call for the same upload won (and wrote the same rendition keys), or the
+          // upload expired meanwhile. Leave the objects to whichever asset now owns them.
           throw new TRPCError({
             code: "CONFLICT",
             message: "Artwork upload is no longer available",
           });
         }
+
+        await deleteObjects(r2Client, mediaAsset.bucket, [mediaAsset.storageKey]).catch(
+          (error: unknown) =>
+            console.error(`Failed to delete original artwork ${mediaAsset.storageKey}:`, error),
+        );
 
         return { success: true };
       } catch (error) {
