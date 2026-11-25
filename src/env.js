@@ -11,7 +11,25 @@ export const env = createEnv({
     // Direct (non-pooled) Neon URL, used by Prisma Migrate via `directUrl`.
     DATABASE_URL_UNPOOLED: z.string().url().optional(),
     BETTER_AUTH_SECRET: z.string(),
-    BETTER_AUTH_URL: z.string(),
+    // Public base URL of the app. Better Auth derives the OAuth redirect URI from it
+    // (`<url>/api/auth/callback/google`), so in production it must be the exact https
+    // origin that is registered in the Google OAuth client.
+    BETTER_AUTH_URL: z
+      .string()
+      .url()
+      .refine(
+        (value) => {
+          const { protocol, hostname } = new URL(value);
+          return (
+            protocol === "https:" ||
+            hostname === "localhost" ||
+            hostname === "127.0.0.1" ||
+            process.env.NODE_ENV !== "production"
+          );
+        },
+        "BETTER_AUTH_URL must use https:// in production",
+      )
+      .refine((value) => !value.endsWith("/"), "BETTER_AUTH_URL must not end with a slash"),
     GOOGLE_CLIENT_ID: z.string(),
     GOOGLE_CLIENT_SECRET: z.string(),
     R2_ACCOUNT_ID: z.string(),
