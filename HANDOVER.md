@@ -1,6 +1,7 @@
 # Codex handover: SoundCloud-like streaming app
 
 > **Current work is tracked in `docs/REFACTOR.md`** (migration to a single Next.js app on Vercel + Neon).
+> Historical notes below: `apps/express` no longer exists. Streaming, waveform and artwork are Next Route Handlers under `apps/web/src/app/api/tracks/`, and audio is delivered through presigned R2 redirects.
 
 Date: 2026-08-24
 

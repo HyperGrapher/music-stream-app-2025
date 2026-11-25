@@ -69,12 +69,16 @@ const getAudioElement = (): HTMLAudioElement => {
   return audioElement!;
 };
 
-const streamApiUrl = (
-  process.env.NEXT_PUBLIC_STREAM_API_URL ?? "http://localhost:4000"
-).replace(/\/+$/, "");
-
 const getTrackStreamUrl = (trackId: string) =>
-  `${streamApiUrl}/tracks/stream/${encodeURIComponent(trackId)}`;
+  `/api/tracks/${encodeURIComponent(trackId)}/stream`;
+
+// One play per playback start; the audio itself is served by R2 via redirect.
+const recordPlay = (trackId: string) => {
+  void fetch(`/api/tracks/${encodeURIComponent(trackId)}/play`, {
+    method: "POST",
+    keepalive: true,
+  }).catch(() => undefined);
+};
 
 const isCurrentAudioSource = (audio: HTMLAudioElement) => {
   const currentTrack = usePlayerStore.getState().currentTrack;
@@ -566,6 +570,7 @@ export function PlayerController({
       // Set the audio source
       audio.src = streamUrl;
       audio.load();
+      recordPlay(requestedTrackId);
 
       const playPromise = audio.play();
       if (playPromise !== undefined) {

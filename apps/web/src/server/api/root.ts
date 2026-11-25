@@ -1,4 +1,3 @@
-import { streamRouter } from "@/server/api/routers/strream";
 import { artistRouter } from "./routers/artist";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 import { uploadRouter } from "./routers/upload";
@@ -9,7 +8,6 @@ import { uploadRouter } from "./routers/upload";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
-  stream: streamRouter,
   artist: artistRouter,
   upload: uploadRouter,
 });

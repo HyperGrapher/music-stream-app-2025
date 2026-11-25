@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { trackUrls } from "@/server/modules/tracks/access";
 
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
 
@@ -107,10 +108,6 @@ export const artistRouter = createTRPCRouter({
         },
       });
 
-      const streamBaseUrl = (
-        process.env.NEXT_PUBLIC_STREAM_API_URL ?? "http://localhost:4000"
-      ).replace(/\/+$/, "");
-
       return tracks.map(({ artworkAsset, audioAsset, ...track }) => {
         const analysis = audioAsset.audioAnalysis;
         return {
@@ -119,10 +116,10 @@ export const artistRouter = createTRPCRouter({
             ? Math.round(analysis.durationMs / 1_000)
             : 0,
           waveformStatus: analysis?.status ?? "QUEUED",
-          waveformUrl: `${streamBaseUrl}/tracks/${track.id}/waveform?v=${analysis?.waveformVersion ?? 1}`,
+          waveformUrl: trackUrls(track.id, analysis?.waveformVersion).waveformUrl,
           artworkUrl: artworkAsset
             ? (artworkAsset.publicUrl ??
-              `${streamBaseUrl}/tracks/${track.id}/artwork`)
+              trackUrls(track.id).artworkFallbackUrl)
             : null,
         };
       });
@@ -182,10 +179,6 @@ export const artistRouter = createTRPCRouter({
         },
       });
 
-      const streamBaseUrl = (
-        process.env.NEXT_PUBLIC_STREAM_API_URL ?? "http://localhost:4000"
-      ).replace(/\/+$/, "");
-
       return tracks.map(({ artworkAsset, audioAsset, ...track }) => {
         const analysis = audioAsset.audioAnalysis;
         return {
@@ -194,10 +187,10 @@ export const artistRouter = createTRPCRouter({
             ? Math.round(analysis.durationMs / 1_000)
             : 0,
           waveformStatus: analysis?.status ?? "QUEUED",
-          waveformUrl: `${streamBaseUrl}/tracks/${track.id}/waveform?v=${analysis?.waveformVersion ?? 1}`,
+          waveformUrl: trackUrls(track.id, analysis?.waveformVersion).waveformUrl,
           artworkUrl: artworkAsset
             ? (artworkAsset.publicUrl ??
-              `${streamBaseUrl}/tracks/${track.id}/artwork`)
+              trackUrls(track.id).artworkFallbackUrl)
             : null,
         };
       });
@@ -256,9 +249,6 @@ export const artistRouter = createTRPCRouter({
       });
 
       if (!track) return null;
-      const streamBaseUrl = (
-        process.env.NEXT_PUBLIC_STREAM_API_URL ?? "http://localhost:4000"
-      ).replace(/\/+$/, "");
       const { artworkAsset, audioAsset, creator, ...trackData } = track;
       const analysis = audioAsset.audioAnalysis;
 
@@ -268,10 +258,10 @@ export const artistRouter = createTRPCRouter({
           ? Math.round(analysis.durationMs / 1_000)
           : 0,
         waveformStatus: analysis?.status ?? "QUEUED",
-        waveformUrl: `${streamBaseUrl}/tracks/${track.id}/waveform?v=${analysis?.waveformVersion ?? 1}`,
+        waveformUrl: trackUrls(track.id, analysis?.waveformVersion).waveformUrl,
         artworkUrl: artworkAsset
           ? (artworkAsset.publicUrl ??
-            `${streamBaseUrl}/tracks/${track.id}/artwork`)
+            trackUrls(track.id).artworkFallbackUrl)
           : null,
         userId: creator.id,
         user: { name: creator.name, image: creator.image },
@@ -341,10 +331,6 @@ export const artistRouter = createTRPCRouter({
         },
       });
 
-      const streamBaseUrl = (
-        process.env.NEXT_PUBLIC_STREAM_API_URL ?? "http://localhost:4000"
-      ).replace(/\/+$/, "");
-
       return releases.map(({ artworkAsset, tracks, ...release }) => ({
         ...release,
         artworkUrl: artworkAsset?.publicUrl ?? null,
@@ -361,12 +347,12 @@ export const artistRouter = createTRPCRouter({
               ? Math.round(analysis.durationMs / 1_000)
               : 0,
             waveformStatus: analysis?.status ?? "QUEUED",
-            waveformUrl: `${streamBaseUrl}/tracks/${track.id}/waveform?v=${analysis?.waveformVersion ?? 1}`,
+            waveformUrl: trackUrls(track.id, analysis?.waveformVersion).waveformUrl,
             userId: creator.id,
             user: { name: creator.name, image: creator.image },
             artworkUrl: trackArtwork
               ? (trackArtwork.publicUrl ??
-                `${streamBaseUrl}/tracks/${track.id}/artwork`)
+                trackUrls(track.id).artworkFallbackUrl)
               : null,
           };
         }),
