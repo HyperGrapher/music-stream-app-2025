@@ -2,9 +2,11 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { r2Client } from "@/lib/r2";
-import { cacheControlFor, isTrackId } from "@/server/modules/tracks/access";
+import { accessParamsFromUrl, isTrackId } from "@/server/modules/tracks/access";
 import { db } from "@/server/db";
-import { isTrackViewable } from "@/server/modules/tracks/delivery";
+import { authorizeTrack } from "@/server/modules/tracks/authorize";
+import { getViewerId } from "@/server/modules/tracks/delivery";
+import { cacheControlFor, trackAccessSelect } from "@/server/modules/visibility";
 
 export const runtime = "nodejs";
 
@@ -23,8 +25,7 @@ export async function GET(
     const track = await db.track.findUnique({
       where: { id: trackId },
       select: {
-        visibility: true,
-        creatorId: true,
+        ...trackAccessSelect,
         audioAsset: {
           select: {
             audioAnalysis: {
@@ -39,7 +40,13 @@ export async function GET(
         },
       },
     });
-    if (!track || !(await isTrackViewable(track, request.headers))) {
+    const access =
+      track &&
+      (await authorizeTrack(db, track, {
+        ...accessParamsFromUrl(request.url),
+        viewerId: await getViewerId(request.headers),
+      }));
+    if (!track || !access) {
       return NextResponse.json({ error: "Track not found" }, { status: 404 });
     }
 
@@ -47,7 +54,7 @@ export async function GET(
     const waveformAsset = analysis?.overviewWaveformAsset;
     if (analysis?.status !== "READY" || !waveformAsset) {
       return NextResponse.json(
-        { status: analysis?.status ?? "QUEUED" },
+        { status: analysis?.status ?? "FAILED" },
         { status: 202 },
       );
     }
@@ -66,7 +73,7 @@ export async function GET(
         ...(object.ContentLength !== undefined && {
           "Content-Length": String(object.ContentLength),
         }),
-        "Cache-Control": cacheControlFor(track.visibility, 31536000),
+        "Cache-Control": cacheControlFor(access, 31536000),
       },
     });
   } catch (error) {

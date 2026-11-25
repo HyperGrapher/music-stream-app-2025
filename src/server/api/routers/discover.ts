@@ -1,13 +1,14 @@
 import { z } from "zod";
 
+import { now } from "@/server/clock";
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
 import {
   DISCOVER_SORTS,
   discoverOrderBy,
   discoverWhere,
-  toTrackListItem,
-  trackListSelect,
 } from "@/server/modules/tracks/discover";
+import { toTrackDto, trackDtoSelect } from "@/server/modules/tracks/dto";
+import { publicTrackWhere } from "@/server/modules/visibility";
 
 export const discoverRouter = createTRPCRouter({
   /** Public tracks across all creators: newest or most played, optionally by genre / search. */
@@ -22,19 +23,19 @@ export const discoverRouter = createTRPCRouter({
     )
     .query(async ({ input, ctx }) => {
       const rows = await ctx.db.track.findMany({
-        where: discoverWhere(input),
+        where: discoverWhere(input, now()),
         orderBy: discoverOrderBy(input.sort),
         take: input.limit,
-        select: trackListSelect,
+        select: trackDtoSelect,
       });
-      return rows.map(toTrackListItem);
+      return rows.map((row) => toTrackDto(row, { viewerId: ctx.session?.user.id }));
     }),
 
   /** Genres that have at least one public track, most populated first. */
   genres: publicProcedure.query(async ({ ctx }) => {
     const groups = await ctx.db.track.groupBy({
       by: ["genre"],
-      where: { visibility: "PUBLIC", genre: { not: null } },
+      where: { AND: [publicTrackWhere(now()), { genre: { not: null } }] },
       _count: { _all: true },
       orderBy: [{ _count: { genre: "desc" } }, { genre: "asc" }],
     });

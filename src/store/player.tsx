@@ -69,16 +69,17 @@ const getAudioElement = (): HTMLAudioElement => {
   return audioElement!;
 };
 
-const getTrackStreamUrl = (trackId: string) =>
-  `/api/tracks/${encodeURIComponent(trackId)}/stream`;
+const getTrackStreamUrl = (track: Pick<Track, "id" | "streamUrl">) =>
+  track.streamUrl ?? `/api/tracks/${encodeURIComponent(track.id)}/stream`;
 
 // A play is reported once the listener has actually heard a few seconds, so
 // skipping through a queue does not inflate counts. The server dedupes further.
 const PLAY_REPORT_AFTER_SECONDS = 5;
 let playReportedFor: string | null = null;
 
-const recordPlay = (trackId: string) => {
-  void fetch(`/api/tracks/${encodeURIComponent(trackId)}/play`, {
+const recordPlay = (track: Pick<Track, "id" | "accessQuery">) => {
+  const query = track.accessQuery ? `?${track.accessQuery}` : "";
+  void fetch(`/api/tracks/${encodeURIComponent(track.id)}/play${query}`, {
     method: "POST",
     keepalive: true,
   }).catch(() => undefined);
@@ -89,7 +90,7 @@ const isCurrentAudioSource = (audio: HTMLAudioElement) => {
   if (!currentTrack || typeof window === "undefined") return false;
 
   const expectedSource = new URL(
-    getTrackStreamUrl(currentTrack.id),
+    getTrackStreamUrl(currentTrack),
     window.location.href,
   ).href;
   return audio.src === expectedSource;
@@ -337,7 +338,7 @@ export function useAudioEvents() {
         audio.currentTime >= PLAY_REPORT_AFTER_SECONDS
       ) {
         playReportedFor = track.id;
-        recordPlay(track.id);
+        recordPlay(track);
       }
     };
 
@@ -453,7 +454,7 @@ export function useMediaSession() {
     if (currentTrack) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTrack.title,
-        artist: currentTrack.userId ?? "Unknown Artist",
+        artist: currentTrack.artistName ?? currentTrack.user?.name ?? "Unknown Artist",
         album: currentTrack.albumId ?? "",
         // Type and size are left for the browser to detect: artwork may be a WebP rendition or
         // a legacy upload of any size.
@@ -568,7 +569,7 @@ export function PlayerController({
     if (currentTrack && status === "loading") {
       const audio = getAudioElement();
       const requestedTrackId = currentTrack.id;
-      const streamUrl = getTrackStreamUrl(currentTrack.id);
+      const streamUrl = getTrackStreamUrl(currentTrack);
 
       // Set the audio source
       audio.src = streamUrl;

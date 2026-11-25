@@ -11,17 +11,40 @@
 export const ARTWORK_WIDTHS = [96, 320, 640] as const;
 export const ARTWORK_MAX_WIDTH = 640;
 
+export type ImagePurpose = "ARTWORK" | "AVATAR" | "BANNER";
+
 /**
- * The widths to render for a source image whose shorter side is `shortSide` px. Never upscales:
+ * Renditions per purpose (PRD NF-3). `aspect` is width / height of every rendition: artwork and
+ * avatars are square, banners are a 2480x520 strip.
+ */
+export const IMAGE_SPECS = {
+  ARTWORK: { widths: ARTWORK_WIDTHS, aspect: 1 },
+  AVATAR: { widths: [64, 160, 320], aspect: 1 },
+  BANNER: { widths: [1240, 2480], aspect: 2480 / 520 },
+} as const satisfies Record<ImagePurpose, { widths: readonly number[]; aspect: number }>;
+
+/**
+ * The widths to render when the largest crop of the source is `maxWidth` px wide. Never upscales:
  * a small image gets the standard widths below its size plus one rendition at its own size.
  */
-export function planArtworkWidths(shortSide: number): number[] {
-  const side = Math.floor(shortSide);
-  if (!Number.isFinite(side) || side < 1) return [];
-  const widths: number[] = ARTWORK_WIDTHS.filter((width) => width <= side);
-  const top = Math.min(side, ARTWORK_MAX_WIDTH);
+export function planImageWidths(standard: readonly number[], maxWidth: number): number[] {
+  const available = Math.floor(maxWidth);
+  if (!Number.isFinite(available) || available < 1) return [];
+  const widths: number[] = standard.filter((width) => width <= available);
+  const top = Math.min(available, standard.at(-1)!);
   if (widths.at(-1) !== top) widths.push(top);
   return widths;
+}
+
+/** Widths for a source of `width` x `height` px cropped to the purpose's aspect ratio. */
+export function planImageWidthsFor(purpose: ImagePurpose, width: number, height: number): number[] {
+  const { widths, aspect } = IMAGE_SPECS[purpose];
+  return planImageWidths(widths, Math.min(width, height * aspect));
+}
+
+/** Square artwork: `shortSide` is the shorter side of the source. */
+export function planArtworkWidths(shortSide: number): number[] {
+  return planImageWidths(ARTWORK_WIDTHS, shortSide);
 }
 
 export const artworkVariantKey = (base: string, width: number) => `${base}/${width}.webp`;
@@ -67,8 +90,9 @@ export function artworkUrls(
   if (widths.length === 0) {
     return { artworkUrl: asset.publicUrl ?? fallbackUrl, artworkSrcSet: null };
   }
+  const joiner = fallbackUrl.includes("?") ? "&" : "?";
   const urlFor = (width: number) =>
-    asset.publicUrl ? withArtworkWidth(asset.publicUrl, width) : `${fallbackUrl}?w=${width}`;
+    asset.publicUrl ? withArtworkWidth(asset.publicUrl, width) : `${fallbackUrl}${joiner}w=${width}`;
   return {
     artworkUrl: urlFor(widths.at(-1)!),
     artworkSrcSet: widths.map((width) => `${urlFor(width)} ${width}w`).join(", "),

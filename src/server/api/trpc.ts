@@ -11,6 +11,7 @@ import superjson from "superjson";
 import { flattenError, ZodError } from "zod";
 
 import { auth } from "@/lib/auth";
+import { AppCause } from "@/server/errors";
 import { db } from "@/server/db";
 
 /**
@@ -57,6 +58,10 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
         ...shape.data,
         zodError:
           error.cause instanceof ZodError ? flattenError(error.cause) : null,
+        // App-level code (PLAN_REQUIRED, RATE_LIMITED, ...) for the one UI message mapping.
+        appCode: error.cause instanceof AppCause ? error.cause.appCode : null,
+        retryAfterSeconds:
+          error.cause instanceof AppCause ? (error.cause.extra.retryAfterSeconds ?? null) : null,
       },
     };
   },

@@ -1,12 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db } from "@/server/db";
-import { isTrackId } from "@/server/modules/tracks/access";
+import { accessParamsFromUrl, isTrackId } from "@/server/modules/tracks/access";
+import { authorizeTrack } from "@/server/modules/tracks/authorize";
 import {
   AUDIO_URL_TTL_SECONDS,
-  isTrackViewable,
+  getViewerId,
   presignGet,
 } from "@/server/modules/tracks/delivery";
+import { trackAccessSelect } from "@/server/modules/visibility";
 
 export const runtime = "nodejs";
 
@@ -14,6 +16,7 @@ export const runtime = "nodejs";
  * Audio is never proxied through this server. After the visibility check we
  * redirect to a short-lived presigned R2 URL, which supports range requests
  * natively, so seeking works and no audio bytes count against Vercel bandwidth.
+ * Hidden tracks need the owner's session or a secret link (`?s=` / `?c=&s=`).
  */
 export async function GET(
   request: NextRequest,
@@ -27,16 +30,18 @@ export async function GET(
   const track = await db.track.findUnique({
     where: { id: trackId },
     select: {
-      visibility: true,
-      creatorId: true,
+      ...trackAccessSelect,
       audioAsset: { select: { bucket: true, storageKey: true, status: true } },
     },
   });
-  if (
-    !track ||
-    track.audioAsset.status === "PENDING" ||
-    !(await isTrackViewable(track, request.headers))
-  ) {
+  const access =
+    track &&
+    track.audioAsset.status !== "PENDING" &&
+    (await authorizeTrack(db, track, {
+      ...accessParamsFromUrl(request.url),
+      viewerId: await getViewerId(request.headers),
+    }));
+  if (!track || !access) {
     return NextResponse.json({ error: "Track not found" }, { status: 404 });
   }
 

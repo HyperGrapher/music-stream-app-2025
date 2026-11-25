@@ -2,12 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { db } from "@/server/db";
 import { withArtworkWidth } from "@/lib/artwork";
-import { isTrackId } from "@/server/modules/tracks/access";
+import { accessParamsFromUrl, isTrackId } from "@/server/modules/tracks/access";
+import { authorizeTrack } from "@/server/modules/tracks/authorize";
 import {
   ARTWORK_URL_TTL_SECONDS,
-  isTrackViewable,
+  getViewerId,
   presignGetStable,
 } from "@/server/modules/tracks/delivery";
+import { trackAccessSelect } from "@/server/modules/visibility";
 
 export const runtime = "nodejs";
 
@@ -27,14 +29,19 @@ export async function GET(
   const track = await db.track.findUnique({
     where: { id: trackId },
     select: {
-      visibility: true,
-      creatorId: true,
+      ...trackAccessSelect,
       artworkAsset: {
         select: { bucket: true, storageKey: true, publicUrl: true, imageWidths: true },
       },
     },
   });
-  if (!track?.artworkAsset || !(await isTrackViewable(track, request.headers))) {
+  const access =
+    track?.artworkAsset &&
+    (await authorizeTrack(db, track, {
+      ...accessParamsFromUrl(request.url),
+      viewerId: await getViewerId(request.headers),
+    }));
+  if (!track?.artworkAsset || !access) {
     return NextResponse.json({ error: "Artwork not found" }, { status: 404 });
   }
 

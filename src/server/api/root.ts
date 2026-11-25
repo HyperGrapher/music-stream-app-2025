@@ -1,7 +1,9 @@
-import { artistRouter } from "./routers/artist";
+import { collectionsRouter } from "./routers/collections";
 import { commentsRouter } from "./routers/comments";
 import { discoverRouter } from "./routers/discover";
 import { engagementRouter } from "./routers/engagement";
+import { profilesRouter } from "./routers/profiles";
+import { tracksRouter } from "./routers/tracks";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 import { uploadRouter } from "./routers/upload";
 
@@ -11,10 +13,12 @@ import { uploadRouter } from "./routers/upload";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
-  artist: artistRouter,
+  collections: collectionsRouter,
   comments: commentsRouter,
   discover: discoverRouter,
   engagement: engagementRouter,
+  profiles: profilesRouter,
+  tracks: tracksRouter,
   upload: uploadRouter,
 });
 

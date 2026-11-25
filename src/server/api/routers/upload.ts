@@ -1,29 +1,21 @@
 import { z } from "zod";
 import {
   DeleteObjectCommand,
-  GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { TRPCError } from "@trpc/server";
-import {
-  AudioAnalysisStatus,
-  MediaKind,
-  MediaStatus,
-  Visibility,
-  type MediaAsset,
-} from "@/generated/prisma/client";
+import { MediaKind, MediaStatus, type MediaAsset } from "@/generated/prisma/client";
 import sanitizeFilename from "sanitize-filename";
 import { r2Client } from "@/lib/r2";
 import { db } from "@/server/db";
 import { env } from "@/env";
-import {
-  createTRPCRouter,
-  protectedProcedure,
-} from "@/server/api/trpc";
+import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import {
   buildPublicObjectUrl,
+  IMAGE_BASE_PREFIX,
+  isOwnedImage,
   isOwnedMediaAsset,
   normalizeObjectContentType,
   type MediaAssetKind,
@@ -33,20 +25,25 @@ import {
   serializeWaveform,
   waveformStorageKey,
 } from "@/server/modules/tracks/analysis";
-import { imageObjectKeys } from "@/lib/artwork";
 import {
-  deleteObjects,
   InvalidArtworkError,
-  processArtworkObject,
+  processImageObject,
   type ProcessedArtwork,
 } from "@/server/modules/media/artwork-processing";
+import { runAfter } from "@/server/after";
+import { now } from "@/server/clock";
+import { removeAssetRows } from "@/server/modules/housekeeping";
+import { getEntitlements } from "@/server/modules/plans/entitlements";
+import { enforceRateLimit, RATE_LIMITS } from "@/server/modules/rate-limit";
+import { publishCollection, publishTrack } from "@/server/modules/publishing";
+import { drainStorageDeletions } from "@/server/modules/storage/deletion";
+import { trackPermalink } from "@/server/modules/tracks/dto";
 
-// Maximum file size in bytes (50MB)
-const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const MAX_ARTWORK_FILE_SIZE = 10 * 1024 * 1024;
 const UNATTACHED_ASSET_TTL_MS = 24 * 60 * 60 * 1000;
 
-// Allowed audio mime types
+// Accepted audio formats. Deliberately the formats the app already supported (owner decision:
+// no new formats for now); MP3 is the reference format.
 const ALLOWED_AUDIO_TYPES = [
   "audio/mpeg",
   "audio/mp3",
@@ -58,22 +55,12 @@ const ALLOWED_AUDIO_TYPES = [
   "audio/m4a",
 ];
 
-// Allowed image mime types
-const ALLOWED_IMAGE_TYPES = [
-  "image/jpeg",
-  "image/jpg",
-  "image/png",
-  "image/webp",
-];
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
-function createStorageKey(
-  prefix: "uploads" | "artworks",
-  userId: string,
-  filename: string,
-) {
-  const safeFilename = sanitizeFilename(filename)
-    .replace(/\s+/g, "_")
-    .slice(0, 180);
+const imagePurposeSchema = z.enum(["ARTWORK", "AVATAR", "BANNER"]);
+
+function createStorageKey(prefix: "uploads" | "artworks", userId: string, filename: string) {
+  const safeFilename = sanitizeFilename(filename).replace(/\s+/g, "_").slice(0, 180);
   if (!safeFilename) {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -88,17 +75,12 @@ async function verifyUploadedObject(
   bucket: string,
   storageKey: string,
   kind: MediaAssetKind,
+  maxAudioBytes: number,
 ) {
   try {
-    const object = await r2Client.send(
-      new HeadObjectCommand({
-        Bucket: bucket,
-        Key: storageKey,
-      }),
-    );
+    const object = await r2Client.send(new HeadObjectCommand({ Bucket: bucket, Key: storageKey }));
 
-    const maximumSize =
-      kind === "audio" ? MAX_FILE_SIZE : MAX_ARTWORK_FILE_SIZE;
+    const maximumSize = kind === "audio" ? maxAudioBytes : MAX_ARTWORK_FILE_SIZE;
     if (!object.ContentLength || object.ContentLength > maximumSize) {
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -107,8 +89,7 @@ async function verifyUploadedObject(
     }
 
     const contentType = normalizeObjectContentType(object.ContentType);
-    const allowedTypes =
-      kind === "audio" ? ALLOWED_AUDIO_TYPES : ALLOWED_IMAGE_TYPES;
+    const allowedTypes = kind === "audio" ? ALLOWED_AUDIO_TYPES : ALLOWED_IMAGE_TYPES;
 
     if (!contentType || !allowedTypes.includes(contentType)) {
       throw new TRPCError({
@@ -130,84 +111,34 @@ async function verifyUploadedObject(
   }
 }
 
+/** Claims an unattached asset (-> DELETING, so a concurrent publish cannot win) and queues its objects for deletion. */
 async function claimAndDeleteMediaAsset(upload: MediaAsset): Promise<boolean> {
-  const generated =
-    upload.kind === MediaKind.AUDIO
-      ? await db.mediaAsset.findMany({
-          where: {
-            OR: [
-              { overviewWaveformFor: { audioAssetId: upload.id } },
-              { detailWaveformFor: { audioAssetId: upload.id } },
-            ],
-          },
-        })
-      : [];
-
   const claimed = await db.mediaAsset.updateMany({
     where: {
       id: upload.id,
       ownerId: upload.ownerId,
-      status: {
-        in: [MediaStatus.PENDING, MediaStatus.READY, MediaStatus.FAILED],
-      },
+      status: { in: [MediaStatus.PENDING, MediaStatus.READY, MediaStatus.FAILED] },
     },
     data: { status: MediaStatus.DELETING },
   });
-
   if (claimed.count !== 1) return false;
 
-  try {
-    await deleteObjects(r2Client, upload.bucket, imageObjectKeys(upload));
-  } catch (storageError) {
-    await db.mediaAsset.updateMany({
-      where: { id: upload.id, status: MediaStatus.DELETING },
-      data: { status: upload.status },
-    });
-    throw storageError;
-  }
-
-  await db.mediaAsset.delete({ where: { id: upload.id } });
-
-  // Generated waveforms have no owner-facing lifecycle: they go with the audio.
-  for (const waveform of generated) {
-    try {
-      await r2Client.send(
-        new DeleteObjectCommand({ Bucket: waveform.bucket, Key: waveform.storageKey }),
-      );
-      await db.mediaAsset.delete({ where: { id: waveform.id } });
-    } catch (error) {
-      console.error(`Failed to delete waveform asset ${waveform.id}:`, error);
-    }
-  }
-
+  await removeAssetRows(db, [upload.id]);
+  runAfter(() => drainStorageDeletions(db, r2Client, { limit: 20 }));
   return true;
 }
 
-async function cleanupExpiredUploadsForUser(userId: string) {
-  const expiredUploads = await db.mediaAsset.findMany({
-    where: {
-      ownerId: userId,
-      status: {
-        in: [MediaStatus.PENDING, MediaStatus.READY, MediaStatus.FAILED],
-      },
-      expiresAt: { lt: new Date() },
-    },
-  });
+const trackFields = {
+  title: z.string().trim().min(1).max(100),
+  artistName: z.string().trim().max(100).optional(),
+  genre: z.string().trim().min(1).max(100),
+  description: z.string().max(4000).optional(),
+  privacy: z.enum(["public", "private"]),
+  tags: z.string().max(1000).optional(),
+  artworkAssetId: z.string().uuid().optional(),
+};
 
-  let deletedCount = 0;
-  let failedCount = 0;
-
-  for (const upload of expiredUploads) {
-    try {
-      if (await claimAndDeleteMediaAsset(upload)) deletedCount++;
-    } catch (error) {
-      failedCount++;
-      console.error(`Failed to clean up media asset ${upload.id}:`, error);
-    }
-  }
-
-  return { deletedCount, failedCount };
-}
+const splitTags = (tags: string | undefined) => tags?.split(",") ?? [];
 
 export const uploadRouter = createTRPCRouter({
   // Get a presigned URL for direct upload to R2
@@ -216,7 +147,7 @@ export const uploadRouter = createTRPCRouter({
       z.object({
         filename: z.string().trim().min(1).max(255),
         contentType: z.string(),
-        fileSize: z.number().int().positive().max(MAX_FILE_SIZE),
+        fileSize: z.number().int().positive(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -225,10 +156,14 @@ export const uploadRouter = createTRPCRouter({
       if (!ALLOWED_AUDIO_TYPES.includes(input.contentType)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message:
-            "Unsupported audio format. Please upload MP3, WAV, OGG, FLAC, or AAC files.",
+          message: "Unsupported audio format. Please upload MP3, WAV, OGG, FLAC, or AAC files.",
         });
       }
+      const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { plan: true } });
+      if (input.fileSize > getEntitlements(user).maxFileBytes) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "File is too large" });
+      }
+      await enforceRateLimit(db, "upload-url", userId, RATE_LIMITS.uploadUrlPerMinute, RATE_LIMITS.uploadUrlPerDay);
 
       const fileKey = createStorageKey("uploads", userId, input.filename);
 
@@ -237,17 +172,14 @@ export const uploadRouter = createTRPCRouter({
           Bucket: env.R2_BUCKET_NAME,
           Key: fileKey,
           ContentType: input.contentType,
-          // Add metadata
           Metadata: {
             userId,
             originalFilename: input.filename,
-            uploadDate: new Date().toISOString(),
+            uploadDate: now().toISOString(),
           },
         });
 
-        const presignedUrl = await getSignedUrl(r2Client, command, {
-          expiresIn: 3600,
-        });
+        const presignedUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
         const mediaAsset = await db.mediaAsset.create({
           data: {
             id: crypto.randomUUID(),
@@ -257,14 +189,11 @@ export const uploadRouter = createTRPCRouter({
             bucket: env.R2_BUCKET_NAME,
             originalFilename: input.filename,
             mimeType: input.contentType,
-            expiresAt: new Date(Date.now() + UNATTACHED_ASSET_TTL_MS),
+            expiresAt: new Date(now().getTime() + UNATTACHED_ASSET_TTL_MS),
           },
         });
 
-        return {
-          uploadUrl: presignedUrl,
-          mediaAssetId: mediaAsset.id,
-        };
+        return { uploadUrl: presignedUrl, mediaAssetId: mediaAsset.id };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error("Error generating presigned URL:", error);
@@ -276,53 +205,48 @@ export const uploadRouter = createTRPCRouter({
       }
     }),
 
-  // Get a presigned URL for artwork upload
+  // Get a presigned URL for an image upload (artwork, avatar or banner)
   getArtworkUploadUrl: protectedProcedure
     .input(
       z.object({
         filename: z.string().trim().min(1).max(255),
         contentType: z.string(),
         fileSize: z.number().int().positive().max(MAX_ARTWORK_FILE_SIZE),
+        purpose: imagePurposeSchema.default("ARTWORK"),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
-      // Validate the file type
       if (!ALLOWED_IMAGE_TYPES.includes(input.contentType)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message:
-            "Unsupported image format. Please upload JPEG, PNG or WebP files.",
+          message: "Unsupported image format. Please upload JPEG, PNG or WebP files.",
         });
       }
+      await enforceRateLimit(db, "upload-url", userId, RATE_LIMITS.uploadUrlPerMinute, RATE_LIMITS.uploadUrlPerDay);
 
       try {
-        // Generate a unique key for the artwork file
         const fileKey = createStorageKey("artworks", userId, input.filename);
-
-        // Create the presigned URL for upload
         const command = new PutObjectCommand({
           Bucket: env.R2_BUCKET_NAME,
           Key: fileKey,
           ContentType: input.contentType,
-          // Add metadata
           Metadata: {
             userId,
             originalFilename: input.filename,
-            uploadDate: new Date().toISOString(),
-            isArtwork: "true",
+            uploadDate: now().toISOString(),
+            purpose: input.purpose,
           },
         });
 
-        const presignedUrl = await getSignedUrl(r2Client, command, {
-          expiresIn: 3600,
-        });
+        const presignedUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
         const mediaAsset = await db.mediaAsset.create({
           data: {
             id: crypto.randomUUID(),
             ownerId: userId,
             kind: MediaKind.IMAGE,
+            imagePurpose: input.purpose,
             storageKey: fileKey,
             bucket: env.R2_BUCKET_NAME,
             originalFilename: input.filename,
@@ -330,14 +254,11 @@ export const uploadRouter = createTRPCRouter({
             publicUrl: env.R2_PUBLIC_BASE_URL
               ? buildPublicObjectUrl(env.R2_PUBLIC_BASE_URL, fileKey)
               : null,
-            expiresAt: new Date(Date.now() + UNATTACHED_ASSET_TTL_MS),
+            expiresAt: new Date(now().getTime() + UNATTACHED_ASSET_TTL_MS),
           },
         });
 
-        return {
-          uploadUrl: presignedUrl,
-          mediaAssetId: mediaAsset.id,
-        };
+        return { uploadUrl: presignedUrl, mediaAssetId: mediaAsset.id };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error("Error generating artwork upload URL:", error);
@@ -349,60 +270,31 @@ export const uploadRouter = createTRPCRouter({
       }
     }),
 
-  // Cancel an upload and delete the file from R2 if it was uploaded
+  // Cancel an upload and queue its file for deletion
   cancelUpload: protectedProcedure
-    .input(
-      z.object({
-        mediaAssetId: z.string().uuid(),
-      }),
-    )
+    .input(z.object({ mediaAssetId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
+      const mediaAsset = await db.mediaAsset.findFirst({
+        where: { id: input.mediaAssetId, ownerId: ctx.session.user.id },
+      });
+      if (!mediaAsset) throw new TRPCError({ code: "NOT_FOUND", message: "Upload not found" });
 
-      try {
-        const mediaAsset = await db.mediaAsset.findFirst({
-          where: {
-            id: input.mediaAssetId,
-            ownerId: userId,
-          },
-        });
-
-        if (!mediaAsset) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Upload not found",
-          });
-        }
-
-        if (!(await claimAndDeleteMediaAsset(mediaAsset))) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "Upload is already being finalized or canceled",
-          });
-        }
-
-        return {
-          success: true,
-          message: "Upload canceled and file deleted",
-        };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        console.error("Error canceling upload:", error);
+      if (!(await claimAndDeleteMediaAsset(mediaAsset))) {
         throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to cancel upload",
-          cause: error,
+          code: "CONFLICT",
+          message: "Upload is already being finalized or canceled",
         });
       }
+      return { success: true, message: "Upload canceled and file deleted" };
     }),
 
-  // Mark a media asset as completed
+  // Verify the uploaded audio, store its waveform and mark the asset READY.
   markUploadComplete: protectedProcedure
     .input(
       z.object({
         mediaAssetId: z.string().uuid(),
-        /** Computed in the browser; omitted if the browser could not decode the file. */
-        analysis: clientAnalysisSchema.optional(),
+        /** Computed in the browser. Required: a file the browser cannot decode is rejected (UP-F2). */
+        analysis: clientAnalysisSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -416,49 +308,36 @@ export const uploadRouter = createTRPCRouter({
             kind: MediaKind.AUDIO,
             status: MediaStatus.PENDING,
           },
-          select: {
-            storageKey: true,
-            bucket: true,
-            originalFilename: true,
-          },
+          select: { storageKey: true, bucket: true, originalFilename: true },
         });
 
         if (!mediaAsset) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Upload not found",
-          });
+          throw new TRPCError({ code: "NOT_FOUND", message: "Upload not found" });
         }
-
         if (!isOwnedMediaAsset(mediaAsset.storageKey, "audio", userId)) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Media asset is not an audio file",
-          });
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Media asset is not an audio file" });
         }
 
+        const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { plan: true } });
         const metadata = await verifyUploadedObject(
           mediaAsset.bucket,
           mediaAsset.storageKey,
           "audio",
+          getEntitlements(user).maxFileBytes,
         );
 
         const analysis = input.analysis;
-        const waveformJson = analysis ? serializeWaveform(analysis) : null;
-        const waveformKey = analysis
-          ? waveformStorageKey(userId, input.mediaAssetId)
-          : null;
+        const waveformJson = serializeWaveform(analysis);
+        const waveformKey = waveformStorageKey(userId, input.mediaAssetId);
 
-        if (analysis && waveformKey) {
-          await r2Client.send(
-            new PutObjectCommand({
-              Bucket: mediaAsset.bucket,
-              Key: waveformKey,
-              Body: waveformJson!,
-              ContentType: "application/json",
-            }),
-          );
-        }
+        await r2Client.send(
+          new PutObjectCommand({
+            Bucket: mediaAsset.bucket,
+            Key: waveformKey,
+            Body: waveformJson,
+            ContentType: "application/json",
+          }),
+        );
 
         try {
           await db.$transaction(async (transaction) => {
@@ -473,26 +352,11 @@ export const uploadRouter = createTRPCRouter({
                 status: MediaStatus.READY,
                 byteSize: BigInt(metadata.byteSize),
                 mimeType: metadata.mimeType,
-                uploadedAt: new Date(),
+                uploadedAt: now(),
               },
             });
-
             if (updated.count !== 1) {
-              throw new TRPCError({
-                code: "CONFLICT",
-                message: "Upload is no longer available",
-              });
-            }
-
-            if (!analysis || !waveformKey) {
-              // Browser could not decode the file: keep the upload, no waveform.
-              await transaction.audioAnalysis.create({
-                data: {
-                  audioAssetId: input.mediaAssetId,
-                  status: AudioAnalysisStatus.FAILED,
-                },
-              });
-              return;
+              throw new TRPCError({ code: "CONFLICT", message: "Upload is no longer available" });
             }
 
             const waveformAsset = await transaction.mediaAsset.create({
@@ -504,41 +368,32 @@ export const uploadRouter = createTRPCRouter({
                 storageKey: waveformKey,
                 originalFilename: "overview.json",
                 mimeType: "application/json",
-                byteSize: BigInt(Buffer.byteLength(waveformJson!)),
-                uploadedAt: new Date(),
-                attachedAt: new Date(),
+                byteSize: BigInt(Buffer.byteLength(waveformJson)),
+                uploadedAt: now(),
+                attachedAt: now(),
               },
             });
             await transaction.audioAnalysis.create({
               data: {
                 audioAssetId: input.mediaAssetId,
-                status: AudioAnalysisStatus.READY,
+                status: "READY",
                 durationMs: analysis.durationMs,
                 sampleRate: analysis.sampleRate,
                 channels: analysis.channels,
                 overviewWaveformAssetId: waveformAsset.id,
                 overviewPixelsPerSecond: 20,
-                completedAt: new Date(),
+                completedAt: now(),
               },
             });
           });
         } catch (error) {
-          if (waveformKey) {
-            await r2Client
-              .send(
-                new DeleteObjectCommand({
-                  Bucket: mediaAsset.bucket,
-                  Key: waveformKey,
-                }),
-              )
-              .catch(() => undefined);
-          }
+          await r2Client
+            .send(new DeleteObjectCommand({ Bucket: mediaAsset.bucket, Key: waveformKey }))
+            .catch(() => undefined);
           throw error;
         }
 
-        return {
-          success: true,
-        };
+        return { success: true, durationMs: analysis.durationMs };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error("Error marking upload as complete:", error);
@@ -550,13 +405,9 @@ export const uploadRouter = createTRPCRouter({
       }
     }),
 
-  // Mark an owned temporary artwork upload as completed
+  // Verify an uploaded image and turn it into WebP renditions (artwork, avatar or banner).
   markArtworkUploadComplete: protectedProcedure
-    .input(
-      z.object({
-        mediaAssetId: z.string().uuid(),
-      }),
-    )
+    .input(z.object({ mediaAssetId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
@@ -568,39 +419,27 @@ export const uploadRouter = createTRPCRouter({
             kind: MediaKind.IMAGE,
             status: MediaStatus.PENDING,
           },
-          select: {
-            storageKey: true,
-            bucket: true,
-          },
+          select: { storageKey: true, bucket: true, imagePurpose: true },
         });
 
         if (!mediaAsset) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Artwork upload not found",
-          });
+          throw new TRPCError({ code: "NOT_FOUND", message: "Artwork upload not found" });
+        }
+        if (!isOwnedImage(mediaAsset.storageKey, userId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Media asset is not an image" });
         }
 
-        if (!isOwnedMediaAsset(mediaAsset.storageKey, "artwork", userId)) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Media asset is not artwork",
-          });
-        }
+        await verifyUploadedObject(mediaAsset.bucket, mediaAsset.storageKey, "artwork", 0);
 
-        await verifyUploadedObject(
-          mediaAsset.bucket,
-          mediaAsset.storageKey,
-          "artwork",
-        );
-
-        // Square WebP renditions (96/320/640 px) replace the original, which is then deleted.
+        // Renditions replace the original, which is then deleted.
+        const purpose = mediaAsset.imagePurpose ?? "ARTWORK";
         let processed: ProcessedArtwork;
         try {
-          processed = await processArtworkObject(r2Client, {
+          processed = await processImageObject(r2Client, {
             bucket: mediaAsset.bucket,
             sourceKey: mediaAsset.storageKey,
-            base: `artworks/${userId}/${input.mediaAssetId}`,
+            base: `${IMAGE_BASE_PREFIX[purpose]}/${userId}/${input.mediaAssetId}`,
+            purpose,
           });
         } catch (error) {
           if (error instanceof InvalidArtworkError) {
@@ -630,7 +469,7 @@ export const uploadRouter = createTRPCRouter({
             publicUrl: env.R2_PUBLIC_BASE_URL
               ? buildPublicObjectUrl(env.R2_PUBLIC_BASE_URL, processed.storageKey)
               : null,
-            uploadedAt: new Date(),
+            uploadedAt: now(),
           },
         });
 
@@ -643,10 +482,11 @@ export const uploadRouter = createTRPCRouter({
           });
         }
 
-        await deleteObjects(r2Client, mediaAsset.bucket, [mediaAsset.storageKey]).catch(
-          (error: unknown) =>
-            console.error(`Failed to delete original artwork ${mediaAsset.storageKey}:`, error),
-        );
+        await db.storageDeletion.createMany({
+          data: [{ bucket: mediaAsset.bucket, key: mediaAsset.storageKey }],
+          skipDuplicates: true,
+        });
+        runAfter(() => drainStorageDeletions(db, r2Client, { limit: 20 }));
 
         return { success: true };
       } catch (error) {
@@ -660,424 +500,52 @@ export const uploadRouter = createTRPCRouter({
       }
     }),
 
-  // Create final track records from media assets
+  // Publish one uploaded file as a track
   createTrack: protectedProcedure
-    .input(
-      z.object({
-        title: z.string().trim().min(1).max(200),
-        mediaAssetId: z.string().uuid(),
-        genre: z.string().trim().min(1).max(100),
-        description: z.string().max(5000).optional(),
-        privacy: z.enum(["public", "private"]),
-        tags: z.string().max(1000).optional(),
-        artworkAssetId: z.string().uuid().optional(),
-      }),
-    )
+    .input(z.object({ mediaAssetId: z.string().uuid(), ...trackFields }))
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      try {
-        const track = await db.$transaction(async (transaction) => {
-          const mediaAsset = await transaction.mediaAsset.findFirst({
-            where: {
-              id: input.mediaAssetId,
-              ownerId: userId,
-              kind: MediaKind.AUDIO,
-              status: MediaStatus.READY,
-            },
-          });
-
-          if (!mediaAsset) {
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: "Completed upload not found",
-            });
-          }
-
-          if (!isOwnedMediaAsset(mediaAsset.storageKey, "audio", userId)) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Completed upload is not an audio file",
-            });
-          }
-
-          const claimed = await transaction.mediaAsset.updateMany({
-            where: {
-              id: input.mediaAssetId,
-              ownerId: userId,
-              kind: MediaKind.AUDIO,
-              status: MediaStatus.READY,
-            },
-            data: {
-              status: MediaStatus.ATTACHED,
-              attachedAt: new Date(),
-              expiresAt: null,
-            },
-          });
-
-          if (claimed.count !== 1) {
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: "Upload is already being finalized or canceled",
-            });
-          }
-
-          let artworkAssetId: string | undefined;
-          if (input.artworkAssetId) {
-            const artworkUpload = await transaction.mediaAsset.findFirst({
-              where: {
-                id: input.artworkAssetId,
-                ownerId: userId,
-                kind: MediaKind.IMAGE,
-                status: MediaStatus.READY,
-              },
-            });
-
-            if (!artworkUpload) {
-              throw new TRPCError({
-                code: "NOT_FOUND",
-                message: "Completed artwork upload not found",
-              });
-            }
-
-            if (
-              !isOwnedMediaAsset(artworkUpload.storageKey, "artwork", userId)
-            ) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: "Completed artwork upload is not artwork",
-              });
-            }
-
-            const artworkClaimed = await transaction.mediaAsset.updateMany({
-              where: {
-                id: input.artworkAssetId,
-                ownerId: userId,
-                kind: MediaKind.IMAGE,
-                status: MediaStatus.READY,
-              },
-              data: {
-                status: MediaStatus.ATTACHED,
-                attachedAt: new Date(),
-                expiresAt: null,
-              },
-            });
-
-            if (artworkClaimed.count !== 1) {
-              throw new TRPCError({
-                code: "CONFLICT",
-                message: "Artwork is already being finalized or canceled",
-              });
-            }
-
-            artworkAssetId = artworkUpload.id;
-          }
-
-          const createdTrack = await transaction.track.create({
-            data: {
-              title: input.title,
-              audioAssetId: mediaAsset.id,
-              artworkAssetId,
-              genre: input.genre,
-              description: input.description,
-              visibility:
-                input.privacy === "public"
-                  ? Visibility.PUBLIC
-                  : Visibility.PRIVATE,
-              tags:
-                input.tags
-                  ?.split(",")
-                  .map((tag) => tag.trim())
-                  .filter(Boolean) ?? [],
-              creatorId: userId,
-            },
-          });
-
-          return createdTrack;
-        });
-
-        return { track };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        console.error("Failed to create track:", error);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to create track record",
-          cause: error,
-        });
-      }
+      const { tags, ...rest } = input;
+      const track = await publishTrack(ctx.db, ctx.session.user.id, { ...rest, tags: splitTags(tags) });
+      const username = ctx.session.user.username as string;
+      return {
+        track: { id: track.id, slug: track.slug },
+        permalink: trackPermalink({ slug: track.slug, creator: { username } }),
+      };
     }),
 
-  // Publish an ordered release with multiple tracks
-  createRelease: protectedProcedure
+  // Publish several uploaded files as one collection (album, EP, ...)
+  createCollection: protectedProcedure
     .input(
       z.object({
-        title: z.string().trim().min(1).max(200),
+        title: z.string().trim().min(1).max(100),
+        type: z.enum(["ALBUM", "EP", "SINGLE", "COMPILATION", "PLAYLIST"]).default("ALBUM"),
         tracks: z
           .array(
             z.object({
               mediaAssetId: z.string().uuid(),
-              title: z.string().trim().min(1).max(200),
+              title: z.string().trim().min(1).max(100),
             }),
           )
           .min(1)
-          .max(50),
+          .max(100),
         genre: z.string().trim().min(1).max(100),
-        description: z.string().max(5000).optional(),
+        description: z.string().max(4000).optional(),
         privacy: z.enum(["public", "private"]),
-        releaseType: z.enum(["ALBUM", "EP"]),
         tags: z.string().max(1000).optional(),
         artworkAssetId: z.string().uuid().optional(),
+        releaseDate: z.coerce.date().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      try {
-        const mediaAssetIds = input.tracks.map((track) => track.mediaAssetId);
-        if (new Set(mediaAssetIds).size !== mediaAssetIds.length) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Each uploaded file can only appear once in a release",
-          });
-        }
-
-        const release = await db.$transaction(async (transaction) => {
-          const mediaAssets = await transaction.mediaAsset.findMany({
-            where: {
-              id: { in: mediaAssetIds },
-              ownerId: userId,
-              kind: MediaKind.AUDIO,
-              status: MediaStatus.READY,
-            },
-          });
-
-          if (mediaAssets.length !== input.tracks.length) {
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: "One or more completed uploads were not found",
-            });
-          }
-
-          if (
-            mediaAssets.some(
-              (upload) =>
-                !isOwnedMediaAsset(upload.storageKey, "audio", userId),
-            )
-          ) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "One or more completed uploads are not audio files",
-            });
-          }
-
-          const claimed = await transaction.mediaAsset.updateMany({
-            where: {
-              id: { in: mediaAssetIds },
-              ownerId: userId,
-              kind: MediaKind.AUDIO,
-              status: MediaStatus.READY,
-            },
-            data: {
-              status: MediaStatus.ATTACHED,
-              attachedAt: new Date(),
-              expiresAt: null,
-            },
-          });
-
-          if (claimed.count !== input.tracks.length) {
-            throw new TRPCError({
-              code: "CONFLICT",
-              message:
-                "One or more uploads are already being finalized or canceled",
-            });
-          }
-
-          let artworkAssetId: string | undefined;
-          if (input.artworkAssetId) {
-            const artworkUpload = await transaction.mediaAsset.findFirst({
-              where: {
-                id: input.artworkAssetId,
-                ownerId: userId,
-                kind: MediaKind.IMAGE,
-                status: MediaStatus.READY,
-              },
-            });
-
-            if (!artworkUpload) {
-              throw new TRPCError({
-                code: "NOT_FOUND",
-                message: "Completed artwork upload not found",
-              });
-            }
-
-            if (
-              !isOwnedMediaAsset(artworkUpload.storageKey, "artwork", userId)
-            ) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: "Completed artwork upload is not artwork",
-              });
-            }
-
-            const artworkClaimed = await transaction.mediaAsset.updateMany({
-              where: {
-                id: input.artworkAssetId,
-                ownerId: userId,
-                kind: MediaKind.IMAGE,
-                status: MediaStatus.READY,
-              },
-              data: {
-                status: MediaStatus.ATTACHED,
-                attachedAt: new Date(),
-                expiresAt: null,
-              },
-            });
-
-            if (artworkClaimed.count !== 1) {
-              throw new TRPCError({
-                code: "CONFLICT",
-                message: "Artwork is already being finalized or canceled",
-              });
-            }
-
-            artworkAssetId = artworkUpload.id;
-          }
-
-          const createdRelease = await transaction.release.create({
-            data: {
-              title: input.title,
-              description: input.description,
-              type: input.releaseType,
-              visibility:
-                input.privacy === "public"
-                  ? Visibility.PUBLIC
-                  : Visibility.PRIVATE,
-              artworkAssetId,
-              creatorId: userId,
-            },
-          });
-
-          const uploadsById = new Map(
-            mediaAssets.map((upload) => [upload.id, upload]),
-          );
-
-          for (const [position, trackInput] of input.tracks.entries()) {
-            const mediaAsset = uploadsById.get(trackInput.mediaAssetId)!;
-            const createdTrack = await transaction.track.create({
-              data: {
-                title: trackInput.title,
-                audioAssetId: mediaAsset.id,
-                artworkAssetId,
-                genre: input.genre,
-                description: input.description,
-                visibility:
-                  input.privacy === "public"
-                    ? Visibility.PUBLIC
-                    : Visibility.PRIVATE,
-                tags:
-                  input.tags
-                    ?.split(",")
-                    .map((tag) => tag.trim())
-                    .filter(Boolean) ?? [],
-                creatorId: userId,
-              },
-            });
-            await transaction.releaseTrack.create({
-              data: {
-                releaseId: createdRelease.id,
-                trackId: createdTrack.id,
-                position,
-              },
-            });
-          }
-
-          return createdRelease;
-        });
-
-        return { release };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        console.error("Failed to create release:", error);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to create release",
-          cause: error,
-        });
-      }
-    }),
-
-  // Delete media assets that are older than 24 hours
-  cleanupMediaAssets: protectedProcedure.mutation(async ({ ctx }) => {
-    const userId = ctx.session.user.id;
-
-    try {
-      const result = await cleanupExpiredUploadsForUser(userId);
-
-      return {
-        success: true,
-        ...result,
-      };
-    } catch (error) {
-      console.error("Failed to clean up media assets:", error);
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to clean up media assets",
-        cause: error,
+      const { tags, ...rest } = input;
+      const collection = await publishCollection(ctx.db, ctx.session.user.id, {
+        ...rest,
+        tags: splitTags(tags),
       });
-    }
-  }),
-
-  // Get a download URL for an existing file
-  getDownloadUrl: protectedProcedure
-    .input(
-      z.object({
-        trackId: z.string().uuid(),
-      }),
-    )
-    .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      try {
-        const track = await db.track.findFirst({
-          where: {
-            id: input.trackId,
-            creatorId: userId,
-          },
-          select: {
-            audioAsset: {
-              select: { storageKey: true, bucket: true },
-            },
-          },
-        });
-
-        if (!track) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Track not found",
-          });
-        }
-
-        const command = new GetObjectCommand({
-          Bucket: track.audioAsset.bucket,
-          Key: track.audioAsset.storageKey,
-        });
-
-        const presignedUrl = await getSignedUrl(r2Client, command, {
-          expiresIn: 3600,
-        });
-
-        return {
-          downloadUrl: presignedUrl,
-        };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        console.error("Error generating download URL:", error);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to generate download URL",
-          cause: error,
-        });
-      }
+      const username = ctx.session.user.username as string;
+      return {
+        collection: { id: collection.id, slug: collection.slug },
+        permalink: `/${username}/sets/${collection.slug}`,
+      };
     }),
 });

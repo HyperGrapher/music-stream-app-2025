@@ -8,11 +8,16 @@ import {
   listComments,
 } from "@/server/modules/tracks/comments";
 
+/** Proof for hidden tracks: the track's secret link token, or a collection's (with its id). */
+const accessInput = z
+  .object({ secret: z.string().max(64).optional(), collectionId: z.string().uuid().optional() })
+  .optional();
+
 export const commentsRouter = createTRPCRouter({
   list: publicProcedure
-    .input(z.object({ trackId: z.string().uuid() }))
+    .input(z.object({ trackId: z.string().uuid(), access: accessInput }))
     .query(({ input, ctx }) =>
-      listComments(ctx.db, input.trackId, { id: ctx.session?.user.id }),
+      listComments(ctx.db, input.trackId, { id: ctx.session?.user.id }, input.access),
     ),
 
   create: protectedProcedure
@@ -23,6 +28,7 @@ export const commentsRouter = createTRPCRouter({
         /** Whole seconds into the track at the moment of posting; omit for a general comment. */
         timestampSeconds: z.number().int().min(0).optional(),
         parentId: z.string().uuid().optional(),
+        access: accessInput,
       }),
     )
     .mutation(({ input, ctx }) =>

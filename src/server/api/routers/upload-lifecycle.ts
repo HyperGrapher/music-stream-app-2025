@@ -5,6 +5,9 @@ const STORAGE_PREFIXES: Record<MediaAssetKind, string> = {
   artwork: "artworks",
 };
 
+/** Folders processed images end up in, by purpose (originals are always uploaded under `artworks/`). */
+export const IMAGE_BASE_PREFIX = { ARTWORK: "artworks", AVATAR: "avatars", BANNER: "banners" } as const;
+
 export function getMediaAssetPrefix(
   kind: MediaAssetKind,
   userId: string,
@@ -18,6 +21,11 @@ export function isOwnedMediaAsset(
   userId: string,
 ): boolean {
   return storageKey.startsWith(getMediaAssetPrefix(kind, userId));
+}
+
+/** An image (any purpose, original or processed) stored in the owner's own folder. */
+export function isOwnedImage(storageKey: string, userId: string): boolean {
+  return Object.values(IMAGE_BASE_PREFIX).some((prefix) => storageKey.startsWith(`${prefix}/${userId}/`));
 }
 
 export function normalizeObjectContentType(

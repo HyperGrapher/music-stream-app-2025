@@ -6,7 +6,7 @@ import {
 } from "@aws-sdk/client-s3";
 import sharp from "sharp";
 
-import { artworkVariantKey, planArtworkWidths } from "@/lib/artwork";
+import { artworkVariantKey, IMAGE_SPECS, planImageWidthsFor, type ImagePurpose } from "@/lib/artwork";
 
 /** Larger sources are refused before decoding (about 7000 x 7000), which bounds memory. */
 export const MAX_ARTWORK_INPUT_PIXELS = 50_000_000;
@@ -25,20 +25,26 @@ export interface ArtworkRendition {
 }
 
 /**
- * Square, centre-cropped WebP renditions (the UI shows artwork in square boxes with
- * `object-cover`, so this is the same crop, without the bytes nobody sees). EXIF orientation is
- * applied and metadata is stripped.
+ * Centre-cropped WebP renditions for an image purpose (square artwork and avatars, 2480x520
+ * banners; the UI shows them in boxes with `object-cover`, so this is the same crop without the
+ * bytes nobody sees). EXIF orientation is applied and metadata is stripped.
  */
-export async function renderArtworkRenditions(input: Buffer): Promise<ArtworkRendition[]> {
+export async function renderImageRenditions(
+  input: Buffer,
+  purpose: ImagePurpose = "ARTWORK",
+): Promise<ArtworkRendition[]> {
   const options = {
     autoOrient: true,
     failOn: "error",
     limitInputPixels: MAX_ARTWORK_INPUT_PIXELS,
   } as const;
+  const { aspect } = IMAGE_SPECS[purpose];
   let widths: number[];
   try {
-    const { width, height } = await sharp(input, options).metadata();
-    widths = planArtworkWidths(Math.min(width ?? 0, height ?? 0));
+    const { width = 0, height = 0, orientation = 1 } = await sharp(input, options).metadata();
+    // Metadata reports the stored size; orientations 5-8 display it rotated by 90 degrees.
+    const [w, h] = orientation >= 5 ? [height, width] : [width, height];
+    widths = planImageWidthsFor(purpose, w, h);
   } catch (error) {
     throw new InvalidArtworkError(undefined, { cause: error });
   }
@@ -49,7 +55,7 @@ export async function renderArtworkRenditions(input: Buffer): Promise<ArtworkRen
       widths.map(async (width) => ({
         width,
         data: await sharp(input, options)
-          .resize(width, width, { fit: "cover", position: "centre" })
+          .resize(width, Math.round(width / aspect), { fit: "cover", position: "centre" })
           .webp({ quality: WEBP_QUALITY })
           .toBuffer(),
       })),
@@ -58,6 +64,9 @@ export async function renderArtworkRenditions(input: Buffer): Promise<ArtworkRen
     throw new InvalidArtworkError(undefined, { cause: error });
   }
 }
+
+/** Square artwork renditions (kept for existing callers and tests). */
+export const renderArtworkRenditions = (input: Buffer) => renderImageRenditions(input, "ARTWORK");
 
 export interface ProcessedArtwork {
   /** Key of the largest rendition; the new `MediaAsset.storageKey`. */
@@ -74,15 +83,15 @@ export interface ProcessedArtwork {
  * same objects instead of leaking new ones. The source is NOT deleted here: callers delete it
  * once the database points at the renditions.
  */
-export async function processArtworkObject(
+export async function processImageObject(
   r2: S3Client,
-  input: { bucket: string; sourceKey: string; base: string },
+  input: { bucket: string; sourceKey: string; base: string; purpose?: ImagePurpose },
 ): Promise<ProcessedArtwork> {
   const object = await r2.send(new GetObjectCommand({ Bucket: input.bucket, Key: input.sourceKey }));
   if (!object.Body) throw new InvalidArtworkError("The uploaded image is empty");
   const source = Buffer.from(await object.Body.transformToByteArray());
 
-  const renditions = await renderArtworkRenditions(source);
+  const renditions = await renderImageRenditions(source, input.purpose ?? "ARTWORK");
   await Promise.all(
     renditions.map(({ width, data }) =>
       r2.send(
@@ -106,6 +115,8 @@ export async function processArtworkObject(
     mimeType: "image/webp",
   };
 }
+
+export const processArtworkObject = processImageObject;
 
 /** Deletes several objects (one request each; R2 objects here are few and small). */
 export async function deleteObjects(r2: S3Client, bucket: string, keys: string[]) {

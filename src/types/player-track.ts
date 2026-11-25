@@ -2,13 +2,23 @@
 export interface PlayerTrack {
   id: string;
   title: string;
+  /** Permalink slug (`/{username}/{slug}`). */
+  slug?: string;
+  /** Canonical page URL of the track, secret-link form included when it was reached that way. */
+  permalink?: string;
+  /** Same-origin stream URL, carrying the secret-link proof when the track is hidden. */
+  streamUrl?: string;
+  /** `s=<token>` / `c=<id>&s=<token>` to append to play-count requests; empty for public tracks. */
+  accessQuery?: string;
+  /** Artist display text (`artistName` override, else the creator's name). */
+  artistName?: string | null;
   duration: number;
   userId?: string;
   artworkUrl?: string | null;
   /** `srcset` of the artwork renditions (absent for legacy single-size images). */
   artworkSrcSet?: string | null;
   waveformUrl?: string | null;
-  waveformStatus?: "QUEUED" | "PROCESSING" | "READY" | "FAILED";
+  waveformStatus?: "READY" | "FAILED";
   description?: string | null;
   genre?: string | null;
   createdAt?: Date | string;
@@ -30,6 +40,7 @@ export interface PlayerTrack {
   albumId?: string | null;
   user?: {
     name: string;
+    username?: string;
     image?: string | null;
   };
 }
