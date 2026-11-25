@@ -1,22 +1,18 @@
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@prisma/client";
-
 import { env } from "@/env";
 
-const createPrismaClient = () =>
-  new PrismaClient({
-    // node-postgres driver adapter over the pooled (-pooler) Neon URL: app traffic
-    // goes through PgBouncer. Migrations use DATABASE_URL_UNPOOLED via `directUrl`
-    // in prisma/schema.prisma.
-    adapter: new PrismaPg({ connectionString: env.DATABASE_URL }),
-    log:
-      env.NODE_ENV === "development" ? [/* "query",  */"error", "warn"] : ["error"],
+import { createPrismaClient } from "./prisma-client";
+
+// node-postgres adapter over the pooled (-pooler) Neon URL: app traffic goes
+// through PgBouncer. Migrations use DATABASE_URL_UNPOOLED (see prisma.config.ts).
+const makeClient = () =>
+  createPrismaClient(env.DATABASE_URL, {
+    log: env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 
 const globalForPrisma = globalThis as unknown as {
-  prisma: ReturnType<typeof createPrismaClient> | undefined;
+  prisma: ReturnType<typeof makeClient> | undefined;
 };
 
-export const db = globalForPrisma.prisma ?? createPrismaClient();
+export const db = globalForPrisma.prisma ?? makeClient();
 
 if (env.NODE_ENV !== "production") globalForPrisma.prisma = db;

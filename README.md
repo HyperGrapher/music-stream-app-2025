@@ -21,7 +21,7 @@ pnpm db:seed:r2             # optional: demo tracks from the R2 bucket (needs ff
 pnpm dev                    # http://localhost:3000
 ```
 
-Required env (validated in `src/env.js`): `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
+Required env (validated in `src/env.js`): `DATABASE_URL` (pooled on Neon; `DATABASE_URL_UNPOOLED` = direct URL used by `prisma migrate`), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
 (optional `R2_PUBLIC_BASE_URL`). The R2 bucket needs a CORS rule allowing `PUT` from your app origin.
 
@@ -32,5 +32,6 @@ Required env (validated in `src/env.js`): `DATABASE_URL`, `BETTER_AUTH_SECRET`, 
 | `pnpm check-types` / `pnpm lint` / `pnpm test` | typecheck, ESLint, node:test |
 | `SKIP_ENV_VALIDATION=1 pnpm build` | production build without real env |
 | `pnpm db:migrate` | apply committed migrations (use the **direct** Neon URL, not the pooler) |
-| `pnpm db:migrate:dev` | create a new migration after editing `prisma/schema.prisma` |
+| `pnpm db:migrate:dev` | create a new migration after editing `prisma/schema.prisma` (also regenerates the client) |
+| `pnpm db:generate` | regenerate the Prisma client into `src/generated/prisma` (runs on `postinstall`) |
 | `pnpm db:studio` | Prisma Studio |

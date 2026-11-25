@@ -32,8 +32,8 @@ A pro-level portfolio demo (SoundCloud-style creator platform) that is:
 - [x] **Phase 2 - audio delivery**: presigned R2 redirect; private/unlisted authorization; `POST /api/tracks/:id/play`. Follow-up: dedupe/rate-limit play events (one per listener per track per window)
 - [x] **Phase 3 - waveform**: browser-side peaks + duration at upload; `media-worker` is now optional (backfill only; `pnpm dev:worker`)
 - [x] **Phase 4 - de-monorepo**: app hoisted to repo root; Turborepo, `packages/*` and the optional `media-worker` deleted (fresh app: no backfill needed)
-- [ ] **Phase 5 - dependency upgrades** (one commit each, read current migration guides first): Next, React, Prisma (+ `generator` output path, deprecated in Prisma 7), Tailwind, Better Auth, zod, rest
-- [ ] **Phase 6 - Neon + Vercel**: pooled `DATABASE_URL` at runtime, direct URL for migrations; switch `db push` to `prisma migrate`; verify custom `stream` schema on Neon; deploy
+- [~] **Phase 5 - dependency upgrades** (done: in-range bumps, Better Auth 1.7, Next 16, Prisma 7; todo: zod 4 + resolvers, zustand 5, lucide/uuid/etc.) (one commit each, read current migration guides first): Next, React, Prisma (+ `generator` output path, deprecated in Prisma 7), Tailwind, Better Auth, zod, rest
+- [~] **Phase 6 - Neon + Vercel** (done by user: Neon project, `0_init` migration, Vercel project on `master`; todo: verify deployed app end to end): pooled `DATABASE_URL` at runtime, direct URL for migrations; switch `db push` to `prisma migrate`; verify custom `stream` schema on Neon; deploy
 - [ ] **Phase 7 - quality**: integration tests (asset claim races, release rollback, stream visibility, auth linking); clear remaining lint warnings (`no-unused-vars`, `<img>` -> `next/image`); README for the demo
 
 ## Commands
@@ -123,3 +123,11 @@ with 8 public tracks (idempotent; pairs waveforms to audio by ffprobe duration).
 ### Session 3 - Phase 6 prep
 - Baseline migration `prisma/migrations/0_init` generated from the schema; verified on a fresh DB (`migrate deploy` then `migrate diff` = no difference). Local `streamapp` DB marked as applied. **Create Neon tables with `DATABASE_URL=<direct url> pnpm db:migrate`** (not `db:push`). From now on schema changes go through `pnpm db:migrate:dev`.
 - Migrations use the direct URL; runtime on Vercel uses the pooled URL as `DATABASE_URL`. No `directUrl` in the datasource since Vercel never runs migrations.
+
+### Session 3 (cont.) - Phase 5 + Neon merge
+- Upgrades, one commit each, all verified with check-types/lint/test plus a runtime smoke test (pages, track routes, sign-up/in, headless-Chromium upload + analysis): in-range bumps; Better Auth 1.2 -> 1.7; Next 15 -> 16 (Turbopack default, native flat ESLint config, `import type` for `AppRouter`: with `verbatimModuleSyntax` an inline `{ type X }` import stays as a side-effect import and pulled server env into the client bundle under Turbopack); Prisma 6 -> 7.
+- Removed dead three.js components + `three`/`@react-three/fiber`; `useTrackWaveform` no longer resets state inside an effect (new react-hooks rule).
+- **Merged `master`** (user's Neon setup: `neon.ts`, `DATABASE_URL_UNPOOLED`, `@prisma/adapter-pg`, `0_init` migration identical to ours).
+- **Prisma 7 layout**: generator `prisma-client` -> `src/generated/prisma` (gitignored, created by `postinstall`/`pnpm db:generate`); datasource URLs live in `prisma.config.ts` (CLI uses `DATABASE_URL_UNPOOLED ?? DATABASE_URL`, loads `.env` via dotenv); app + seeds build clients via `src/server/prisma-client.ts` (pg adapter, pooled URL). `migrate dev` no longer generates, so `pnpm db:migrate:dev` runs `prisma generate` after it.
+- Correction: the pg adapter is enough for Neon on Vercel (pooled URL); a Neon-specific adapter would not help migrations from restricted networks, which use Prisma's schema engine over TCP.
+- `@neon/env` is in package.json from the Neon setup but unused by the app code.

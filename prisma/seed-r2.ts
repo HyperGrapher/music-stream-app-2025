@@ -9,13 +9,14 @@
  *   pnpm db:seed:r2
  */
 import { GetObjectCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
-import { PrismaClient } from "@prisma/client";
+import "dotenv/config";
+import { createPrismaClient } from "../src/server/prisma-client";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient(process.env.DATABASE_URL!);
 const bucket = process.env.R2_BUCKET_NAME!;
 const r2 = new S3Client({
   region: "auto",

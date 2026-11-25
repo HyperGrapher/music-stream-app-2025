@@ -1,6 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import "dotenv/config";
+import { createPrismaClient } from "../src/server/prisma-client";
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient(process.env.DATABASE_URL!);
 
 const creators = [
   ["burak", "burak@example.com", "Electronic sketches and late-night edits."],

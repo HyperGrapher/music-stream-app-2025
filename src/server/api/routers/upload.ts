@@ -14,7 +14,7 @@ import {
   Visibility,
   type Prisma,
   type MediaAsset,
-} from "@prisma/client";
+} from "@/generated/prisma/client";
 import sanitizeFilename from "sanitize-filename";
 import { r2Client } from "@/lib/r2";
 import { db } from "@/server/db";
