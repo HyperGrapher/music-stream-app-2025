@@ -3,6 +3,7 @@ import type { S3Client } from "@aws-sdk/client-s3";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { imageObjectKeys } from "@/lib/artwork";
 import { now as clockNow } from "@/server/clock";
+import { purgeDeletedAccounts } from "@/server/modules/accounts/deletion";
 import { pruneEmailBodies } from "@/server/modules/email";
 import { pruneRateLimitBuckets } from "@/server/modules/rate-limit";
 import { drainStorageDeletions, enqueueStorageDeletion } from "@/server/modules/storage/deletion";
@@ -66,6 +67,7 @@ export interface DailyReport {
   emailBodies: number;
   playEvents: number;
   usernameRedirects: number;
+  accounts: { purged: number; removed: number };
 }
 
 /**
@@ -80,6 +82,8 @@ export async function runDailyHousekeeping(
 ): Promise<DailyReport> {
   const deadline = Date.now() + 40_000;
   const expiredAssets = await expireUnattachedAssets(db, at);
+  // Before draining: purging a deleted account queues its R2 objects.
+  const accounts = await purgeDeletedAccounts(db, at);
   const storage = await drainStorageDeletions(db, r2, { limit: 200, deadline });
   const rateLimitBuckets = await pruneRateLimitBuckets(db, at);
   const emailBodies = await pruneEmailBodies(db, at);
@@ -91,5 +95,5 @@ export async function runDailyHousekeeping(
   const usernameRedirects = (
     await db.usernameRedirect.deleteMany({ where: { createdAt: { lt: new Date(at.getTime() - 30 * DAY_MS) } } })
   ).count;
-  return { expiredAssets, storage, rateLimitBuckets, emailBodies, playEvents, usernameRedirects };
+  return { expiredAssets, storage, rateLimitBuckets, emailBodies, playEvents, usernameRedirects, accounts };
 }

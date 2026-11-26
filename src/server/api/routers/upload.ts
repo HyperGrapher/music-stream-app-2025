@@ -11,7 +11,7 @@ import sanitizeFilename from "sanitize-filename";
 import { r2Client } from "@/lib/r2";
 import { db } from "@/server/db";
 import { env } from "@/env";
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import { createTRPCRouter, protectedProcedure, verifiedProcedure } from "@/server/api/trpc";
 import {
   buildPublicObjectUrl,
   IMAGE_BASE_PREFIX,
@@ -142,7 +142,7 @@ const splitTags = (tags: string | undefined) => tags?.split(",") ?? [];
 
 export const uploadRouter = createTRPCRouter({
   // Get a presigned URL for direct upload to R2
-  getUploadUrl: protectedProcedure
+  getUploadUrl: verifiedProcedure
     .input(
       z.object({
         filename: z.string().trim().min(1).max(255),
@@ -289,7 +289,7 @@ export const uploadRouter = createTRPCRouter({
     }),
 
   // Verify the uploaded audio, store its waveform and mark the asset READY.
-  markUploadComplete: protectedProcedure
+  markUploadComplete: verifiedProcedure
     .input(
       z.object({
         mediaAssetId: z.string().uuid(),
@@ -501,7 +501,7 @@ export const uploadRouter = createTRPCRouter({
     }),
 
   // Publish one uploaded file as a track
-  createTrack: protectedProcedure
+  createTrack: verifiedProcedure
     .input(z.object({ mediaAssetId: z.string().uuid(), ...trackFields }))
     .mutation(async ({ ctx, input }) => {
       const { tags, ...rest } = input;
@@ -514,7 +514,7 @@ export const uploadRouter = createTRPCRouter({
     }),
 
   // Publish several uploaded files as one collection (album, EP, ...)
-  createCollection: protectedProcedure
+  createCollection: verifiedProcedure
     .input(
       z.object({
         title: z.string().trim().min(1).max(100),

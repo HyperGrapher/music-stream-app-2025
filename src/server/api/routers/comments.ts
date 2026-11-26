@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "@/server/api/trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure, verifiedProcedure } from "@/server/api/trpc";
 import {
   COMMENT_MAX_LENGTH,
   createComment,
@@ -20,7 +20,7 @@ export const commentsRouter = createTRPCRouter({
       listComments(ctx.db, input.trackId, { id: ctx.session?.user.id }, input.access),
     ),
 
-  create: protectedProcedure
+  create: verifiedProcedure
     .input(
       z.object({
         trackId: z.string().uuid(),

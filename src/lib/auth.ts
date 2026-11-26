@@ -1,8 +1,13 @@
 import { env } from "@/env";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { db } from "@/server/db";
 import { firstFree, usernameBase } from "@/lib/names";
+import { PASSWORD_PROBLEM_MESSAGES, passwordProblem } from "@/lib/passwords";
+import { sendEmail } from "@/server/modules/email";
+import { passwordResetEmail, verificationEmail } from "@/server/modules/email/templates";
+import { consumeRateLimit, RATE_LIMITS } from "@/server/modules/rate-limit";
 
 /** Emails listed in ADMIN_EMAILS (comma-separated, case-insensitive) get the ADMIN role at sign-in. */
 const adminEmails = new Set(
@@ -30,15 +35,39 @@ async function freeUsername(seed: string) {
   );
 }
 
+/**
+ * Verification and reset mails: at most 3 per hour per address (PRD 14.3). Over the limit the mail
+ * is silently dropped, so the endpoint never reveals whether an account exists.
+ */
+async function sendLimited(email: string, mail: Parameters<typeof sendEmail>[1]) {
+    const result = await consumeRateLimit(db, `email:${mail.template}:${email.toLowerCase()}`, RATE_LIMITS.emailPerHour);
+    if (result.ok) await sendEmail(db, mail);
+}
+
+const PASSWORD_PATHS = new Set(["/sign-up/email", "/reset-password", "/change-password", "/set-password"]);
+
 export const auth = betterAuth({
     database: prismaAdapter(db, {
         provider: "postgresql",
     }),
-    user: {
-        // Not settable by clients (`input: false`): written by the hooks below or by server code.
-        additionalFields: {
-            username: { type: "string", required: false, input: false },
-            role: { type: "string", required: false, input: false },
+    hooks: {
+        // AU-3: common passwords are refused on every path that sets one.
+        before: createAuthMiddleware(async (ctx) => {
+            if (!PASSWORD_PATHS.has(ctx.path)) return;
+            const body = ctx.body as { password?: string; newPassword?: string; email?: string } | undefined;
+            const password = body?.newPassword ?? body?.password;
+            if (!password) return;
+            const problem = passwordProblem(password, { email: body?.email });
+            if (problem) throw new APIError("BAD_REQUEST", { message: PASSWORD_PROBLEM_MESSAGES[problem] });
+        }),
+    },
+    emailVerification: {
+        sendOnSignUp: true,
+        autoSignInAfterVerification: true,
+        // Verification links work for 24 hours.
+        expiresIn: 60 * 60 * 24,
+        sendVerificationEmail: async ({ user, url }) => {
+            await sendLimited(user.email, verificationEmail(user.email, user.name, url));
         },
     },
     databaseHooks: {
@@ -98,6 +127,29 @@ export const auth = betterAuth({
     },
     emailAndPassword: {
         enabled: true,
+        minPasswordLength: 8,
+        // AU-5: one hour, single use (Better Auth deletes the token when it is used).
+        resetPasswordTokenExpiresIn: 60 * 60,
+        sendResetPassword: async ({ user, url }) => {
+            await sendLimited(user.email, passwordResetEmail(user.email, user.name, url));
+        },
+        // AU-5: a reset signs every other device out.
+        onPasswordReset: async ({ user }) => {
+            await db.session.deleteMany({ where: { userId: user.id } });
+        },
+    },
+    account: {
+        // AU-9: users can link Google next to a password (and the last sign-in method cannot be unlinked).
+        accountLinking: { enabled: true, trustedProviders: ["google"] },
+    },
+    user: {
+        additionalFields: {
+            username: { type: "string", required: false, input: false },
+            role: { type: "string", required: false, input: false },
+            onboardedAt: { type: "date", required: false, input: false },
+        },
+        // AU-7: changing the address sends a verification link to the new one.
+        changeEmail: { enabled: true },
     },
 
 })

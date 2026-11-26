@@ -168,3 +168,7 @@ export function callerFor(userId?: string) {
 }
 
 export { db };
+
+/** `assert.rejects` validator: the error carries this application error code (`error.cause.appCode`). */
+export const withAppCode = (appCode: string) => (error: unknown) =>
+  (error as { cause?: { appCode?: string } }).cause?.appCode === appCode;

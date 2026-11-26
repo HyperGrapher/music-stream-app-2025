@@ -1,3 +1,4 @@
+import { accountRouter } from "./routers/account";
 import { collectionsRouter } from "./routers/collections";
 import { commentsRouter } from "./routers/comments";
 import { discoverRouter } from "./routers/discover";
@@ -13,6 +14,7 @@ import { uploadRouter } from "./routers/upload";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
+  account: accountRouter,
   collections: collectionsRouter,
   comments: commentsRouter,
   discover: discoverRouter,

@@ -6,8 +6,20 @@ import type { PrismaClient } from "@/generated/prisma/client";
  * changing them in the same transaction as the rows; this is for seeds, migrations and account
  * deletion, which change many rows at once.
  */
+export async function recountCounters(db: Pick<PrismaClient, "$executeRawUnsafe">) {
+  for (const sql of COUNTER_STATEMENTS) await db.$executeRawUnsafe(sql);
+}
+
+export async function rebuildDailyStats(db: Pick<PrismaClient, "$executeRawUnsafe">) {
+  for (const sql of DAILY_STAT_STATEMENTS) await db.$executeRawUnsafe(sql);
+}
+
 export async function recountAll(db: Pick<PrismaClient, "$executeRawUnsafe">) {
-  const statements = [
+  await recountCounters(db);
+  await rebuildDailyStats(db);
+}
+
+const COUNTER_STATEMENTS = [
     `UPDATE "track" t SET
        "likeCount" = (SELECT count(*) FROM "track_like" x WHERE x."trackId" = t."id"),
        "repostCount" = (SELECT count(*) FROM "track_repost" x WHERE x."trackId" = t."id"),
@@ -25,6 +37,9 @@ export async function recountAll(db: Pick<PrismaClient, "$executeRawUnsafe">) {
        "followingCount" = (SELECT count(*) FROM "follow" x WHERE x."followerId" = u."id"),
        "publicTrackCount" = (SELECT count(*) FROM "track" t WHERE t."creatorId" = u."id" AND t."moderationState" = 'VISIBLE'
          AND (t."visibility" = 'PUBLIC' OR (t."visibility" = 'SCHEDULED' AND t."publishAt" <= now())))`,
+];
+
+const DAILY_STAT_STATEMENTS = [
     // Daily statistics: rebuilt from the events and rows they summarise.
     `DELETE FROM "track_daily_stat"`,
     `INSERT INTO "track_daily_stat" ("trackId", "day", "plays", "likes", "reposts", "comments", "downloads")
@@ -37,6 +52,4 @@ export async function recountAll(db: Pick<PrismaClient, "$executeRawUnsafe">) {
     `DELETE FROM "user_daily_stat"`,
     `INSERT INTO "user_daily_stat" ("userId", "day", "newFollowers", "lostFollowers")
      SELECT "followingId", ("createdAt" AT TIME ZONE 'UTC')::date, count(*)::int, 0 FROM "follow" GROUP BY 1, 2`,
-  ];
-  for (const sql of statements) await db.$executeRawUnsafe(sql);
-}
+];

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import { setFollow } from "@/server/modules/social/follow";
 import { setTrackLike } from "@/server/modules/tracks/likes";
 
 const accessInput = z
@@ -21,5 +22,12 @@ export const engagementRouter = createTRPCRouter({
         liked: input.liked,
         access: input.access,
       }),
+    ),
+
+  /** Follow or unfollow a user. Idempotent; counters change only with real rows. */
+  setFollow: protectedProcedure
+    .input(z.object({ userId: z.string().min(1), follow: z.boolean() }))
+    .mutation(({ input, ctx }) =>
+      setFollow(ctx.db, { followerId: ctx.session.user.id, followingId: input.userId, follow: input.follow }),
     ),
 });
