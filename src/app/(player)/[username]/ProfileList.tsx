@@ -14,8 +14,10 @@ export type ProfileTab = "all" | "popular-tracks" | "tracks" | "albums" | "sets"
 
 type Item = TabPage["items"][number];
 
+/** Collections (albums, playlists) carry `isPlaylist`; tracks never do. Activity/likes wrap either in `{ kind, ... }`. */
 function trackOf(item: Item): PlayerTrack | null {
   if ("kind" in item) return item.kind === "track" ? (item as { track: PlayerTrack }).track : null;
+  if ("isPlaylist" in item) return null;
   return "slug" in item && "durationMs" in item ? (item as unknown as PlayerTrack) : null;
 }
 
