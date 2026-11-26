@@ -13,10 +13,10 @@ import { cn } from "@/lib/utils";
 import { api } from "@/trpc/react";
 
 type Status = "OPEN" | "RESOLVED" | "DISMISSED";
-type Type = "TRACK" | "COLLECTION" | "COMMENT" | "USER";
+type Type = "TRACK" | "COLLECTION" | "COMMENT" | "USER" | "MESSAGE";
 type Target = { targetType: Type; targetId: string };
 const STATUSES: Status[] = ["OPEN", "RESOLVED", "DISMISSED"];
-const TYPES: Type[] = ["TRACK", "COLLECTION", "COMMENT", "USER"];
+const TYPES: Type[] = ["TRACK", "COLLECTION", "COMMENT", "USER", "MESSAGE"];
 const label = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
 
 function Detail({ target, onClose }: { target: Target; onClose: () => void }) {
@@ -82,8 +82,8 @@ export function ReportsQueue() {
           <thead className="bg-zinc-900/70 text-left text-xs text-zinc-400"><tr><th className="p-3">Reported</th><th className="p-3">Type</th><th className="p-3 text-right">Reporters</th><th className="p-3">Reasons</th><th className="p-3 text-right">Oldest</th></tr></thead>
           <tbody>
             {(list.data?.items ?? []).map((item) => (
-              <tr key={`${item.targetType}${item.targetId}`} className="cursor-pointer border-t border-zinc-800 hover:bg-zinc-900/50" onClick={() => setOpen({ targetType: item.targetType as Type, targetId: item.targetId })} data-testid="report-row">
-                <td className="p-3"><button className="text-left font-semibold hover:text-orange-400" onClick={() => setOpen({ targetType: item.targetType as Type, targetId: item.targetId })}>{item.preview?.title ?? "No longer exists"}</button>{item.preview?.text && <p className="max-w-md truncate text-xs text-zinc-400">{item.preview.text}</p>}</td>
+              <tr key={`${item.targetType}${item.targetId}`} className="cursor-pointer border-t border-zinc-800 hover:bg-zinc-900/50" onClick={() => setOpen({ targetType: item.targetType, targetId: item.targetId })} data-testid="report-row">
+                <td className="p-3"><button className="text-left font-semibold hover:text-orange-400" onClick={() => setOpen({ targetType: item.targetType, targetId: item.targetId })}>{item.preview?.title ?? "No longer exists"}</button>{item.preview?.text && <p className="max-w-md truncate text-xs text-zinc-400">{item.preview.text}</p>}</td>
                 <td className="p-3">{label(item.targetType)}</td>
                 <td className="p-3 text-right tabular-nums">{item.reporters}</td>
                 <td className="p-3 text-zinc-400">{item.reasons.map(label).join(", ")}</td>

@@ -408,6 +408,21 @@ export function PrivacySettings() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">Privacy</h1>
+      <Section title="Messages">
+        <Label text="Who can message me">
+          <select
+            aria-label="Who can message me"
+            value={me.messagePolicy}
+            onChange={(e) => save({ messagePolicy: e.target.value as "EVERYONE" | "FOLLOWING" | "NOBODY" })}
+            className={select}
+          >
+            <option value="EVERYONE">Everyone</option>
+            <option value="FOLLOWING">People I follow</option>
+            <option value="NOBODY">No one</option>
+          </select>
+        </Label>
+        <p className="text-xs text-zinc-400">Blocked people can never message you. You can always reply to someone you messaged first.</p>
+      </Section>
       <Section title="Your activity">
         <Toggle label="Show my likes on my profile" hint="Turn off to hide your Likes tab from other people." checked={me.showLikes} onChange={(showLikes) => save({ showLikes })} />
         <Toggle label="Show me in creators' top listeners" hint="Creators with a Pro plan can see their most active listeners." checked={me.showInTopListeners} onChange={(showInTopListeners) => save({ showInTopListeners })} />

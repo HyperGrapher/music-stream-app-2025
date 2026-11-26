@@ -20,7 +20,7 @@ export interface ShareTarget {
 
 /** What is being reported (TS-1). */
 export interface ReportTarget {
-  targetType: "TRACK" | "COLLECTION" | "COMMENT" | "USER";
+  targetType: "TRACK" | "COLLECTION" | "COMMENT" | "USER" | "MESSAGE";
   targetId: string;
   /** Shown in the dialog title: the track title, user name, "this comment"... */
   label: string;

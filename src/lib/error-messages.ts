@@ -66,7 +66,7 @@ export function friendlyError(error: TrpcLikeError, fallback = "Something went w
     case "UPLOAD_LIMIT_REACHED":
       return "You've used all your upload time. Free some up or upgrade.";
     case "BLOCKED":
-      return "You can't do that.";
+      return error.message || "You can't do that.";
   }
   if (error.data?.code === "UNAUTHORIZED") return "Sign in to do that.";
   return validationMessage(error.message) ?? (error.message || fallback);

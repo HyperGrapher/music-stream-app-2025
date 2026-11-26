@@ -2,7 +2,7 @@
 import { hardNavigate } from "@/lib/navigate";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { AudioLines, ChevronDown, Copyright, Heart, Info, Keyboard, Library, LogOut, MoreHorizontal, Scale, Settings, ShieldCheck, Smartphone, User, Users } from "lucide-react";
+import { AudioLines, ChevronDown, Copyright, Heart, Info, Keyboard, Library, LogOut, MessageSquare, MoreHorizontal, Scale, Settings, ShieldCheck, Smartphone, User, Users } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +17,7 @@ import { useDialogs } from "@/store/dialogs";
 import { toast } from "sonner";
 import { SearchBox } from "@/components/SearchBox";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { MessageBell } from "@/components/messages/MessageBell";
 
 type User = {
   id: string;
@@ -108,6 +109,7 @@ export function Navbar({ initialUser }: NavbarProps) {
         {displayUser ? (
           <>
             <NotificationBell />
+            <MessageBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="gap-0.5 rounded-full p-1 hover:bg-zinc-800 data-[state=open]:bg-zinc-800" aria-label="Account menu">
@@ -136,6 +138,7 @@ export function Navbar({ initialUser }: NavbarProps) {
                 <DropdownMenuItem asChild><Link href="/you/likes"><Heart /> Likes</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild><Link href="/you/following"><Users /> Following</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild><Link href="/you/library"><Library /> Library</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href="/messages"><MessageSquare /> Messages</Link></DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild><Link href="/studio/tracks"><AudioLines /> Studio</Link></DropdownMenuItem>
                 {role === "ADMIN" && (

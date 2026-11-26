@@ -32,6 +32,7 @@ One Next.js app on **Vercel**, **Neon** Postgres and **Cloudflare R2**.
 - **Waveforms without a media server:** the browser decodes the file (Web Audio) while it uploads and computes the duration and waveform peaks. The server validates them and stores a small JSON next to the audio.
 - **Streaming:** seeking works, audio never passes through the app server, and visibility (including secret links) is enforced.
 - **Player:** one global player with shuffle, repeat, a "Next up" queue (play next / add to queue from any track menu), autoplay of related tracks, buffered range, keyboard shortcuts (press `?`), OS media controls (Media Session API), a mini player and full-screen sheet on phones, and a saved position that survives reloads.
+- **Messages:** one-to-one direct messages (`/messages`), with "Who can message me" in Privacy settings, link cards for tracks and collections, report/delete/block, rate limits, and a navbar badge.
 - **Social loop:** reposts and likes for tracks, albums, playlists and comments, a Feed of the people you follow (de-duplicated reposts, "new posts" pill), notifications (bell, grouped, per-type in-app and email preferences, daily digest, one-click unsubscribe), and a Library (likes, playlists, albums, following, listening history).
 - **Trust and safety:** report tracks, albums, playlists, comments and people; block people (they can't follow you or comment, and you stop seeing their comments); an admin area for the report queue, removing or restoring content, suspending accounts and an audit log.
 - **Creator Studio:** a table of all your tracks and collections with sorting, filters and bulk edit/delete, Insights (plays over time, top tracks; Pro adds longer ranges, countries, sources, top listeners and per-track views), a Spotlight editor, and the Free/Pro limits enforced on the server.
@@ -43,7 +44,7 @@ One Next.js app on **Vercel**, **Neon** Postgres and **Cloudflare R2**.
 - **Play counts** that cannot be inflated by refreshing: one count per listener per track per 30 minutes; the owner's own plays are never counted. Daily statistics are kept for charts and insights.
 - **Platform plumbing:** Postgres-backed rate limiter, email module (Resend, or logged when no key is set), durable R2 deletion queue with a daily cron, simulated Free/Pro entitlements, injectable clock.
 
-**Work in progress:** the product is being built out milestone by milestone against [`docs/PRD.md`](docs/PRD.md) (M0 to M8 done; status in [`docs/REFACTOR.md`](docs/REFACTOR.md)). The data model already contains reposts, blocks, notifications, reports, messages and insights tables, but their UI and procedures arrive in later milestones: direct messages (P2) are undecided.
+**Work in progress:** the product is being built out milestone by milestone against [`docs/PRD.md`](docs/PRD.md) (M0 to M8 done; status in [`docs/REFACTOR.md`](docs/REFACTOR.md)). Remaining P2 items are listed in the "Open items" of the refactor doc.
 
 ## How it works
 
