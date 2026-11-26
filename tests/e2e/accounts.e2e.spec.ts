@@ -142,6 +142,19 @@ test("settings: change the display name and username; the old link keeps redirec
   await context.close();
 });
 
+test("a profile link without https:// is refused with a readable message, not raw JSON", async ({ browser, baseURL }) => {
+  const { context } = await signedInContext(browser, baseURL!);
+  const page = await context.newPage();
+  await page.goto("/settings/profile", { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Add link" }).click();
+  await page.getByLabel("Link 1 URL").fill("example.com");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  const toast = page.locator("[data-sonner-toast]").first();
+  await expect(toast).toContainText("Link 1: enter a full web address starting with https://");
+  await expect(toast).not.toContainText("invalid_format");
+  await context.close();
+});
+
 test("AU-4: an unverified account sees the verify banner and cannot comment", async ({ browser, baseURL }) => {
   const { context } = await signedInContext(browser, baseURL!, { verified: false });
   const page = await context.newPage();

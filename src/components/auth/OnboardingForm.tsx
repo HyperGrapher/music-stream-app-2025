@@ -4,6 +4,7 @@ import { hardNavigate } from "@/lib/navigate";
 import { Check, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { friendlyError } from "@/lib/error-messages";
 
 import { ImageUploader } from "@/components/ImageUploader";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -64,7 +65,7 @@ export function OnboardingForm({ initialUsername, initialName, initialImage }: {
       hardNavigate("/");
     } catch (error) {
       setSaving(false);
-      toast.error(error instanceof Error ? error.message : "Could not finish setting up your profile");
+      toast.error(error instanceof Error ? friendlyError(error, "Could not finish setting up your profile") : "Could not finish setting up your profile");
     }
   };
 

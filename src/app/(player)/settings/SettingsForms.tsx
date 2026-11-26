@@ -360,7 +360,7 @@ function DeleteSection({ me }: { me: Me }) {
             void del
               .mutateAsync({ confirmUsername: typed })
               .then(() => hardNavigate("/"))
-              .catch((error: Error) => toast.error(error.message));
+              .catch((error: Parameters<typeof friendlyError>[0]) => toast.error(friendlyError(error, "Could not delete the account")));
           }}
         >
           <Label text={`Type "${me.username}" to confirm`}>

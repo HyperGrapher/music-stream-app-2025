@@ -24,8 +24,8 @@ const httpsUrl = z
   .string()
   .trim()
   .max(300)
-  .url()
-  .refine((value) => value.startsWith("https://") || value.startsWith("http://"), "Links must be http(s) URLs");
+  .url("Enter a full web address starting with https://")
+  .refine((value) => value.startsWith("https://") || value.startsWith("http://"), "Links must start with https://");
 
 const NOTIFICATION_TYPES = ["FOLLOW", "TRACK_LIKE", "COLLECTION_LIKE", "TRACK_REPOST", "COLLECTION_REPOST", "COMMENT", "REPLY", "MENTION", "COMMENT_LIKE", "PLAYLIST_ADD", "NEW_RELEASE", "SYSTEM"] as const;
 const COUNTRY = z.string().length(2).regex(/^[A-Za-z]{2}$/);

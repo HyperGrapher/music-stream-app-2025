@@ -271,7 +271,7 @@ function ThreadView({ thread, track }: { thread: Thread; track: PlayerTrack }) {
   const shownReplies = allReplies ? thread.replies : thread.replies.slice(0, 3);
   const remove = api.comments.delete.useMutation({
     onSuccess: () => utils.comments.list.invalidate({ trackId: track.id }),
-    onError: (error) => toast.error(error.message || "Could not delete the comment"),
+    onError: (error) => toast.error(friendlyError(error, "Could not delete the comment")),
   });
   const confirmDelete = (comment: Comment, warnReplies: boolean) => {
     const message = warnReplies && thread.replies.length ? "Delete this comment and its replies?" : "Delete this comment?";

@@ -3,6 +3,7 @@
 import { ImagePlus } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { friendlyError } from "@/lib/error-messages";
 
 import { Button } from "@/components/ui/button";
 import { api } from "@/trpc/react";
@@ -44,7 +45,7 @@ export function ImageUploader({ purpose, label, onUploaded, className }: ImageUp
       await complete.mutateAsync({ mediaAssetId });
       onUploaded(mediaAssetId, URL.createObjectURL(file));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not upload the image");
+      toast.error(error instanceof Error ? friendlyError(error, "Could not upload the image") : "Could not upload the image");
     } finally {
       setBusy(false);
     }
