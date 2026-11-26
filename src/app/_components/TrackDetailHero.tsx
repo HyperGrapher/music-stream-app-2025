@@ -5,6 +5,7 @@ import {
   Copy,
   MoreHorizontal,
   Pause,
+  Pencil,
   Play,
   Plus,
   Repeat2,
@@ -26,7 +27,7 @@ import { genreLabel } from "@/lib/genres";
 const roundActionClass =
   "flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700 bg-black/50 text-zinc-300 backdrop-blur transition hover:border-zinc-400 hover:text-white";
 
-export function TrackDetailHero({ track }: { track: PlayerTrack & { likedByMe?: boolean } }) {
+export function TrackDetailHero({ track, editHref }: { track: PlayerTrack & { likedByMe?: boolean }; editHref?: string }) {
   const { peaks, isLoading, error } = useTrackWaveform(
     track.waveformUrl,
     track.waveformStatus === "FAILED",
@@ -156,6 +157,11 @@ export function TrackDetailHero({ track }: { track: PlayerTrack & { likedByMe?: 
               variant="round"
               className={roundActionClass}
             />
+            {editHref && (
+              <Link href={editHref} className={roundActionClass} aria-label="Edit track">
+                <Pencil className="h-4 w-4" />
+              </Link>
+            )}
             <button
               type="button"
               className={roundActionClass}

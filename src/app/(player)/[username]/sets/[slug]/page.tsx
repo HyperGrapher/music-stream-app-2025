@@ -10,7 +10,8 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 }
 
 /** `/{username}/sets/{slug}`: any collection type. */
-export default async function Page({ params }: { params: Params }) {
+export default async function Page({ params, searchParams }: { params: Params; searchParams: Promise<{ new?: string; at?: string }> }) {
   const { username, slug } = await params;
-  return <CollectionPage username={username} slug={slug} />;
+  const { new: status, at } = await searchParams;
+  return <CollectionPage username={username} slug={slug} justSaved={{ status, at }} />;
 }

@@ -6,12 +6,14 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { WaveformTrackItem } from "@/app/_components/WaveformTrackItem";
 import { ARTWORK_SIZES } from "@/lib/artwork";
 import { genreLabel } from "@/lib/genres";
+import { OwnerVisibilityBanner, PublishedBanner } from "@/components/editor/Banners";
 import { api } from "@/trpc/server";
 
 export interface CollectionPageParams {
   username: string;
   slug: string;
   secret?: string;
+  justSaved?: { status?: string; at?: string };
 }
 
 const load = ({ username, slug, secret }: CollectionPageParams) =>
@@ -49,10 +51,23 @@ export async function CollectionPage(params: CollectionPageParams) {
   return (
     <div className="min-h-screen bg-[#0d0d0d] pb-24 text-white">
       <div className="mx-auto max-w-[1240px] px-4 py-5 sm:px-6">
-        {collection.isOwner && collection.visibility !== "PUBLIC" && (
-          <p className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-            Private: only you and people with the secret link can open this {TYPE_LABEL[collection.type].toLowerCase()}.
-          </p>
+        {collection.isOwner && params.justSaved?.status && (
+          <PublishedBanner
+            kind={collection.isPlaylist ? "playlist" : "album"}
+            status={params.justSaved.status}
+            path={collection.permalink}
+            secretToken={collection.secretToken}
+            actions={[
+              { label: collection.isPlaylist ? "View playlist" : "View release", href: collection.permalink },
+              { label: collection.isPlaylist ? "Edit playlist" : "Edit release", href: `/studio/sets/${collection.id}/edit?return=${encodeURIComponent(collection.permalink)}` },
+              { label: "Edit tracks", href: `/studio/sets/${collection.id}/edit?return=${encodeURIComponent(collection.permalink)}` },
+              { label: "Upload more", href: "/upload" },
+              { label: "Go to profile", href: `/${collection.owner.username}` },
+            ]}
+          />
+        )}
+        {collection.isOwner && collection.visibility !== "PUBLIC" && collection.secretToken && (
+          <OwnerVisibilityBanner visibility="PRIVATE" path={collection.permalink} secretToken={collection.secretToken} />
         )}
         <header className="flex flex-col gap-6 sm:flex-row">
           <img
@@ -79,6 +94,11 @@ export async function CollectionPage(params: CollectionPageParams) {
               {collection.trackCount} {collection.trackCount === 1 ? "track" : "tracks"}
               {collection.durationMs > 0 && ` · ${formatTotal(collection.durationMs)}`}
             </p>
+            {collection.isOwner && (
+              <p className="mt-3">
+                <Link href={`/studio/sets/${collection.id}/edit?return=${encodeURIComponent(collection.permalink)}`} className="rounded-full border border-zinc-700 px-4 py-1.5 text-sm font-semibold hover:border-zinc-400">Edit</Link>
+              </p>
+            )}
             {collection.genre && <p className="mt-2 text-xs text-zinc-500"># {genreLabel(collection.genre)}</p>}
             {collection.description && (
               <p className="mt-4 max-w-2xl text-sm leading-6 whitespace-pre-line text-zinc-300">{collection.description}</p>

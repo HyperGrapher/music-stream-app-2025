@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { Heart, Lock, MapPin, Play, Repeat2 } from "lucide-react";
+import { Heart, MapPin, Play, Repeat2 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
@@ -8,6 +8,7 @@ import { CommentsSection } from "@/app/_components/CommentsSection";
 import { TrackDetailHero } from "@/app/_components/TrackDetailHero";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { genreLabel } from "@/lib/genres";
+import { OwnerVisibilityBanner, PublishedBanner } from "@/components/editor/Banners";
 import { api, HydrateClient } from "@/trpc/server";
 
 export interface TrackPageParams {
@@ -15,6 +16,8 @@ export interface TrackPageParams {
   slug: string;
   /** Secret link token without the `s-` prefix. */
   secret?: string;
+  /** `?new=` / `?at=` after saving from the upload or edit flow (owner only). */
+  justSaved?: { status?: string; at?: string };
 }
 
 async function loadTrack({ username, slug, secret }: TrackPageParams) {
@@ -50,15 +53,24 @@ export async function TrackPage(params: TrackPageParams) {
     <HydrateClient>
       <div className="min-h-screen bg-[#0d0d0d] pb-24 text-white">
         <div className="mx-auto max-w-[1240px] px-4 py-5 sm:px-6">
-          {track.isOwner && track.visibility !== "PUBLIC" && (
-            <p className="mb-4 flex items-center gap-2 rounded border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-              <Lock className="h-4 w-4 shrink-0" />
-              {track.visibility === "SCHEDULED"
-                ? `Scheduled for ${format(new Date(track.publishAt!), "d MMM yyyy, HH:mm")}. Only you and people with the secret link can listen until then.`
-                : "Private: only you and people with the secret link can listen."}
-            </p>
+          {track.isOwner && params.justSaved?.status && (
+            <PublishedBanner
+              kind="track"
+              status={params.justSaved.status}
+              at={params.justSaved.at}
+              path={track.permalink}
+              secretToken={track.secretToken}
+              actions={[
+                { label: "Edit", href: `/studio/tracks/${track.id}/edit?return=${encodeURIComponent(track.permalink)}` },
+                { label: "Upload another", href: "/upload" },
+                { label: "Go to profile", href: `/${track.creator.username}` },
+              ]}
+            />
           )}
-          <TrackDetailHero track={track} />
+          {track.isOwner && track.visibility !== "PUBLIC" && track.secretToken && (
+            <OwnerVisibilityBanner visibility={track.visibility} publishAt={track.publishAt} path={track.permalink} secretToken={track.secretToken} />
+          )}
+          <TrackDetailHero track={track} editHref={track.isOwner ? `/studio/tracks/${track.id}/edit?return=${encodeURIComponent(track.permalink)}` : undefined} />
 
           <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
             <main className="min-w-0 space-y-9">

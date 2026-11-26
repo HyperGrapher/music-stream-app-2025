@@ -62,7 +62,7 @@ test("the upload page offers the file picker to a signed-in user", async ({ brow
   const context = await signedIn(browser, baseURL!);
   const page = await context.newPage();
   await page.goto("/upload");
-  await expect(page.getByText("Upload your tracks")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upload", exact: true })).toBeVisible();
   await expect(page.locator("#files")).toBeVisible();
   await context.close();
 });

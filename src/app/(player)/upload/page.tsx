@@ -1,25 +1,13 @@
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import FileUpload from "@/components/upload";
-import { Suspense } from 'react';
+import { UploadApp } from "@/components/upload/UploadApp";
+import { getSessionUser } from "@/server/session-user";
 
+export const metadata: Metadata = { title: "Upload | Music Stream", robots: { index: false } };
 
-const UploadPage = () => {
-    return (
-        <div>
-            <div className="flex-1 flex flex-col pb-[-61px] overflow-hidden pt-0 relative">
-                <div className="h-[1px] bg-red-500 w-full absolute bottom-0 left-0 z-50"></div>
-                <div className="min-w-max">
-                    <Suspense fallback={<div className="w-full" />}>
-                        <h1 className="text-2xl font-bold text-center">Upload</h1>
-                        <div className="flex flex-col gap-4 justify-center items-center mt-8">
-                            <FileUpload />
-                        </div>
-                    </Suspense>
-                </div>
-
-            </div>
-        </div>
-    )
+export default async function UploadPage() {
+  const user = await getSessionUser();
+  if (!user) redirect("/signin?next=/upload");
+  return <UploadApp username={user.username} />;
 }
-
-export default UploadPage

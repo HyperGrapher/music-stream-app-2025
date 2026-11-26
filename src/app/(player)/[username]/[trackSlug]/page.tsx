@@ -10,7 +10,8 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 }
 
 /** `/{username}/{trackSlug}`: the canonical track permalink. */
-export default async function Page({ params }: { params: Params }) {
+export default async function Page({ params, searchParams }: { params: Params; searchParams: Promise<{ new?: string; at?: string }> }) {
   const { username, trackSlug } = await params;
-  return <TrackPage username={username} slug={trackSlug} />;
+  const { new: status, at } = await searchParams;
+  return <TrackPage username={username} slug={trackSlug} justSaved={{ status, at }} />;
 }

@@ -3,6 +3,7 @@ import { collectionsRouter } from "./routers/collections";
 import { commentsRouter } from "./routers/comments";
 import { discoverRouter } from "./routers/discover";
 import { engagementRouter } from "./routers/engagement";
+import { plansRouter } from "./routers/plans";
 import { profilesRouter } from "./routers/profiles";
 import { tracksRouter } from "./routers/tracks";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
@@ -19,6 +20,7 @@ export const appRouter = createTRPCRouter({
   comments: commentsRouter,
   discover: discoverRouter,
   engagement: engagementRouter,
+  plans: plansRouter,
   profiles: profilesRouter,
   tracks: tracksRouter,
   upload: uploadRouter,

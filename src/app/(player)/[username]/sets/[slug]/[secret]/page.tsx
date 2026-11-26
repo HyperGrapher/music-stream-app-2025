@@ -14,8 +14,9 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 }
 
 /** `/{username}/sets/{slug}/s-{token}`: a private collection opened through its secret link. */
-export default async function Page({ params }: { params: Params }) {
+export default async function Page({ params, searchParams }: { params: Params; searchParams: Promise<{ new?: string; at?: string }> }) {
   const { username, slug, secret } = await params;
+  const { new: status, at } = await searchParams;
   if (!secret.startsWith(SECRET_PREFIX)) notFound();
-  return <CollectionPage username={username} slug={slug} secret={secret.slice(SECRET_PREFIX.length)} />;
+  return <CollectionPage username={username} slug={slug} secret={secret.slice(SECRET_PREFIX.length)} justSaved={{ status, at }} />;
 }

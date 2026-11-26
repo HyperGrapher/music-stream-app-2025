@@ -14,8 +14,9 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 }
 
 /** `/{username}/{trackSlug}/s-{token}`: a private track opened through its secret link. */
-export default async function Page({ params }: { params: Params }) {
+export default async function Page({ params, searchParams }: { params: Params; searchParams: Promise<{ new?: string; at?: string }> }) {
   const { username, trackSlug, secret } = await params;
+  const { new: status, at } = await searchParams;
   if (!secret.startsWith(SECRET_PREFIX)) notFound();
-  return <TrackPage username={username} slug={trackSlug} secret={secret.slice(SECRET_PREFIX.length)} />;
+  return <TrackPage username={username} slug={trackSlug} secret={secret.slice(SECRET_PREFIX.length)} justSaved={{ status, at }} />;
 }

@@ -1,4 +1,4 @@
-import type { APIRequestContext, Browser, BrowserContext } from "@playwright/test";
+import type { APIRequestContext, Browser, BrowserContext, Page, Route } from "@playwright/test";
 
 import { createPrismaClient } from "../../src/server/prisma-client";
 
@@ -85,4 +85,63 @@ export async function createTrackFor(
     },
   });
   return { ...track, path: `/${owner.username}/${slug}` };
+}
+
+/** n seconds of an 8 kHz mono 16-bit sine wave: tiny, and every browser can decode it. */
+export function sineWav(seconds = 2, sampleRate = 8000, hz = 440) {
+  const samples = seconds * sampleRate;
+  const buffer = Buffer.alloc(44 + samples * 2);
+  buffer.write("RIFF", 0);
+  buffer.writeUInt32LE(36 + samples * 2, 4);
+  buffer.write("WAVEfmt ", 8);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write("data", 36);
+  buffer.writeUInt32LE(samples * 2, 40);
+  for (let i = 0; i < samples; i++) buffer.writeInt16LE(Math.round(Math.sin((2 * Math.PI * hz * i) / sampleRate) * 12000), 44 + i * 2);
+  return buffer;
+}
+
+/**
+ * Replaces object storage for the upload pipeline with the database: `getUploadUrl` creates the asset row
+ * and points the browser at a fake PUT target, `markUploadComplete` flips it to READY with the analysis the
+ * browser really computed. Publishing (`createTrack` / `createCollection`) then runs for real against these
+ * rows, so the whole UI flow is tested without R2 credentials or CORS.
+ */
+export async function mockUploadStorage(page: Page, userId: string, baseURL: string) {
+  type Call = { json: Record<string, unknown> };
+  const respond = (route: Route, outputs: unknown[]) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(outputs.map((json) => ({ result: { data: { json } } }))) });
+  const inputsOf = (route: Route) => Object.values(route.request().postDataJSON() as Record<string, Call>).map((c) => c.json);
+
+  await page.route("**/__e2e-put/**", (route) => route.fulfill({ status: 200, body: "" }));
+  await page.route("**/api/trpc/upload.getUploadUrl*", async (route) => {
+    const outputs = [];
+    for (const input of inputsOf(route)) {
+      const id = crypto.randomUUID();
+      await db.mediaAsset.create({
+        data: { id, ownerId: userId, kind: "AUDIO", bucket: "e2e-bucket", storageKey: `uploads/${userId}/${id}-${String(input.filename)}`, originalFilename: String(input.filename), mimeType: String(input.contentType), expiresAt: new Date(Date.now() + 86_400_000) },
+      });
+      outputs.push({ uploadUrl: `${baseURL}/__e2e-put/${id}`, mediaAssetId: id });
+    }
+    await respond(route, outputs);
+  });
+  await page.route("**/api/trpc/upload.markUploadComplete*", async (route) => {
+    const outputs = [];
+    for (const input of inputsOf(route)) {
+      const analysis = input.analysis as { durationMs: number; sampleRate: number; channels: number };
+      await db.mediaAsset.update({ where: { id: String(input.mediaAssetId) }, data: { status: "READY", uploadedAt: new Date(), byteSize: BigInt(1000) } });
+      await db.audioAnalysis.create({ data: { audioAssetId: String(input.mediaAssetId), status: "READY", durationMs: analysis.durationMs, sampleRate: analysis.sampleRate, channels: analysis.channels, completedAt: new Date() } });
+      outputs.push({ success: true, durationMs: analysis.durationMs });
+    }
+    await respond(route, outputs);
+  });
+  await page.route("**/api/trpc/upload.cancelUpload*", async (route) => {
+    await respond(route, inputsOf(route).map(() => ({ success: true })));
+  });
 }
