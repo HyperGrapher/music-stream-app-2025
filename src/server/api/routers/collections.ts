@@ -1,3 +1,4 @@
+import { createPlaylist, myPlaylists } from "@/server/modules/collections/playlists";
 import { z } from "zod";
 
 import type { Prisma } from "@/generated/prisma/client";
@@ -144,6 +145,15 @@ export const collectionsRouter = createTRPCRouter({
     .query(({ input, ctx }) => slugAvailability(ctx.db, ctx.account.id, "COLLECTION", input.slug, input.selfId)),
 
   resetSecret: accountProcedure.input(z.object({ id: z.string().uuid() })).mutation(({ input, ctx }) => resetCollectionSecret(ctx.db, ctx.account.id, input.id)),
+
+  /** The caller's playlists, with whether each already contains `trackId` (add-to-playlist dialog). */
+  mine: accountProcedure
+    .input(z.object({ trackId: z.string().uuid().optional() }).optional())
+    .query(({ input, ctx }) => myPlaylists(ctx.db, ctx.account.id, input?.trackId)),
+
+  createPlaylist: accountProcedure
+    .input(z.object({ title: z.string().trim().min(1).max(100), privacy: z.enum(["public", "private"]).default("private"), trackIds: z.array(z.string().uuid()).max(100).optional() }))
+    .mutation(({ input, ctx }) => createPlaylist(ctx.db, ctx.account.id, input)),
 
   addTracks: accountProcedure
     .input(z.object({ id: z.string().uuid(), trackIds: z.array(z.string().uuid()).min(1).max(100) }))

@@ -39,7 +39,8 @@ export async function relatedTracks(
           where: {
             ...visible,
             creatorId: { not: seed.creatorId },
-            OR: [...(seed.genre ? [{ genre: seed.genre }] : []), ...(seed.tags.length > 0 ? [{ tags: { hasSome: seed.tags } }] : [])],
+            // AND, not a second `OR` key: that would replace the visibility filter of `visible`.
+            AND: [{ OR: [...(seed.genre ? [{ genre: seed.genre }] : []), ...(seed.tags.length > 0 ? [{ tags: { hasSome: seed.tags } }] : [])] }],
           },
           orderBy: [{ playCount: "desc" }, { id: "asc" }],
           take,

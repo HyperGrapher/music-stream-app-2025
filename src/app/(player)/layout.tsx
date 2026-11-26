@@ -2,6 +2,7 @@ import { AuthDialog } from "@/components/auth/AuthDialog";
 import { OnboardingGuard, VerifyEmailBanner } from "@/components/auth/AppShellGuards";
 import { PlaybackControls } from "../_components/GlobalPlaybackControls";
 import { PlayerControllerWrapper } from "@/components/PlayerControllerWrapper";
+import { ServerNavbar } from "../_components/ServerNavbar";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 
@@ -17,6 +18,7 @@ export default async function Layout({
 
     return (
         <>
+            <ServerNavbar />
             <VerifyEmailBanner />
             <OnboardingGuard />
             <AuthDialog />

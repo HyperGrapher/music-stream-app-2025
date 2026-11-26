@@ -42,3 +42,17 @@ export function presignGetStable(
     { expiresIn: windowSeconds * 2, signingDate: new Date(Math.floor(now / windowMs) * windowMs) },
   );
 }
+
+/** A presigned URL that makes the browser save the file under `filename` instead of playing it. */
+export function presignDownload(asset: { bucket: string; storageKey: string }, filename: string, expiresIn = 300) {
+  const safe = filename.replace(/["\\\r\n/]/g, "_");
+  return getSignedUrl(
+    r2Client,
+    new GetObjectCommand({
+      Bucket: asset.bucket,
+      Key: asset.storageKey,
+      ResponseContentDisposition: `attachment; filename="${safe}"; filename*=UTF-8''${encodeURIComponent(safe)}`,
+    }),
+    { expiresIn },
+  );
+}

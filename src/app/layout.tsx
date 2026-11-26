@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/sonner"
 import { TRPCReactProvider } from "@/trpc/react";
 import { getSessionUser } from "@/server/session-user";
 import { AuthProvider } from "@/components/AuthProvider";
-import { ServerNavbar } from "./_components/ServerNavbar";
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -36,7 +35,6 @@ export default async function RootLayout({
       <body className="dark">
         <TRPCReactProvider>
           <AuthProvider initialUser={user} />
-          <ServerNavbar />
           {children}
         </TRPCReactProvider>
         <Toaster
