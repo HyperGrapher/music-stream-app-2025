@@ -4,6 +4,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import { now as clockNow } from "@/server/clock";
 import { appError, rateLimited } from "@/server/errors";
 import { consumeRateLimit, RATE_LIMITS } from "@/server/modules/rate-limit";
+import { notify, unnotify } from "@/server/modules/notifications";
 import { bumpUserDailyStat } from "@/server/modules/stats";
 
 export const MAX_FOLLOWINGS = 2000;
@@ -66,6 +67,8 @@ export async function setFollow(
       await tx.user.update({ where: { id: followingId }, data: { followerCount: { increment: delta } } });
       await tx.user.update({ where: { id: followerId }, data: { followingCount: { increment: delta } } });
       await bumpUserDailyStat(tx, followingId, delta > 0 ? "newFollowers" : "lostFollowers", 1, now);
+      if (delta > 0) await notify(tx, { recipientId: followingId, actorId: followerId, type: "FOLLOW", now });
+      else await unnotify(tx, { recipientId: followingId, actorId: followerId, type: "FOLLOW" });
     }
 
     const row = await tx.user.findUniqueOrThrow({ where: { id: followingId }, select: { followerCount: true } });

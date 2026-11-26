@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { now as clockNow } from "@/server/clock";
+import { notify } from "@/server/modules/notifications";
 import { enforceRateLimit, RATE_LIMITS } from "@/server/modules/rate-limit";
 import { bumpTrackDailyStat } from "@/server/modules/stats";
 import { trackAccessSelect } from "@/server/modules/visibility";
@@ -11,6 +12,17 @@ import { authorizeTrack } from "./authorize";
 import { userAvatarUrl } from "./dto";
 
 export const COMMENT_MAX_LENGTH = 1000;
+export const MAX_MENTIONS = 5;
+
+/** Distinct lowercase usernames written as `@name` in a comment (CM-4), at most `MAX_MENTIONS`. */
+export function extractMentions(content: string): string[] {
+  const found = new Set<string>();
+  for (const match of content.matchAll(/(?:^|[^a-z0-9_-])@([a-z0-9][a-z0-9_-]{2,24})/gi)) {
+    found.add(match[1]!.toLowerCase());
+    if (found.size >= MAX_MENTIONS) break;
+  }
+  return [...found];
+}
 /** Used only when a track's duration is unknown: matches the upload cap. */
 const FALLBACK_MAX_SECONDS = 4 * 60 * 60;
 
@@ -175,11 +187,13 @@ export async function createComment(
 
     // One level of replies: answering a reply attaches to the thread's root comment.
     let parentId: string | null = null;
+    let parentAuthorId: string | null = null;
     if (input.parentId) {
       const parent = await tx.comment.findUnique({
         where: { id: input.parentId },
-        select: { trackId: true, parentId: true },
+        select: { trackId: true, parentId: true, authorId: true },
       });
+      parentAuthorId = parent?.authorId ?? null;
       if (parent?.trackId !== input.trackId) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Comment not found" });
       }
@@ -202,6 +216,27 @@ export async function createComment(
       data: { commentCount: { increment: 1 } },
     });
     await bumpTrackDailyStat(tx, input.trackId, "comments", 1, now);
+
+    // Notifications (NT-1): the creator hears about comments, the parent's author about replies, mentioned users about mentions.
+    const base = { actorId: input.authorId, trackId: input.trackId, commentId: row.id, now };
+    const told = new Set<string>([input.authorId]);
+    if (parentAuthorId && !told.has(parentAuthorId)) {
+      told.add(parentAuthorId);
+      await notify(tx, { ...base, recipientId: parentAuthorId, type: "REPLY" });
+    }
+    if (!told.has(track.creatorId)) {
+      told.add(track.creatorId);
+      await notify(tx, { ...base, recipientId: track.creatorId, type: "COMMENT" });
+    }
+    const names = extractMentions(input.content);
+    if (names.length) {
+      const mentioned = await tx.user.findMany({ where: { username: { in: names }, status: "ACTIVE" }, select: { id: true } });
+      for (const user of mentioned) {
+        if (told.has(user.id)) continue;
+        told.add(user.id);
+        await notify(tx, { ...base, recipientId: user.id, type: "MENTION" });
+      }
+    }
     return toItem(row, track.creatorId, { id: input.authorId });
   });
 }

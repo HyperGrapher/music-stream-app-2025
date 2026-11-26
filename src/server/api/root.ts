@@ -3,6 +3,9 @@ import { collectionsRouter } from "./routers/collections";
 import { commentsRouter } from "./routers/comments";
 import { discoverRouter } from "./routers/discover";
 import { engagementRouter } from "./routers/engagement";
+import { libraryRouter } from "./routers/library";
+import { feedRouter } from "./routers/feed";
+import { notificationsRouter } from "./routers/notifications";
 import { plansRouter } from "./routers/plans";
 import { profilesRouter } from "./routers/profiles";
 import { tracksRouter } from "./routers/tracks";
@@ -20,6 +23,9 @@ export const appRouter = createTRPCRouter({
   comments: commentsRouter,
   discover: discoverRouter,
   engagement: engagementRouter,
+  notifications: notificationsRouter,
+  feed: feedRouter,
+  library: libraryRouter,
   plans: plansRouter,
   profiles: profilesRouter,
   tracks: tracksRouter,

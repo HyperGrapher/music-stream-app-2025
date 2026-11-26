@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import { setCollectionLike, setCollectionRepost, setCommentLike, setTrackRepost } from "@/server/modules/social/engagement";
 import { setFollow } from "@/server/modules/social/follow";
 import { setTrackLike } from "@/server/modules/tracks/likes";
 
@@ -30,4 +31,21 @@ export const engagementRouter = createTRPCRouter({
     .mutation(({ input, ctx }) =>
       setFollow(ctx.db, { followerId: ctx.session.user.id, followingId: input.userId, follow: input.follow }),
     ),
+
+  setCollectionLike: protectedProcedure
+    .input(z.object({ collectionId: z.string().uuid(), liked: z.boolean(), secret: z.string().max(64).optional() }))
+    .mutation(({ input, ctx }) => setCollectionLike(ctx.db, { userId: ctx.session.user.id, ...input })),
+
+  setCommentLike: protectedProcedure
+    .input(z.object({ commentId: z.string().uuid(), liked: z.boolean(), access: accessInput }))
+    .mutation(({ input, ctx }) => setCommentLike(ctx.db, { userId: ctx.session.user.id, ...input })),
+
+  /** Repost or un-repost a public track (not your own). */
+  setTrackRepost: protectedProcedure
+    .input(z.object({ trackId: z.string().uuid(), reposted: z.boolean(), caption: z.string().max(140).optional() }))
+    .mutation(({ input, ctx }) => setTrackRepost(ctx.db, { userId: ctx.session.user.id, ...input })),
+
+  setCollectionRepost: protectedProcedure
+    .input(z.object({ collectionId: z.string().uuid(), reposted: z.boolean(), caption: z.string().max(140).optional(), secret: z.string().max(64).optional() }))
+    .mutation(({ input, ctx }) => setCollectionRepost(ctx.db, { userId: ctx.session.user.id, ...input })),
 });

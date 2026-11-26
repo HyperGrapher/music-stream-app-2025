@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { now as clockNow } from "@/server/clock";
+import { notify, unnotify } from "@/server/modules/notifications";
 import { consumeRateLimit, enforceRateLimit, RATE_LIMITS } from "@/server/modules/rate-limit";
 import { bumpTrackDailyStat, utcDay } from "@/server/modules/stats";
 import { trackAccessSelect } from "@/server/modules/visibility";
@@ -61,6 +62,12 @@ export async function setTrackLike(
       if (delta && existing && utcDay(existing.createdAt).getTime() === utcDay(now).getTime()) {
         await bumpTrackDailyStat(tx, trackId, "likes", -1, now);
       }
+    }
+
+    if (delta) {
+      const target = { recipientId: track.creatorId, actorId: userId, type: "TRACK_LIKE" as const, trackId };
+      if (delta > 0) await notify(tx, { ...target, now });
+      else await unnotify(tx, target);
     }
 
     if (delta) {
