@@ -26,8 +26,8 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 |---|---|
 | M0 Foundation reset | **done** (see "M0 summary" below) |
 | M1 Accounts & profiles | **done** (see "M1 summary") |
-| M2 Upload & editing | **next** (see "Next up") |
-| M3 Listening | not started |
+| M2 Upload & editing | **done** (see "M2 summary") |
+| M3 Listening | **next** (see "Next up") |
 | M4 Social loop | not started |
 | M5 Discovery | not started |
 | M6 Creator tools & plans | not started |
@@ -68,24 +68,37 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 | UI: profiles | `(player)/[username]/*` | `ProfileShell` + real routes `/ (all) /popular-tracks /tracks /albums /sets /reposts /likes /followers /following`; infinite scroll + "Load more" (`ProfileList`, `UserList`); Spotlight on All; `FollowButton`; "Who to follow" on Home. |
 | Tests | integration `accounts`, `follow`; unit `passwords`, `onboarding-rule`; e2e `accounts.e2e.spec.ts` (J2, AU-2 retry, follow/unfollow, rename redirect, reset, verify banner) | e2e `signUp` helper now marks the user verified+onboarded by default (`{verified:false, onboarded:false}` to opt out) and `latestEmailLink()` reads LOGGED emails. |
 
+**M2 summary: what exists now** (upload, editing, plans page)
+
+| Area | Where | Notes |
+|---|---|---|
+| Field schemas | `src/lib/track-fields.ts`, `src/lib/collection-fields.ts` | Shared zod schemas for every PRD 7.3/7.4 field (+ ISRC normaliser, key list, licenses, `titleFromFilename`, default preview start, schedule rule). Used by forms and procedures. |
+| Publishing | `server/modules/publishing/{index,fields,edit,genre}.ts` | `publishTrack` / `publishCollection` take the full field set (per-track overrides over release defaults); `resolveVisibility` implements the privacy transitions (public sets `publishedAt` once, scheduling is Pro + 5 min..1 year, scheduled feed entries are dated at `publishAt`); `assertUploadQuota` (UP-8, also in `markUploadComplete`, which deletes the object when over quota); `updateTrack`, `deleteTrack`, `replaceTrackAudio` (Pro), `resetTrackSecret`, `trackDeleteImpact`, `slugAvailability`/`renameSlug` (SlugRedirect), `normaliseCollection` + `lockCollection`. |
+| Collections | `server/modules/collections/edit.ts` | `updateCollection` (type change needs a date, first-public activity once, apply genre/tags to own tracks, label/publisher to own tracks lacking them), `addTracksToCollection` (own tracks of any visibility, others' only if public, max 500, appended), `removeTrackFromCollection`, `reorderCollection` (stale list refused), `deleteCollection` (optionally the owner's own tracks only). All serialised per collection by an advisory lock. |
+| Routers | `tracks` (+ `forEdit`, `update`, `delete`, `deleteImpact`, `resetSecret`, `checkSlug`, `replaceAudio`, `mine`), `collections` (+ `forEdit`, `update`, `checkSlug`, `resetSecret`, `addTracks`, `removeTrack`, `reorder`, `delete`), `upload` (+ `quota`; `createTrack`/`createCollection` take the new schemas), `plans` (`entitlements`, `setPlan`) | `accountProcedure` (`ctx.account` = id + fresh plan) underlies `verifiedProcedure`. |
+| Upload UI | `src/components/upload/*`, `src/store/uploadBatch.ts`, `src/trpc/vanilla.ts` | Zustand store runs the per-file pipeline Queued -> Uploading -> Analysing -> Verifying -> Ready/Failed (3 uploads, 2 decodes, retry/remove). `UploadApp` (drop zone, "make a playlist" checkbox, usage bar, rejected files), `SingleTrackStage`, `ReleaseStage` (release details, dnd-kit sortable list with keyboard support, bulk actions, privacy warning), `TrackFieldsEditor` (4 tabs; PRO tags + upsell dialog). |
+| Edit UI | `src/components/editor/*`, `(player)/studio/{tracks,sets}/[id]/edit` | `TrackEditor` (all fields, secret link box, replace audio, delete with consequences), `CollectionEditor` (Basic / Tracks / Metadata, live reorder, add tracks, delete with two options), success `PublishedBanner` (`?new=1|private|scheduled`) and owner `OwnerVisibilityBanner` on track and collection pages, Edit buttons. |
+| Plan page | `(player)/settings/plan` | PL-1/PL-2 comparison + demo upgrade/downgrade, creates a SYSTEM notification row (nothing reads notifications yet). |
+| Tests | integration `editing.test.ts` (24), unit `track-fields.test.ts`, e2e `upload.e2e.spec.ts` (J3, J4, J7, J8, quota, UP-2/UP-5, UP-3, editing) | e2e replaces object storage with the DB through `mockUploadStorage()` (tRPC batches procedures into one request: the mock answers each by name), so no R2 credentials are needed; the opt-in real-R2 journey (`upload-playback.e2e.spec.ts`) was updated to the new UI. |
+
 **Deliberately deferred / deviations** (each has an owner milestone):
 
-- No crop UI for avatar/banner (PRD 9.2): the server centre-crops to the target aspect. Add a crop dialog in M8 polish if wanted.
-- AU-6 session list shows device and last activity but no approximate location; AU-8 "set a password on a Google-only account" is done through "Forgot your password?" (Better Auth's `setPassword` is server-only).
-- Unlinking Google needs a recent sign-in (Better Auth `freshAge`); the message is shown as is.
-- Block, per-type notification preferences, message policy enforcement: M4/M7 (the settings toggles that exist only store values).
-- Navbar: bell and message icons were removed (no dead controls) until M4/M7; the full GL-1 menu (Feed, Library, Studio, Plan, Admin) arrives with those pages.
-- Full-text + trigram search columns (M5); upload-time quota UP-8 (M2); repost/notification flows (M4).
-- The onboarding redirect is a client guard (layouts cannot see the pathname); the page itself and all API rules are server-side.
+- The 30 s preview window is a slider (not a draggable window on the waveform); only the player/Discover preview in M5 (DI-4) will use it.
+- ID3/Vorbis tag reading to prefill metadata (UP-9, P2) is not done; titles come from file names.
+- Studio list pages (`/studio/tracks`, `/studio/sets`) and bulk edit are M6; the entry points to the editors (pencil on the hero, Edit on collections, banners) exist.
+- Playlists created by users ("Create a playlist" dialog, add-to-playlist) are M3; collections can be created today only by uploading, and edited in the editor.
+- Collection "Liked by"/likes, reposts, notifications: M4. Email notification of plan changes: M4.
+- Image uploads have no crop UI (M1 note still applies). Replacing audio re-runs the whole upload pipeline for one file.
+- Quota counts the durations of existing tracks only; READY-but-unpublished uploads do not count until published.
 
-**Next up: M2 Upload & editing** (PRD §7; exit: journeys J3, J4, J7, J8)
+**Next up: M3 Listening** (PRD §8; exit: journeys J1, J5, Lighthouse targets on the track page)
 
-1. Rebuild `/upload` as the two-stage page (choose files with drop zone, "make a playlist when multiple files" checkbox, quota bar) and the per-file pipeline states Queued -> Uploading -> Analysing -> Verifying -> Ready/Failed with Retry/Remove, 3 parallel uploads, 2 decodes (UP-1..UP-8, 7.2). Enforce upload-time quota (`UPLOAD_LIMIT_REACHED`, UP-8) in `markUploadComplete` and at publish using `getEntitlements`.
-2. Single-track editor (tabs Basic info / Metadata / Permissions / Advanced, 7.3) incl. permalink availability check, tags chip input, genres, license, scheduled privacy (PRO via `requireEntitlement`), 30 s preview picker; release editor with release artwork, type segmented control, bulk actions, drag-and-drop with `@dnd-kit`, parent/child privacy warning (7.4).
-3. Edit routes `/studio/tracks/[id]/edit`, `/studio/sets/[id]/edit` (7.5, 7.6): slug change writes `SlugRedirect`, secret reset, replace audio (PRO), delete track/collection with consequence text, collection track reorder under an advisory lock, Studio list pages (ST-*) can wait for M6 but the entry points (pencil, menus) are M2.
-4. Extend `publishTrack/publishCollection` and `tracks.*`/`collections.*` routers with every field of the PRD tables (`TrackInput` is intentionally small today), `publishedAt` only on the first time public (ED-2), `publicTrackCount` recount on privacy change.
-5. Success banners after save (UP-10, UP-15), `beforeunload` guard, secret-link copy UI.
-6. Tests: integration per rule (quota, slug redirects, privacy transitions, scheduling with the injectable clock, bulk edit), e2e J3, J4, J7 (secret link UI), J8.
+1. Player upgrades (PL-P1..P11): shuffle/repeat, queue model (context + user queue + history), Next up panel, Play next / Add to Next up in every row menu, autoplay hook (related tracks come in M5, leave the seam), persistence in `localStorage`, keyboard shortcuts, Media Session actions, play-progress beacon `POST /api/plays/:id/progress`, single-tab playback via `BroadcastChannel`, presigned URL expiry recovery.
+2. Mobile layout (GL-4/GL-5): bottom tab bar, mini player, full-screen player sheet.
+3. Track page completion (8.3: related sidebar placeholder, In albums/playlists, liked-by/reposted-by come with M4, metadata block, SEO JSON-LD, Twitter card) and collection page (8.4: Play/Shuffle, actions, per-row menus, equaliser icon, unavailable rows already done).
+4. Add-to-playlist dialog (8.5) + playlist creation (`collections.createPlaylist`), library entry points, share dialog + embeds (`/embed/track/[id]`, `frame-ancestors`), downloads route (`/api/tracks/:id/download`, DL-1), `#t=` time links.
+5. Waveform extras (WF-2..WF-4: click-to-load, clustered comment markers, live comment bubble), Settings toggle `showWaveformComments`.
+6. Tests: e2e J1 and J5 (needs add-to-playlist), a11y checks on the player, Lighthouse run on a production build.
 
 **Environment gotchas for agents (cloud sandbox)**
 
@@ -347,3 +360,10 @@ Rendering (`buildWaveformBars` in `lib/waveform-utils.ts`): bar count = display 
 - UI: sign in/up pages + modal with action retry, forgot/reset/verify pages, three-step onboarding with the client guard, settings (5 pages), profile as real routes with paging, follow buttons, Home "Who to follow", navbar menu (profile, likes, following, settings).
 - Tests: 18 new integration (follow concurrency/limits/blocks, usernames, onboarding, avatars, deletion + recount, verified gate, suggestions), 6 unit, 8 e2e (incl. J2 via the LOGGED verification email). Totals when this entry was written: unit 59, integration 116, e2e 41 (+1 opt-in R2), lint 0 warnings, types clean.
 - Learned: `assert.rejects({cause:{...}})` does a deep comparison against the error class, so use predicate validators (`withAppCode`); Better Auth's `unlinkAccount` takes the account row id, not the provider; Playwright strict mode trips on `getByLabel("Password")` when a "Show password" button exists (use `exact`); the Next route announcer is also `role="alert"`; the cached session cookie lags DB changes by up to 5 minutes, so anything gating on it (onboarding, verification) must read the DB or merge server-resolved values (`AuthProvider` does).
+
+### Session 13 - PRD M2 (upload and editing), branch `dev`
+- Server: full field set, privacy/scheduling rules, upload-time quota (publish and verify), update/delete/replace-audio/secret reset, slug redirects, collection edit operations under advisory locks; `plans` router + `/settings/plan`.
+- UI: new upload page with the Queued..Ready pipeline, single and release editors (dnd-kit, bulk actions, privacy warning), edit pages for tracks and collections, success/owner banners.
+- Bugs found by the new tests and fixed: the sticky Save bar covered the Delete button at the bottom of the editors; the profile Albums/Playlists tabs rendered collections as tracks (M1 bug in `ProfileList`); `storage_deletion` update after a concurrent delete threw (now `updateMany`).
+- Totals when this entry was written: unit 64, integration 140, e2e 49 (+1 opt-in R2), lint 0 warnings, types clean.
+- Learned: tRPC batches calls issued in the same tick into one request (`/api/trpc/a,b`), so Playwright mocks must route on `upload.*` and answer per procedure; `getByLabel("Title")` matches labels that contain hint text only without `exact`; keyboard drag-and-drop in dnd-kit needs a short pause between key presses in Playwright.

@@ -1,4 +1,4 @@
-import type { APIRequestContext, Browser, BrowserContext, Page, Route } from "@playwright/test";
+import type { APIRequestContext, Browser, BrowserContext, Page } from "@playwright/test";
 
 import { createPrismaClient } from "../../src/server/prisma-client";
 

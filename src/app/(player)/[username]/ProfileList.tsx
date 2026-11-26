@@ -18,7 +18,7 @@ type Item = TabPage["items"][number];
 function trackOf(item: Item): PlayerTrack | null {
   if ("kind" in item) return item.kind === "track" ? (item as { track: PlayerTrack }).track : null;
   if ("isPlaylist" in item) return null;
-  return "slug" in item && "durationMs" in item ? (item as unknown as PlayerTrack) : null;
+  return "slug" in item && "durationMs" in item ? (item) : null;
 }
 
 /**

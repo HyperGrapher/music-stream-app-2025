@@ -2,7 +2,7 @@ import { DeleteObjectsCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/c
 import { expect, test } from "@playwright/test";
 import sharp from "sharp";
 
-import { db, signUp } from "./helpers";
+import { db, signUp, sineWav } from "./helpers";
 
 /**
  * The whole creator journey against REAL Cloudflare R2: browser upload -> in-browser waveform
@@ -46,28 +46,6 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-/** 3 s, 8 kHz, mono, 16-bit PCM sine wave: small, and every browser can decode it. */
-function sineWav(seconds = 3, sampleRate = 8000) {
-  const samples = seconds * sampleRate;
-  const buffer = Buffer.alloc(44 + samples * 2);
-  buffer.write("RIFF", 0);
-  buffer.writeUInt32LE(36 + samples * 2, 4);
-  buffer.write("WAVEfmt ", 8);
-  buffer.writeUInt32LE(16, 16);
-  buffer.writeUInt16LE(1, 20); // PCM
-  buffer.writeUInt16LE(1, 22); // mono
-  buffer.writeUInt32LE(sampleRate, 24);
-  buffer.writeUInt32LE(sampleRate * 2, 28);
-  buffer.writeUInt16LE(2, 32);
-  buffer.writeUInt16LE(16, 34);
-  buffer.write("data", 36);
-  buffer.writeUInt32LE(samples * 2, 40);
-  for (let i = 0; i < samples; i++) {
-    buffer.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / sampleRate) * 12000), 44 + i * 2);
-  }
-  return buffer;
-}
-
 test("upload, analyse in the browser, publish and play", async ({ page, baseURL }) => {
   const user = await signUp(page.request, baseURL!);
   userId = user.id;
@@ -84,12 +62,8 @@ test("upload, analyse in the browser, publish and play", async ({ page, baseURL 
   });
 
   await page.goto("/upload");
-  await page.locator("#files").setInputFiles({
-    name: "tone.wav",
-    mimeType: "audio/wav",
-    buffer: sineWav(),
-  });
-  await expect(page.getByText("Upload complete")).toBeVisible({ timeout: 45_000 });
+  await page.locator("#files").setInputFiles({ name: "tone.wav", mimeType: "audio/wav", buffer: sineWav(3) });
+  await expect(page.locator('[data-state="ready"]')).toBeVisible({ timeout: 45_000 });
 
   // The browser decoded the file and the server stored duration + waveform.
   const asset = await db.mediaAsset.findFirstOrThrow({
@@ -106,13 +80,7 @@ test("upload, analyse in the browser, publish and play", async ({ page, baseURL 
   })
     .jpeg()
     .toBuffer();
-  await page.getByRole("button", { name: "Continue to Details" }).click();
-  await page.locator('input[type="file"][accept*="image"]').setInputFiles({
-    name: "cover.jpg",
-    mimeType: "image/jpeg",
-    buffer: jpeg,
-  });
-  await page.getByRole("button", { name: "Upload Artwork" }).click();
+  await page.getByTestId("upload-artwork").setInputFiles({ name: "cover.jpg", mimeType: "image/jpeg", buffer: jpeg });
   await expect(page.getByAltText("Artwork preview")).toBeVisible({ timeout: 30_000 });
   const artwork = await db.mediaAsset.findFirstOrThrow({
     where: { ownerId: user.id, kind: "IMAGE", status: "READY" },
@@ -127,21 +95,9 @@ test("upload, analyse in the browser, publish and play", async ({ page, baseURL 
     [96, 320, 640].map((w) => `artworks/${user.id}/${artwork.id}/${w}.webp`).sort(),
   );
 
-  const published = await page.request.post("/api/trpc/upload.createTrack?batch=1", {
-    headers: { origin: baseURL! },
-    data: {
-      0: {
-        json: {
-          title: "E2E Tone",
-          mediaAssetId: asset.id,
-          artworkAssetId: artwork.id,
-          genre: "electronic",
-          privacy: "public",
-        },
-      },
-    },
-  });
-  expect(published.ok()).toBe(true);
+  await page.getByLabel("Title").first().fill("E2E Tone");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page).toHaveURL(/\/e2e-tone\?new=1$/);
   const track = await db.track.findFirstOrThrow({ where: { audioAssetId: asset.id }, include: { creator: true } });
   expect(track.slug).toBe("e2e-tone");
 
