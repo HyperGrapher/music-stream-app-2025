@@ -136,7 +136,7 @@ export function CollectionEditor({ initial, returnTo }: { initial: Data; returnT
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 text-white">
+    <div className="mx-auto max-w-3xl space-y-6 px-4 pt-8 pb-48 text-white">
       <header>
         <p className="text-xs tracking-wide text-orange-400 uppercase">Edit {type === "PLAYLIST" ? "playlist" : "release"}</p>
         <h1 className="text-2xl font-bold">{initial.title}</h1>
