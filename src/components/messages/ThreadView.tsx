@@ -151,7 +151,7 @@ export function ThreadView({ conversationId }: { conversationId: string }) {
           const el = event.currentTarget;
           stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
         }}
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-3"
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6"
       >
         {cursor ? (
           <div className="mb-3 text-center">
@@ -159,23 +159,28 @@ export function ThreadView({ conversationId }: { conversationId: string }) {
           </div>
         ) : null}
         {messages.length === 0 ? <p className="py-10 text-center text-sm text-zinc-400">No messages yet. Say hello to {other.name}.</p> : null}
-        <ol aria-label={`Messages with ${other.name}`} className="space-y-1.5">
+        <ol aria-label={`Messages with ${other.name}`} className="mx-auto flex max-w-3xl flex-col">
           {messages.map((m, i) => {
             const previous = messages[i - 1];
             const at = new Date(m.at);
+            const newDay = !previous || !isSameDay(new Date(previous.at), at);
+            // Messages from the same person within 5 minutes sit closer together; a change of speaker gets more air.
+            const grouped = !newDay && previous.mine === m.mine && at.getTime() - new Date(previous.at).getTime() < 5 * 60_000;
             return (
-              <li key={m.id}>
-                {!previous || !isSameDay(new Date(previous.at), at) ? <p className="my-3 text-center text-xs text-zinc-400">{dayLabel(at)}</p> : null}
-                <div className={cn("group flex items-end gap-1", m.mine ? "flex-row-reverse" : "flex-row")}>
-                  <div className={cn("max-w-[80%] rounded-2xl px-3 py-2 text-sm", m.mine ? "rounded-br-md bg-orange-700 text-white" : "rounded-bl-md bg-zinc-800 text-zinc-100")}>
-                    {m.removed ? <p className="text-zinc-300 italic">Message removed</p> : <MessageText body={m.body} />}
-                    {m.cards.map((card) => <MessageCard key={card.url} card={card} />)}
+              <li key={m.id} className={cn(grouped ? "mt-1" : "mt-4", i === 0 && "mt-0")}>
+                {newDay ? <p className="mt-2 mb-4 text-center text-xs font-medium text-zinc-400">{dayLabel(at)}</p> : null}
+                <div className={cn("group flex items-start gap-1", m.mine ? "flex-row-reverse" : "flex-row")}>
+                  <div className={cn("flex max-w-[85%] flex-col sm:max-w-[75%]", m.mine ? "items-end" : "items-start")}>
+                    <div className={cn("rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words", m.mine ? "rounded-br-md bg-orange-700 text-white" : "rounded-bl-md bg-zinc-800 text-zinc-100")}>
+                      {m.removed ? <p className="text-zinc-300 italic">Message removed</p> : <MessageText body={m.body} />}
+                      {m.cards.map((card) => <MessageCard key={card.url} card={card} />)}
+                    </div>
+                    <time dateTime={at.toISOString()} className="mt-1 px-1 text-[11px] text-zinc-400">{format(at, "p")}</time>
                   </div>
-                  <time dateTime={at.toISOString()} className="shrink-0 pb-1 text-[11px] text-zinc-400">{format(at, "p")}</time>
                   {!m.mine && !m.removed ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button type="button" aria-label="Message actions" className="rounded-full p-1 text-zinc-400 opacity-0 group-hover:opacity-100 hover:bg-zinc-800 hover:text-white focus-visible:opacity-100 data-[state=open]:opacity-100"><MoreHorizontal className="h-4 w-4" /></button>
+                        <button type="button" aria-label="Message actions" className="mt-2 rounded-full p-1 text-zinc-400 opacity-0 group-hover:opacity-100 hover:bg-zinc-800 hover:text-white focus-visible:opacity-100 data-[state=open]:opacity-100"><MoreHorizontal className="h-4 w-4" /></button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start">
                         <DropdownMenuItem onSelect={() => startReport(true, { targetType: "MESSAGE", targetId: m.id, label: "this message" })}>Report message</DropdownMenuItem>
