@@ -86,10 +86,10 @@ export function trackPermalink(
  * but their owner (TR-3).
  */
 export function toTrackDto(
-  row: TrackDtoRow & { likes?: { userId: string }[] },
+  row: TrackDtoRow & { likes?: { userId: string }[]; reposts?: { userId: string }[] },
   options: { viewerId?: string | null; access?: AccessParams; secretForPermalink?: string | null } = {},
-): PlayerTrack & { likedByMe: boolean; slug: string; permalink: string; creatorId: string } {
-  const { artworkAsset, audioAsset, creator, likes, ...track } = row;
+): PlayerTrack & { likedByMe: boolean; repostedByMe: boolean; slug: string; permalink: string; creatorId: string } {
+  const { artworkAsset, audioAsset, creator, likes, reposts, ...track } = row;
   const mimeType = audioAsset.mimeType;
   const analysis = audioAsset.audioAnalysis;
   const urls = trackUrls(track.id, { waveformVersion: analysis?.waveformVersion, access: options.access });
@@ -110,6 +110,7 @@ export function toTrackDto(
     waveformStatus: analysis?.status ?? "FAILED",
     waveformUrl: analysis?.status === "READY" ? urls.waveformUrl : null,
     likedByMe: (likes?.length ?? 0) > 0,
+    repostedByMe: (reposts?.length ?? 0) > 0,
     ...art,
   };
 }
@@ -118,5 +119,6 @@ export function toTrackDto(
 export function likedByMeSelect(viewerId: string | null | undefined) {
   return {
     likes: { where: { userId: viewerId ?? "" }, select: { userId: true }, take: 1 },
+    reposts: { where: { userId: viewerId ?? "" }, select: { userId: true }, take: 1 },
   } as const;
 }

@@ -7,7 +7,6 @@ import {
   Pencil,
   Play,
   Plus,
-  Repeat2,
   Share2,
 } from "lucide-react";
 import Link from "next/link";
@@ -24,6 +23,7 @@ import { TrackMenu, absoluteUrl, copyText } from "@/components/player/TrackMenu"
 import type { PlayerTrack } from "@/types/player-track";
 import { CommentMarkers } from "./CommentMarkers";
 import { LikeButton } from "./LikeButton";
+import { RepostButton } from "./RepostButton";
 import WaveformVisualizer from "./WaveformVisualizer";
 import { ARTWORK_SIZES } from "@/lib/artwork";
 import { genreLabel } from "@/lib/genres";
@@ -187,13 +187,7 @@ export function TrackDetailHero({ track, editHref }: { track: PlayerTrack & { li
             >
               <Copy className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              className={roundActionClass}
-              aria-label="Repost track"
-            >
-              <Repeat2 className="h-4 w-4" />
-            </button>
+            <RepostButton kind="track" id={track.id} ownerId={track.userId} isPrivate={track.isPrivate} initialReposted={track.repostedByMe} initialCount={track.repostCount ?? 0} variant="round" className={roundActionClass} />
             <button
               type="button"
               className={roundActionClass}

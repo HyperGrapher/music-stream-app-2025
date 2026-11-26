@@ -7,7 +7,6 @@ import {
   Pause,
   Play,
   Link2,
-  Repeat2,
   Share2,
 } from "lucide-react";
 import Link from "next/link";
@@ -19,6 +18,7 @@ import { useDialogs } from "@/store/dialogs";
 import { TrackMenu, copyText, absoluteUrl } from "@/components/player/TrackMenu";
 import type { PlayerTrack as Track } from "@/types/player-track";
 import { LikeButton } from "./LikeButton";
+import { RepostButton } from "./RepostButton";
 import WaveformVisualizer from "./WaveformVisualizer";
 import { ARTWORK_SIZES } from "@/lib/artwork";
 import { genreLabel } from "@/lib/genres";
@@ -190,13 +190,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
               variant="pill"
               className={actionClass}
             />
-            <button
-              type="button"
-              className={actionClass}
-              aria-label="Repost track"
-            >
-              <Repeat2 className="h-3.5 w-3.5" /> {track.repostCount ?? 0}
-            </button>
+            <RepostButton kind="track" id={track.id} ownerId={track.userId} isPrivate={track.isPrivate} initialReposted={track.repostedByMe} initialCount={track.repostCount ?? 0} variant="pill" className={actionClass} />
             <button
               type="button"
               className={actionClass}

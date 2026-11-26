@@ -50,6 +50,8 @@ export const collectionsRouter = createTRPCRouter({
         ...collectionDtoSelect,
         secretToken: true,
         moderationState: true,
+        likes: { where: { userId: viewerId ?? "" }, select: { userId: true }, take: 1 },
+        reposts: { where: { userId: viewerId ?? "" }, select: { userId: true }, take: 1 },
         tracks: {
           orderBy: { position: "asc" as const },
           select: {
@@ -104,6 +106,8 @@ export const collectionsRouter = createTRPCRouter({
         status: "ok" as const,
         collection: {
           ...toCollectionDto(collection, { secret }),
+          likedByMe: collection.likes.length > 0,
+          repostedByMe: collection.reposts.length > 0,
           isOwner: access === "owner",
           viaSecret: access === "secret",
           secretToken: access === "owner" ? collection.secretToken : null,

@@ -1,12 +1,12 @@
 import type { PlayerTrack } from "@/types/player-track";
-import { getSessionUser } from "@/server/session-user";
+import { requireUser } from "../requireUser";
 import { api } from "@/trpc/server";
 
 import { ProfileList } from "../../[username]/ProfileList";
 import { LikesActions } from "../LikesActions";
 
 export default async function Page() {
-  const user = (await getSessionUser())!;
+  const user = await requireUser("/you/likes");
   const initial = await api.profiles.tabPage({ username: user.username, tab: "likes" });
   const tracks = initial.items.flatMap((item) => ("kind" in item && item.kind === "track" ? [item.track as PlayerTrack] : []));
   return (

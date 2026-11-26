@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { CollectionCard } from "@/app/_components/CollectionCard";
 import { TrackCard } from "@/app/_components/TrackCard";
-import { getSessionUser } from "@/server/session-user";
+import { requireUser } from "../requireUser";
 import { api } from "@/trpc/server";
 
 import type { PlayerTrack } from "@/types/player-track";
@@ -18,7 +18,7 @@ function Section({ title, href, children, empty }: { title: string; href: string
 
 /** `/you/library` (LB-1): the latest six of each section. */
 export default async function Page() {
-  const user = (await getSessionUser())!;
+  const user = await requireUser("/you/library");
   const [history, likes, playlists, albums, following] = await Promise.all([
     api.library.history({ limit: 6 }),
     api.profiles.tabPage({ username: user.username, tab: "likes" }),

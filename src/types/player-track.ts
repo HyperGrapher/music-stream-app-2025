@@ -30,6 +30,8 @@ export interface PlayerTrack {
   likeCount?: number;
   /** Whether the signed-in viewer liked this track (absent for anonymous viewers). */
   likedByMe?: boolean;
+  /** Whether the signed-in viewer reposted this track. */
+  repostedByMe?: boolean;
   commentCount?: number;
   repostCount?: number;
   downloadCount?: number;

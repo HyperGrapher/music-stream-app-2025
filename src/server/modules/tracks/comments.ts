@@ -37,6 +37,7 @@ const authorSelect = {
 } as const;
 const commentSelect = {
   id: true,
+  likeCount: true,
   content: true,
   timestampSeconds: true,
   parentId: true,
@@ -44,12 +45,18 @@ const commentSelect = {
   author: authorSelect,
 } as const;
 
+/** Whether the viewer liked each comment (anonymous viewers match nothing). */
+const likedByViewer = (viewerId: string | null | undefined) =>
+  ({ likes: { where: { userId: viewerId ?? "" }, select: { userId: true }, take: 1 } }) as const;
+
 interface Viewer {
   id: string | null | undefined;
 }
 
 type CommentRow = {
   id: string;
+  likeCount: number;
+  likes?: { userId: string }[];
   content: string;
   timestampSeconds: number | null;
   parentId: string | null;
@@ -67,6 +74,8 @@ function toItem(row: CommentRow, trackCreatorId: string, viewer: Viewer) {
   return {
     id: row.id,
     content: row.content,
+    likeCount: row.likeCount,
+    likedByMe: (row.likes?.length ?? 0) > 0,
     timestampSeconds: row.timestampSeconds,
     parentId: row.parentId,
     createdAt: row.createdAt,
@@ -134,10 +143,11 @@ export async function listComments(
     take: 100,
     select: {
       ...commentSelect,
+      ...likedByViewer(viewer.id),
       replies: {
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         take: 100,
-        select: commentSelect,
+        select: { ...commentSelect, ...likedByViewer(viewer.id) },
       },
     },
   });

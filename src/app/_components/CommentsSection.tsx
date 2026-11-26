@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { MessageCircle, Play } from "lucide-react";
+import { Heart, MessageCircle, Play } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useShallow } from "zustand/react/shallow";
@@ -34,6 +34,46 @@ function TimeChip({ seconds, onClick }: { seconds: number; onClick: () => void }
     >
       <Play className="h-2.5 w-2.5 fill-current" />
       {formatDuration(seconds)}
+    </button>
+  );
+}
+
+/** `@username` in a comment becomes a link to that profile (CM-4). */
+function CommentText({ content }: { content: string }) {
+  return (
+    <>
+      {content.split(/((?:^|(?<=[^a-z0-9_-]))@[a-z0-9][a-z0-9_-]{2,24})/gi).map((part, index) =>
+        /^@[a-z0-9]/i.test(part) ? (
+          <Link key={index} href={`/${part.slice(1).toLowerCase()}`} className="text-orange-400 hover:underline">{part}</Link>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
+function CommentLike({ comment, track }: { comment: Comment; track: PlayerTrack }) {
+  const { user } = useUser();
+  const [state, setState] = useState({ liked: comment.likedByMe, count: comment.likeCount });
+  const [seen, setSeen] = useState({ liked: comment.likedByMe, count: comment.likeCount });
+  if (seen.liked !== comment.likedByMe || seen.count !== comment.likeCount) {
+    setSeen({ liked: comment.likedByMe, count: comment.likeCount });
+    setState({ liked: comment.likedByMe, count: comment.likeCount });
+  }
+  const mutation = api.engagement.setCommentLike.useMutation();
+  const perform = (liked: boolean) => {
+    if (mutation.isPending) return;
+    const before = state;
+    setState({ liked, count: Math.max(0, before.count + (liked ? 1 : -1)) });
+    mutation.mutate({ commentId: comment.id, liked, access: parseAccessQuery(track.accessQuery) }, {
+      onSuccess: (r) => setState({ liked: r.liked, count: r.likeCount }),
+      onError: (error) => { setState(before); toast.error(friendlyError(error, "Could not update your like")); },
+    });
+  };
+  return (
+    <button type="button" aria-pressed={state.liked} aria-label={state.liked ? "Unlike comment" : "Like comment"} onClick={() => (user ? perform(!state.liked) : useAuthPrompt.getState().show("Sign in to like comments", () => perform(true)))} className={`${smallButton} inline-flex items-center gap-1 ${state.liked ? "text-orange-400" : ""}`}>
+      <Heart className={`h-3 w-3 ${state.liked ? "fill-current" : ""}`} /> {state.count > 0 ? state.count : null}
     </button>
   );
 }
@@ -204,9 +244,10 @@ function CommentRow({
           </span>
         </div>
         <p className="mt-1 text-sm leading-6 break-words whitespace-pre-line text-zinc-200">
-          {comment.content}
+          <CommentText content={comment.content} />
         </p>
-        <div className="mt-1 flex gap-4">
+        <div className="mt-1 flex items-center gap-4">
+          <CommentLike comment={comment} track={track} />
           {onReply && (
             <button type="button" onClick={onReply} className={smallButton}>
               Reply
@@ -226,6 +267,8 @@ function CommentRow({
 function ThreadView({ thread, track }: { thread: Thread; track: PlayerTrack }) {
   const utils = api.useUtils();
   const [replying, setReplying] = useState(false);
+  const [allReplies, setAllReplies] = useState(false);
+  const shownReplies = allReplies ? thread.replies : thread.replies.slice(0, 3);
   const remove = api.comments.delete.useMutation({
     onSuccess: () => utils.comments.list.invalidate({ trackId: track.id }),
     onError: (error) => toast.error(error.message || "Could not delete the comment"),
@@ -245,7 +288,7 @@ function ThreadView({ thread, track }: { thread: Thread; track: PlayerTrack }) {
       />
       {(thread.replies.length > 0 || replying) && (
         <div className="ml-12 space-y-4 border-l border-zinc-800 pl-4">
-          {thread.replies.map((reply) => (
+          {shownReplies.map((reply) => (
             <CommentRow
               key={reply.id}
               comment={reply}
@@ -253,6 +296,9 @@ function ThreadView({ thread, track }: { thread: Thread; track: PlayerTrack }) {
               onDelete={() => confirmDelete(reply, false)}
             />
           ))}
+          {!allReplies && thread.replies.length > 3 && (
+            <button type="button" onClick={() => setAllReplies(true)} className={smallButton}>View {thread.replies.length - 3} more {thread.replies.length - 3 === 1 ? "reply" : "replies"}</button>
+          )}
           {replying && (
             <Composer track={track} parentId={thread.id} autoFocus onDone={() => setReplying(false)} />
           )}
@@ -267,7 +313,19 @@ export function CommentsSection({ track }: { track: PlayerTrack }) {
     trackId: track.id,
     access: parseAccessQuery(track.accessQuery),
   });
-  const threads = data?.comments ?? [];
+  const [sort, setSort] = useState<"newest" | "oldest" | "time">("newest");
+  const [visible, setVisible] = useState(20);
+  const sorted = [...(data?.comments ?? [])].sort((a, b) => {
+    if (sort === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (sort === "time") {
+      // Timed comments by second, general comments last (CM-2).
+      const at = a.timestampSeconds ?? Number.POSITIVE_INFINITY;
+      const bt = b.timestampSeconds ?? Number.POSITIVE_INFINITY;
+      return at === bt ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() : at - bt;
+    }
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+  const threads = sorted.slice(0, visible);
   const commentsEnabled = data?.commentsEnabled ?? true;
 
   return (
@@ -276,7 +334,11 @@ export function CommentsSection({ track }: { track: PlayerTrack }) {
         <h2 id="comments-heading" className="text-xs font-bold tracking-wide uppercase">
           {data?.total ?? 0} {data?.total === 1 ? "comment" : "comments"}
         </h2>
-        <span className="text-xs text-zinc-500">Newest</span>
+        <select aria-label="Sort comments" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300">
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="time">Track time</option>
+        </select>
       </div>
 
       <div className="mt-4">
@@ -305,6 +367,9 @@ export function CommentsSection({ track }: { track: PlayerTrack }) {
             <ThreadView key={thread.id} thread={thread} track={track} />
           ))}
         </ul>
+      )}
+      {sorted.length > visible && (
+        <button type="button" onClick={() => setVisible((v) => v + 20)} className="mt-6 w-full rounded border border-zinc-700 py-2 text-sm text-zinc-300 hover:border-zinc-500">Load more comments</button>
       )}
     </section>
   );
