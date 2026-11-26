@@ -100,8 +100,11 @@ test("J4: five files become an album: rename, reorder by keyboard, privacy warni
   const handle = page.getByRole("button", { name: /Reorder Track 1/ });
   await handle.focus();
   await page.keyboard.press("Space");
+  await page.waitForTimeout(150);
   await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(150);
   await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(150);
   await page.keyboard.press("Space");
   await expect(page.getByLabel("Title of track 3")).toHaveValue("Track 1");
 

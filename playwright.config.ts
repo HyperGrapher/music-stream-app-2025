@@ -22,6 +22,7 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${port}`,
     trace: "retain-on-failure",
+    screenshot: "only-on-failure",
     // Sandbox conveniences, all unset in CI: a preinstalled Chromium, and a proxy the browser must
     // use to reach the internet (only needed by the opt-in R2 test; localhost is never proxied).
     launchOptions: {
