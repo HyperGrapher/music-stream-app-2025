@@ -3,6 +3,7 @@ import { collectionsRouter } from "./routers/collections";
 import { commentsRouter } from "./routers/comments";
 import { discoverRouter } from "./routers/discover";
 import { engagementRouter } from "./routers/engagement";
+import { searchRouter } from "./routers/search";
 import { libraryRouter } from "./routers/library";
 import { feedRouter } from "./routers/feed";
 import { notificationsRouter } from "./routers/notifications";
@@ -26,6 +27,7 @@ export const appRouter = createTRPCRouter({
   notifications: notificationsRouter,
   feed: feedRouter,
   library: libraryRouter,
+  search: searchRouter,
   plans: plansRouter,
   profiles: profilesRouter,
   tracks: tracksRouter,
