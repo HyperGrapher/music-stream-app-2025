@@ -12,6 +12,7 @@ import { trackFieldsSchema } from "@/lib/track-fields";
 import { deleteTrack, replaceTrackAudio, resetTrackSecret, slugAvailability, trackDeleteImpact, updateTrack } from "@/server/modules/publishing/edit";
 import { RELEASE_TYPES, collectionPermalink } from "@/server/modules/collections/dto";
 import { resolveSlug, resolveUsername } from "@/server/modules/profiles/resolve";
+import { relatedTracks } from "@/server/modules/tracks/related";
 import { authorizeTrack } from "@/server/modules/tracks/authorize";
 import {
   creatorSelect,
@@ -238,6 +239,11 @@ export const tracksRouter = createTRPCRouter({
       runAfter(() => drainStorageDeletions(ctx.db, r2Client, { limit: 20 }));
       return result;
     }),
+
+  /** Related public tracks for the track page sidebar and autoplay (TR-8, PL-P5). */
+  related: publicProcedure
+    .input(z.object({ trackId: z.string().uuid(), limit: z.number().int().min(1).max(50).default(20) }))
+    .query(({ input, ctx }) => relatedTracks(ctx.db, { trackId: input.trackId, viewerId: ctx.session?.user.id ?? null, limit: input.limit })),
 
   /** Your own tracks (any visibility) for "add your tracks" pickers (ED-7). */
   mine: accountProcedure

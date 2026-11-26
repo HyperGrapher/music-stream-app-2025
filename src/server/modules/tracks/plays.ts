@@ -55,7 +55,12 @@ interface RecordPlayInput {
  * requests for the same listener+track, so parallel calls cannot both pass the "recent play"
  * check. The owner's own plays are stored (history) but never counted (PL-P9).
  */
-export async function recordPlay(
+export async function recordPlay(db: PrismaClient, input: RecordPlayInput): Promise<boolean> {
+  return (await recordPlayEvent(db, input)).counted;
+}
+
+/** Like `recordPlay`, but also returns the id of the event the listener's progress is reported against (a deduped play answers with the listener's most recent event). */
+export async function recordPlayEvent(
   db: PrismaClient,
   {
     trackId,
@@ -66,7 +71,7 @@ export async function recordPlay(
     countryCode = null,
     now = clockNow(),
   }: RecordPlayInput,
-): Promise<boolean> {
+): Promise<{ counted: boolean; eventId: string | null }> {
   const identity = listenerId ?? clientHash;
   const since = new Date(now.getTime() - PLAY_DEDUPE_WINDOW_MS);
 
@@ -79,12 +84,13 @@ export async function recordPlay(
         createdAt: { gte: since },
         ...(listenerId ? { listenerId } : { listenerId: null, clientHash }),
       },
+      orderBy: { createdAt: "desc" },
       select: { id: true },
     });
-    if (recent) return false;
+    if (recent) return { counted: false, eventId: recent.id };
 
     const track = await tx.track.findUnique({ where: { id: trackId }, select: { creatorId: true } });
-    if (!track) return false;
+    if (!track) return { counted: false, eventId: null };
     const counted = track.creatorId !== listenerId;
 
     // A collection only gets credit when it really contains the track.
@@ -95,7 +101,8 @@ export async function recordPlay(
         })
       : null;
 
-    await tx.playEvent.create({
+    const event = await tx.playEvent.create({
+      select: { id: true },
       data: {
         trackId,
         listenerId,
@@ -107,13 +114,13 @@ export async function recordPlay(
         createdAt: now,
       },
     });
-    if (!counted) return false;
+    if (!counted) return { counted: false, eventId: event.id };
 
     await tx.track.update({ where: { id: trackId }, data: { playCount: { increment: 1 } } });
     await bumpTrackDailyStat(tx, trackId, "plays", 1, now);
     if (credited) {
       await tx.collection.update({ where: { id: credited.collectionId }, data: { playCount: { increment: 1 } } });
     }
-    return true;
+    return { counted: true, eventId: event.id };
   });
 }

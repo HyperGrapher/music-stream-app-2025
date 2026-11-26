@@ -10,7 +10,7 @@ import {
   clientIpFromHeaders,
   computeClientHash,
   countryFromHeaders,
-  recordPlay,
+  recordPlayEvent,
 } from "@/server/modules/tracks/plays";
 import { trackAccessSelect } from "@/server/modules/visibility";
 
@@ -30,8 +30,9 @@ const bodySchema = z
 
 /**
  * Called by the player after a few seconds of actual listening. Always answers
- * 204 for a viewable track whether or not the play was counted (deduped plays
+ * the same shape for a viewable track whether or not the play was counted (deduped plays
  * are indistinguishable to the caller), so the counter gives no oracle for abuse.
+ * `eventId` is what the progress beacon reports against.
  */
 export async function POST(
   request: NextRequest,
@@ -59,7 +60,7 @@ export async function POST(
     request.headers.get("user-agent") ?? "",
     env.BETTER_AUTH_SECRET,
   );
-  await recordPlay(db, {
+  const { eventId } = await recordPlayEvent(db, {
     trackId,
     listenerId,
     clientHash,
@@ -68,5 +69,5 @@ export async function POST(
     countryCode: countryFromHeaders(request.headers),
   });
 
-  return new NextResponse(null, { status: 204 });
+  return NextResponse.json({ eventId });
 }

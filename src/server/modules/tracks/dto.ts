@@ -63,7 +63,7 @@ export const trackDtoSelect = {
   creator: creatorSelect,
   artworkAsset: imageAssetSelect,
   audioAsset: {
-    select: { audioAnalysis: { select: { status: true, waveformVersion: true } } },
+    select: { mimeType: true, audioAnalysis: { select: { status: true, waveformVersion: true } } },
   },
 } as const satisfies Prisma.TrackSelect;
 
@@ -88,6 +88,7 @@ export function toTrackDto(
   options: { viewerId?: string | null; access?: AccessParams; secretForPermalink?: string | null } = {},
 ): PlayerTrack & { likedByMe: boolean; slug: string; permalink: string; creatorId: string } {
   const { artworkAsset, audioAsset, creator, likes, ...track } = row;
+  const mimeType = audioAsset.mimeType;
   const analysis = audioAsset.audioAnalysis;
   const urls = trackUrls(track.id, { waveformVersion: analysis?.waveformVersion, access: options.access });
   const hideStats = !track.statsPublic && options.viewerId !== track.creatorId;
@@ -99,6 +100,7 @@ export function toTrackDto(
     duration: Math.round(track.durationMs / 1000),
     userId: creator.id,
     user: { name: creator.name, username: creator.username, image: userAvatarUrl(creator) },
+    mimeType,
     isPrivate: track.visibility !== "PUBLIC",
     permalink: trackPermalink({ slug: track.slug, creator }, options.secretForPermalink),
     streamUrl: urls.streamUrl,
