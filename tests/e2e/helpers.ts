@@ -115,33 +115,32 @@ export function sineWav(seconds = 2, sampleRate = 8000, hz = 440) {
  */
 export async function mockUploadStorage(page: Page, userId: string, baseURL: string) {
   type Call = { json: Record<string, unknown> };
-  const respond = (route: Route, outputs: unknown[]) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(outputs.map((json) => ({ result: { data: { json } } }))) });
-  const inputsOf = (route: Route) => Object.values(route.request().postDataJSON() as Record<string, Call>).map((c) => c.json);
 
   await page.route("**/__e2e-put/**", (route) => route.fulfill({ status: 200, body: "" }));
-  await page.route("**/api/trpc/upload.getUploadUrl*", async (route) => {
-    const outputs = [];
-    for (const input of inputsOf(route)) {
-      const id = crypto.randomUUID();
-      await db.mediaAsset.create({
-        data: { id, ownerId: userId, kind: "AUDIO", bucket: "e2e-bucket", storageKey: `uploads/${userId}/${id}-${String(input.filename)}`, originalFilename: String(input.filename), mimeType: String(input.contentType), expiresAt: new Date(Date.now() + 86_400_000) },
-      });
-      outputs.push({ uploadUrl: `${baseURL}/__e2e-put/${id}`, mediaAssetId: id });
+  // tRPC batches calls made in the same tick into one request (`/api/trpc/a,b,c`): answer each by its own procedure.
+  await page.route("**/api/trpc/upload.*", async (route) => {
+    const url = new URL(route.request().url());
+    const procedures = decodeURIComponent(url.pathname.split("/api/trpc/")[1] ?? "").split(",");
+    const body = route.request().postDataJSON() as Record<string, Call>;
+    if (!procedures.every((p) => ["upload.getUploadUrl", "upload.markUploadComplete", "upload.cancelUpload"].includes(p))) return route.fallback();
+    const outputs: unknown[] = [];
+    for (const [index, procedure] of procedures.entries()) {
+      const input = body[String(index)]!.json;
+      if (procedure === "upload.getUploadUrl") {
+        const id = crypto.randomUUID();
+        await db.mediaAsset.create({
+          data: { id, ownerId: userId, kind: "AUDIO", bucket: "e2e-bucket", storageKey: `uploads/${userId}/${id}-${String(input.filename)}`, originalFilename: String(input.filename), mimeType: String(input.contentType), expiresAt: new Date(Date.now() + 86_400_000) },
+        });
+        outputs.push({ uploadUrl: `${baseURL}/__e2e-put/${id}`, mediaAssetId: id });
+      } else if (procedure === "upload.markUploadComplete") {
+        const analysis = input.analysis as { durationMs: number; sampleRate: number; channels: number };
+        await db.mediaAsset.update({ where: { id: String(input.mediaAssetId) }, data: { status: "READY", uploadedAt: new Date(), byteSize: BigInt(1000) } });
+        await db.audioAnalysis.create({ data: { audioAssetId: String(input.mediaAssetId), status: "READY", durationMs: analysis.durationMs, sampleRate: analysis.sampleRate, channels: analysis.channels, completedAt: new Date() } });
+        outputs.push({ success: true, durationMs: analysis.durationMs });
+      } else {
+        outputs.push({ success: true, message: "canceled" });
+      }
     }
-    await respond(route, outputs);
-  });
-  await page.route("**/api/trpc/upload.markUploadComplete*", async (route) => {
-    const outputs = [];
-    for (const input of inputsOf(route)) {
-      const analysis = input.analysis as { durationMs: number; sampleRate: number; channels: number };
-      await db.mediaAsset.update({ where: { id: String(input.mediaAssetId) }, data: { status: "READY", uploadedAt: new Date(), byteSize: BigInt(1000) } });
-      await db.audioAnalysis.create({ data: { audioAssetId: String(input.mediaAssetId), status: "READY", durationMs: analysis.durationMs, sampleRate: analysis.sampleRate, channels: analysis.channels, completedAt: new Date() } });
-      outputs.push({ success: true, durationMs: analysis.durationMs });
-    }
-    await respond(route, outputs);
-  });
-  await page.route("**/api/trpc/upload.cancelUpload*", async (route) => {
-    await respond(route, inputsOf(route).map(() => ({ success: true })));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(outputs.map((json) => ({ result: { data: { json } } }))) });
   });
 }

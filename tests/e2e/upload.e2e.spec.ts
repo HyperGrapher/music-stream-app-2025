@@ -266,8 +266,8 @@ test("editing: change title and permalink (old URL redirects), then delete with 
   await page.getByRole("button", { name: "Delete this track" }).click();
   await expect(page.getByRole("dialog")).toContainText("1 comment");
   await page.getByRole("button", { name: "Delete forever" }).click();
-  await expect(page).toHaveURL(new RegExp(`/${username}$`));
-  expect(await db.track.count({ where: { id: track.id } })).toBe(0);
+  await expect.poll(() => db.track.count({ where: { id: track.id } })).toBe(0);
+  await expect(page).toHaveURL(new RegExp(`localhost:\\d+/${username}$`));
   expect((await page.goto(`/${username}/renamed-track`))?.status()).toBe(404);
   await context.close();
 });
