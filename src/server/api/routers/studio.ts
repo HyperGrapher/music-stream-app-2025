@@ -4,7 +4,7 @@ import { accountProcedure, createTRPCRouter } from "@/server/api/trpc";
 import { runAfter } from "@/server/after";
 import { r2Client } from "@/lib/r2";
 import { drainStorageDeletions } from "@/server/modules/storage/deletion";
-import { bulkDeleteTracks, bulkUpdateTracks, listStudioCollections, listStudioTracks, MAX_BULK, previewBulk, studioUsage, STUDIO_SORTS, STUDIO_VISIBILITY } from "@/server/modules/studio";
+import { getSpotlight, setSpotlight, bulkDeleteTracks, bulkUpdateTracks, listStudioCollections, listStudioTracks, MAX_BULK, previewBulk, studioUsage, STUDIO_SORTS, STUDIO_VISIBILITY } from "@/server/modules/studio";
 
 const ids = z.array(z.string().uuid()).min(1).max(MAX_BULK);
 const patch = z.object({
@@ -39,4 +39,10 @@ export const studioRouter = createTRPCRouter({
     runAfter(() => drainStorageDeletions(ctx.db, r2Client, { limit: 100 }));
     return result;
   }),
+
+  spotlight: accountProcedure.query(({ ctx }) => getSpotlight(ctx.db, ctx.account)),
+
+  setSpotlight: accountProcedure
+    .input(z.object({ items: z.array(z.object({ kind: z.enum(["track", "collection"]), id: z.string().uuid() })).max(5) }))
+    .mutation(({ input, ctx }) => setSpotlight(ctx.db, ctx.account, input.items)),
 });

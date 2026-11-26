@@ -132,6 +132,9 @@ export function Navbar({ initialUser }: NavbarProps) {
                   <Link href="/you/library">Library</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="hover:bg-gray-800">
+                  <Link href="/studio/tracks">Studio</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="hover:bg-gray-800">
                   <Link href="/settings/profile">Settings</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem

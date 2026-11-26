@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 
-const LINKS = [["/studio/tracks", "Tracks"], ["/studio/sets", "Albums & playlists"], ["/studio/insights", "Insights"]] as const;
+const LINKS = [["/studio/tracks", "Tracks"], ["/studio/sets", "Albums & playlists"], ["/studio/insights", "Insights"], ["/studio/spotlight", "Spotlight"]] as const;
 
 export function StudioNav() {
   const pathname = usePathname();

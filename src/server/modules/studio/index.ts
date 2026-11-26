@@ -8,6 +8,7 @@ import { collectionDtoSelect, toCollectionDto } from "@/server/modules/collectio
 import { getEntitlements, type Plan } from "@/server/modules/plans/entitlements";
 import { deleteTrack, updateTrack } from "@/server/modules/publishing/edit";
 import { usedUploadMs } from "@/server/modules/publishing/fields";
+import { planRequired } from "@/server/errors";
 import { effectiveVisibility } from "@/server/modules/visibility";
 
 export const STUDIO_PAGE_SIZE = 50;
@@ -172,4 +173,49 @@ export async function listStudioCollections(db: PrismaClient, userId: string, { 
     db.collection.count({ where }),
   ]);
   return { total, nextOffset: offset + limit < total ? offset + limit : null, items: rows.map(({ secretToken, ...row }) => ({ ...toCollectionDto(row), secretToken })) };
+}
+
+export interface SpotlightPick { kind: "track" | "collection"; id: string }
+
+/**
+ * SP-1: your spotlight (ordered) and what you may add: your own public tracks and collections. `limit` is the plan's
+ * allowance (PL-3: after a downgrade the extra items are kept but hidden on the profile; `hidden` says how many).
+ */
+export async function getSpotlight(db: PrismaClient, user: Viewer, now = clockNow()) {
+  const limit = getEntitlements(user).spotlightItems;
+  const rows = await db.spotlightItem.findMany({
+    where: { userId: user.id },
+    orderBy: { position: "asc" },
+    select: { track: { select: { id: true, title: true } }, collection: { select: { id: true, title: true } } },
+  });
+  const items = rows.flatMap<{ kind: "track" | "collection"; id: string; title: string }>((r) => (r.track ? [{ kind: "track", id: r.track.id, title: r.track.title }] : r.collection ? [{ kind: "collection", id: r.collection.id, title: r.collection.title }] : []));
+  const [tracks, collections] = await Promise.all([
+    db.track.findMany({ where: { AND: [{ creatorId: user.id }, visibilityWhere("public", now)] }, orderBy: [{ playCount: "desc" }, { id: "asc" }], take: 100, select: { id: true, title: true } }),
+    db.collection.findMany({ where: { ownerId: user.id, visibility: "PUBLIC", moderationState: "VISIBLE" }, orderBy: [{ createdAt: "desc" }, { id: "asc" }], take: 100, select: { id: true, title: true } }),
+  ]);
+  return { limit, items, hidden: Math.max(0, items.length - limit), options: { tracks, collections } };
+}
+
+/** Replaces the spotlight with `picks` (own public items only, at most the plan's allowance, no duplicates). */
+export async function setSpotlight(db: PrismaClient, user: Viewer, picks: SpotlightPick[], now = clockNow()) {
+  const limit = getEntitlements(user).spotlightItems;
+  const unique = picks.filter((p, i) => picks.findIndex((q) => q.kind === p.kind && q.id === p.id) === i);
+  if (unique.length > limit) {
+    if (user.plan === "PRO") throw new TRPCError({ code: "BAD_REQUEST", message: `You can spotlight up to ${limit} items` });
+    throw planRequired(`Free accounts can spotlight ${limit} item. Pro allows 5.`);
+  }
+  const trackIds = unique.filter((p) => p.kind === "track").map((p) => p.id);
+  const collectionIds = unique.filter((p) => p.kind === "collection").map((p) => p.id);
+  const [tracks, collections] = await Promise.all([
+    db.track.count({ where: { AND: [{ id: { in: trackIds } }, { creatorId: user.id }, visibilityWhere("public", now)] } }),
+    db.collection.count({ where: { id: { in: collectionIds }, ownerId: user.id, visibility: "PUBLIC", moderationState: "VISIBLE" } }),
+  ]);
+  if (tracks !== trackIds.length || collections !== collectionIds.length) throw new TRPCError({ code: "BAD_REQUEST", message: "You can only spotlight your own public tracks and collections" });
+  await db.$transaction(async (tx) => {
+    await tx.spotlightItem.deleteMany({ where: { userId: user.id } });
+    for (const [position, pick] of unique.entries()) {
+      await tx.spotlightItem.create({ data: { userId: user.id, position, ...(pick.kind === "track" ? { trackId: pick.id } : { collectionId: pick.id }) } });
+    }
+  });
+  return { count: unique.length };
 }

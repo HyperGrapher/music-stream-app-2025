@@ -153,7 +153,7 @@ describe("insights", () => {
     const result = await api.get({ range: "30" });
     assert.equal(result.totals.plays, 16);
     assert.deepEqual(result.breakdowns?.countries.map((c) => [c.country, c.plays]).sort(), [["DE", 1], ["TR", 2], ["Unknown", 1]]);
-    assert.deepEqual(Object.fromEntries(result.breakdowns!.sources.map((s) => [s.source, s.plays])), { HOME: 1, SEARCH: 1, FEED: 1, EMBED: 1 });
+    assert.deepEqual(Object.fromEntries(result.breakdowns.sources.map((s) => [s.source, s.plays])), { HOME: 1, SEARCH: 1, FEED: 1, EMBED: 1 });
     assert.deepEqual(result.breakdowns?.listeners.map((l) => [l.id, l.plays]), [[fan, 2]], "the user who hides from top listeners is left out");
     assert.equal((await api.get({ range: "365" })).weekly, true);
     const single = await api.get({ range: "30", trackId: t2.id });
@@ -161,5 +161,67 @@ describe("insights", () => {
     assert.equal(single.breakdowns?.countries.length, 0);
     await assert.rejects(api.get({ range: "7", trackId: "00000000-0000-4000-8000-000000000000" }), /not found/i);
     assert.ok(t1);
+  });
+});
+
+describe("spotlight (SP-1, PL-3)", () => {
+  it("Free pins one own public item, Pro five; private or foreign items are refused; downgrade hides the extras without deleting them", async () => {
+    const me = await createUser("sp-me");
+    const other = await createUser("sp-other");
+    const tracks = await Promise.all([1, 2, 3].map((n) => createTrack(me, { title: `sp${n}` })));
+    const priv = await createTrack(me, { title: "private", visibility: "PRIVATE" });
+    const theirs = await createTrack(other, { title: "theirs" });
+    const pick = (t: { id: string }) => ({ kind: "track" as const, id: t.id });
+    const api = callerFor(me).studio;
+
+    await api.setSpotlight({ items: [pick(tracks[0]!)] });
+    await assert.rejects(api.setSpotlight({ items: [pick(tracks[0]!), pick(tracks[1]!)] }), withAppCode("PLAN_REQUIRED"));
+    await makePro(me);
+    await assert.rejects(api.setSpotlight({ items: [pick(priv)] }), /own public/);
+    await assert.rejects(api.setSpotlight({ items: [pick(theirs)] }), /own public/);
+    await api.setSpotlight({ items: tracks.map(pick) });
+    assert.deepEqual((await api.spotlight()).items.map((i) => i.id), tracks.map((t) => t.id));
+
+    // downgrade: rows stay, the profile shows only the first
+    await db.user.update({ where: { id: me }, data: { plan: "FREE" } });
+    const state = await api.spotlight();
+    assert.equal(state.items.length, 3);
+    assert.equal(state.hidden, 2);
+    assert.equal(await db.spotlightItem.count({ where: { userId: me } }), 3);
+    const username = (await db.user.findUniqueOrThrow({ where: { id: me } })).username;
+    const shown = await callerFor().profiles.spotlight({ username });
+    assert.deepEqual(shown.map((s) => ("track" in s ? s.track.id : null)), [tracks[0]!.id]);
+  });
+});
+
+describe("notifications of M6", () => {
+  it("adding someone's track to a public playlist notifies its creator; private playlists and your own tracks do not", async () => {
+    const creator = await createUser("pa-creator");
+    const fan = await createUser("pa-fan");
+    const theirs = await createTrack(creator, { title: "added" });
+    const mine = await createTrack(fan, { title: "mine" });
+    const api = callerFor(fan).collections;
+    const privatePlaylist = await api.createPlaylist({ title: "secret", privacy: "private", trackIds: [theirs.id] });
+    assert.ok(privatePlaylist.id);
+    assert.equal(await db.notification.count({ where: { recipientId: creator, type: "PLAYLIST_ADD" } }), 0);
+    const publicPlaylist = await api.createPlaylist({ title: "open", privacy: "public", trackIds: [theirs.id, mine.id] });
+    assert.ok(publicPlaylist.id);
+    assert.equal(await db.notification.count({ where: { recipientId: creator, type: "PLAYLIST_ADD" } }), 1);
+    assert.equal(await db.notification.count({ where: { recipientId: fan, type: "PLAYLIST_ADD" } }), 0);
+  });
+
+  it("NEW_RELEASE reaches only followers who opted in", async () => {
+    const creator = await createUser("nr-creator");
+    const optedIn = await createUser("nr-in");
+    const notOptedIn = await createUser("nr-out");
+    for (const f of [optedIn, notOptedIn]) await callerFor(f).engagement.setFollow({ userId: creator, follow: true });
+    await callerFor(optedIn).account.setNotificationPreference({ type: "NEW_RELEASE", inApp: true });
+    assert.equal((await callerFor(notOptedIn).account.notificationPreferences()).find((p) => p.type === "NEW_RELEASE")?.inApp, false, "opt-in by default");
+
+    const album = await createCollection(creator, { title: "New LP", type: "ALBUM", visibility: "PRIVATE" });
+    await db.collection.update({ where: { id: album.id }, data: { publishedAt: null } });
+    await callerFor(creator).collections.update({ id: album.id, privacy: "public" });
+    assert.equal(await db.notification.count({ where: { recipientId: optedIn, type: "NEW_RELEASE" } }), 1);
+    assert.equal(await db.notification.count({ where: { recipientId: notOptedIn, type: "NEW_RELEASE" } }), 0);
   });
 });

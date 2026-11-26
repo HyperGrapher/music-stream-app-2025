@@ -47,6 +47,8 @@ export async function notify(tx: Tx, input: NotifyInput): Promise<boolean> {
     select: { inApp: true },
   });
   if (preference && !preference.inApp) return false;
+  // NEW_RELEASE is opt-in (NT-1): nothing is created unless the recipient turned it on.
+  if (input.type === "NEW_RELEASE" && !preference?.inApp) return false;
 
   if (input.actorId) {
     const existing = await tx.notification.findFirst({
@@ -79,4 +81,20 @@ export async function unnotify(
   await tx.notification.deleteMany({
     where: { recipientId: input.recipientId, actorId: input.actorId, type: input.type, readAt: null, ...targetWhere(input) },
   });
+}
+
+/**
+ * NT-1 `NEW_RELEASE` (opt-in): a followed creator published an album, EP, single or compilation. Only followers
+ * who switched the type on get a row, so the fan-out is as small as the opt-in list.
+ */
+export async function notifyNewRelease(
+  tx: Tx & Pick<PrismaClient, "follow">,
+  { creatorId, collectionId, now }: { creatorId: string; collectionId: string; now?: Date },
+) {
+  const optedIn = await tx.notificationPreference.findMany({
+    where: { type: "NEW_RELEASE", inApp: true, user: { following: { some: { followingId: creatorId } }, status: "ACTIVE" } },
+    select: { userId: true },
+    take: 5000,
+  });
+  for (const { userId } of optedIn) await notify(tx, { recipientId: userId, actorId: creatorId, type: "NEW_RELEASE", collectionId, now });
 }
