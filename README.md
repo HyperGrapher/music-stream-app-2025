@@ -31,14 +31,15 @@ One Next.js app on **Vercel**, **Neon** Postgres and **Cloudflare R2**.
 - **Image processing:** uploaded images (JPEG, PNG, WebP up to 10 MB) are centre-cropped and stored as WebP renditions with [sharp](https://sharp.pixelplumbing.com): artwork 96/320/640 px, avatars 64/160/320 px (square), banners 1240/2480 px wide (2480x520 strip); the original is deleted. Every `<img>` gets a `srcset` and `sizes`.
 - **Waveforms without a media server:** the browser decodes the file (Web Audio) while it uploads and computes the duration and waveform peaks. The server validates them and stores a small JSON next to the audio.
 - **Streaming:** seeking works, audio never passes through the app server, and visibility (including secret links) is enforced.
-- **Player:** one global player with a queue, next/previous, keyboard shortcuts and OS media controls (Media Session API).
+- **Player:** one global player with shuffle, repeat, a "Next up" queue (play next / add to queue from any track menu), autoplay of related tracks, buffered range, keyboard shortcuts (press `?`), OS media controls (Media Session API), a mini player and full-screen sheet on phones, and a saved position that survives reloads.
+- **Playlists, sharing, embeds, downloads:** create playlists from the add-to-playlist dialog; share dialog with start-time links (`#t=1m23s`), social intents and an embed code (`/embed/track/{id}`, `/embed/set/{id}`); signed-in downloads when the creator allows them.
 - **Browsing:** a landing page, `/discover` (latest or most played, genre filter, search over titles and creator names), creator profiles, track pages and collection pages.
 - **Timed comments:** comment at the exact second you are listening to (read from the player at the moment you post), with one level of replies. Each timed comment shows as an avatar under the waveform and as a clickable time chip that jumps the player there. Authors and the track's creator can delete.
 - **Likes** on tracks (optimistic UI, safe against double clicks and races, rate limited; you cannot like your own or a private track), shown as filled hearts for the signed-in listener.
 - **Play counts** that cannot be inflated by refreshing: one count per listener per track per 30 minutes; the owner's own plays are never counted. Daily statistics are kept for charts and insights.
 - **Platform plumbing:** Postgres-backed rate limiter, email module (Resend, or logged when no key is set), durable R2 deletion queue with a daily cron, simulated Free/Pro entitlements, injectable clock.
 
-**Work in progress:** the product is being built out milestone by milestone against [`docs/PRD.md`](docs/PRD.md) (M0 and M1 done; status in [`docs/REFACTOR.md`](docs/REFACTOR.md)). The data model already contains reposts, blocks, notifications, reports, messages and insights tables, but their UI and procedures arrive in later milestones: some controls (repost, add to playlist, share) are visible but not functional yet.
+**Work in progress:** the product is being built out milestone by milestone against [`docs/PRD.md`](docs/PRD.md) (M0 to M3 done; status in [`docs/REFACTOR.md`](docs/REFACTOR.md)). The data model already contains reposts, blocks, notifications, reports, messages and insights tables, but their UI and procedures arrive in later milestones: some controls (repost) are visible but not functional yet.
 
 ## How it works
 

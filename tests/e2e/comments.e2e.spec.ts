@@ -83,7 +83,8 @@ test("a comment posted while listening captures the exact second, and shows on t
   await expect(posted.getByRole("button", { name: "Play from 0:12" })).toBeVisible();
   const stored = (await storedComments()).find((c) => c.content === "same drop, I agree");
   expect(stored?.timestampSeconds).toBe(12);
-  await expect(page.getByRole("button", { name: /commented at 0:12/ })).toHaveCount(2);
+  // two comments at the same moment are clustered into one marker with a count
+  await expect(page.getByRole("button", { name: "2 comments from 0:12" })).toHaveCount(1);
   await context.close();
 });
 

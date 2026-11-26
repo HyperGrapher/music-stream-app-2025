@@ -27,8 +27,8 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 | M0 Foundation reset | **done** (see "M0 summary" below) |
 | M1 Accounts & profiles | **done** (see "M1 summary") |
 | M2 Upload & editing | **done** (see "M2 summary") |
-| M3 Listening | **next** (see "Next up") |
-| M4 Social loop | not started |
+| M3 Listening | **done** (see "M3 summary"; Lighthouse run still open, see deviations) |
+| M4 Social loop | **next** (see "Next up") |
 | M5 Discovery | not started |
 | M6 Creator tools & plans | not started |
 | M7 Trust & safety | not started |
@@ -81,17 +81,52 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 | Plan page | `(player)/settings/plan` | PL-1/PL-2 comparison + demo upgrade/downgrade, creates a SYSTEM notification row (nothing reads notifications yet). |
 | Tests | integration `editing.test.ts` (24), unit `track-fields.test.ts`, e2e `upload.e2e.spec.ts` (J3, J4, J7, J8, quota, UP-2/UP-5, UP-3, editing) | e2e replaces object storage with the DB through `mockUploadStorage()` (tRPC batches procedures into one request: the mock answers each by name), so no R2 credentials are needed; the opt-in real-R2 journey (`upload-playback.e2e.spec.ts`) was updated to the new UI. |
 
+**M3 summary: what exists now** (listening)
+
+| Area | Where | Notes |
+|---|---|---|
+| Queue model | `src/lib/player-queue.ts` (pure, 11 unit tests) | Context (list played from) + user queue ("Play next" / "Add to Next up", always before the context resumes) + history (50). `cursorId` = last context track played. Shuffle pins the current track first and re-shuffles on repeat-all wrap; previous restarts after 3 s, else history, else previous context track; `canPlay` skips formats the browser cannot decode (UP-F3). |
+| Player store | `src/store/player.tsx` | Actions `playContext(tracks, track, {name, source, collectionId})` (use this instead of `setPlaylist`+`playTrack`), `playNext`, `addToQueue`, `removeFromQueue`, `moveInQueue`, `clearQueue`, `playFromQueue`, `toggleShuffle`, `cycleRepeat`, `toggleAutoplay`. Persists to `localStorage` key `player-state-v1` (restored paused, never autoplays), single-tab playback through `BroadcastChannel`, Media Session (play/pause/next/prev/seek/position), stream error -> one cache-busted retry then toast + skip, buffered range. Shortcuts: Space, arrows, Shift+arrows, M, S, Q, L, ? (`SHORTCUTS`, `useKeyboardControls`). Autoplay at the end of a context calls `tracks.related` (seam for M5 recommendations). |
+| Play reporting | `POST /api/tracks/:id/play` now returns `{eventId}` (JSON; a deduped play returns the listener's latest event) and takes an optional body `{source, collectionId}`; `POST /api/plays/:eventId/progress` (`{listenedMs, completed}`, only ever grows, capped, always 204) is sent as a beacon when a track ends or the page hides. `recordPlayEvent` in `server/modules/tracks/plays.ts` (`recordPlay` still returns a boolean). |
+| Related tracks | `server/modules/tracks/related.ts`, `tracks.related` | Public only, never the seed, same creator first, then co-likes, then genre/tags; at most 2 per creator. A hidden seed answers empty. |
+| Playlists | `server/modules/collections/playlists.ts`, `collections.mine` / `collections.createPlaylist` | `mine({trackId})` lists the caller's playlists with `hasTrack`; `createPlaylist` makes a private playlist by default (slug via `firstFree`). Add/remove use the existing `addTracks` / `removeTrack`. |
+| Downloads | `GET /api/tracks/:id/download` | Signed-in only (401), 403 unless `downloadable` (owner always allowed), same visibility rules, 307 to a 5-minute presigned attachment URL; `downloadCount` +1 once per user per track per 24 h (fixed-window rate-limit bucket, owner never counts). |
+| Embeds | `/embed/track/[trackId]`, `/embed/set/[collectionId]` (`?s=` secret), `src/app/embed/*`, `next.config.js` headers | Own layout without navbar. `/embed/*` sends `frame-ancestors *`, everything else `frame-ancestors 'self'` + `X-Frame-Options`. Honours `embeddable`; public or secret only. The navbar now lives in `(player)/layout`, not the root layout. |
+| UI | `src/components/player/*`, `src/store/dialogs.ts`, `GlobalPlaybackControls.tsx` | `TrackMenu` (the "..." menu on cards, waveform rows, related list, player bar), `AddToPlaylistDialog` (Add / Create tabs), `ShareDialog` (link, "At 1:23", X/Facebook/WhatsApp/Email, Web Share, Embed tab), `NextUpPanel` (Q), `ShortcutsDialog` (?), `MobileTabBar` + mini player + full-screen sheet below `sm`. Dialogs are opened through the `useDialogs` store and mounted once by `GlobalDialogs`. The bar shows real artist, like, follow, menu, shuffle/repeat, buffered range. |
+| Pages | `TrackPage.tsx`, `CollectionPage.tsx`, `RelatedTracks`, `CollectionActions`, `CommentMarkers` | Track page: follow button, related sidebar, "In: albums/playlists", BPM/key/ISRC/publisher/license, buy link, JSON-LD `MusicRecording`, Open Graph + Twitter card. `#t=1m23s` (`src/lib/time-fragment.ts`) starts the track at that time. Collection page: Play / Shuffle / Share, rows play the collection as context (plays are credited to it). Waveform: comment markers cluster (`src/lib/marker-clusters.ts`), live bubble for the comment being passed, hidden when the user turned off `showWaveformComments`. Equaliser bars on the playing row. |
+| Tests | integration `listening.test.ts` (5), unit `player-queue`, `time-fragment`, `marker-clusters`, e2e `listening.e2e.spec.ts` (J1, J5, embeds + CSP, downloads) | J5 here covers playlists, queue and share; liking an album and the Library are M4. |
+
 **Deliberately deferred / deviations** (each has an owner milestone):
 
 - The 30 s preview window is a slider (not a draggable window on the waveform); only the player/Discover preview in M5 (DI-4) will use it.
 - ID3/Vorbis tag reading to prefill metadata (UP-9, P2) is not done; titles come from file names.
 - Studio list pages (`/studio/tracks`, `/studio/sets`) and bulk edit are M6; the entry points to the editors (pencil on the hero, Edit on collections, banners) exist.
-- Playlists created by users ("Create a playlist" dialog, add-to-playlist) are M3; collections can be created today only by uploading, and edited in the editor.
 - Collection "Liked by"/likes, reposts, notifications: M4. Email notification of plan changes: M4.
 - Image uploads have no crop UI (M1 note still applies). Replacing audio re-runs the whole upload pipeline for one file.
 - Quota counts the durations of existing tracks only; READY-but-unpublished uploads do not count until published.
 
-**Next up: M3 Listening** (PRD §8; exit: journeys J1, J5, Lighthouse targets on the track page)
+**Deviations from M3** (owner milestone in brackets):
+
+- Lighthouse targets on the track page have not been measured yet (no Chrome-based Lighthouse run in the sandbox). Run it against a production build before release [M8].
+- Related tracks are heuristic (creator, co-likes, genre/tags), not ranked recommendations [M5]. The player's autoplay uses them.
+- "Reposted by" / "Liked by", repost and album like buttons are placeholders or absent [M4]. The track page "Message" button was removed (messages are P2 in M7).
+- The player bar's Follow button always starts as "Follow" (it does not know the relationship); the track page's is accurate [M4].
+- Download dedupe uses a fixed 24 h window, not a rolling one.
+- The embed player is minimal (artwork, seek bar, list); no waveform [M8].
+- Chosen play sources are set where the list is known (collection page, track page, related); Home/Discover/Profile lists still report `OTHER` unless their callers pass `context` to `TrackCard` / `WaveformTrackItem` [M4/M5].
+
+**Next up: M4 Social loop** (PRD §9..: collection and comment likes, reposts, Activity + Feed, notifications in-app + email + digest, Library, history, comment upgrades CM-*; exit: J6 and counter tests green)
+
+1. Likes for collections and comments, reposts (tracks and collections) with the counters-in-transaction rule and `db:recount` coverage; show real "Liked by / Reposted by" on track and collection pages; enable the Repost buttons that are placeholders today (`TrackDetailHero`, `WaveformTrackItem`).
+2. `Activity` rows (new track, repost, playlist add, new follower) and the `/feed` page; wire the `PLAYLIST_ADD` activity into `createPlaylist` / `addTracks` for public playlists.
+3. Notifications: in-app bell + page, email through `server/modules/email` (status LOGGED until `RESEND_API_KEY` exists), daily digest in the cron.
+4. Library (`/library`: Likes, Playlists, Albums, Following, History) and play history (PlayEvent already stores `listenedMs`).
+5. Comment upgrades (CM-*), then pass `context` (source) from Home/Discover/Profile lists.
+6. Tests: J6, counter consistency, e2e for the Library.
+
+<details><summary>M3 plan as it was (done)</summary>
+
+(removed items kept for history)
 
 1. Player upgrades (PL-P1..P11): shuffle/repeat, queue model (context + user queue + history), Next up panel, Play next / Add to Next up in every row menu, autoplay hook (related tracks come in M5, leave the seam), persistence in `localStorage`, keyboard shortcuts, Media Session actions, play-progress beacon `POST /api/plays/:id/progress`, single-tab playback via `BroadcastChannel`, presigned URL expiry recovery.
 2. Mobile layout (GL-4/GL-5): bottom tab bar, mini player, full-screen player sheet.
@@ -99,6 +134,8 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 4. Add-to-playlist dialog (8.5) + playlist creation (`collections.createPlaylist`), library entry points, share dialog + embeds (`/embed/track/[id]`, `frame-ancestors`), downloads route (`/api/tracks/:id/download`, DL-1), `#t=` time links.
 5. Waveform extras (WF-2..WF-4: click-to-load, clustered comment markers, live comment bubble), Settings toggle `showWaveformComments`.
 6. Tests: e2e J1 and J5 (needs add-to-playlist), a11y checks on the player, Lighthouse run on a production build.
+
+</details>
 
 **Environment gotchas for agents (cloud sandbox)**
 
@@ -367,3 +404,10 @@ Rendering (`buildWaveformBars` in `lib/waveform-utils.ts`): bar count = display 
 - Bugs found by the new tests and fixed: the sticky Save bar covered the Delete button at the bottom of the editors; the profile Albums/Playlists tabs rendered collections as tracks (M1 bug in `ProfileList`); `storage_deletion` update after a concurrent delete threw (now `updateMany`).
 - Totals when this entry was written: unit 64, integration 140, e2e 49 (+1 opt-in R2), lint 0 warnings, types clean.
 - Learned: tRPC batches calls issued in the same tick into one request (`/api/trpc/a,b`), so Playwright mocks must route on `upload.*` and answer per procedure; `getByLabel("Title")` matches labels that contain hint text only without `exact`; keyboard drag-and-drop in dnd-kit needs a short pause between key presses in Playwright.
+
+### Session 14 - PRD M3 (listening), branch `dev`
+- Server: related tracks, playlists (`mine`, `createPlaylist`), download route, play reporting with event ids + progress beacon, embed routes with frame headers.
+- UI: queue model and player rewrite (shuffle, repeat, Next up, persistence, shortcuts, Media Session, tab sync), `TrackMenu`, add-to-playlist, share + embed dialogs, mobile tab bar / mini player / sheet, track and collection page completion, comment marker clustering and live bubble, `#t=` links.
+- Bugs found by the new tests and fixed: `tracks.related` spread two `OR` keys into one `where` (the genre filter silently replaced the visibility filter, so private tracks leaked into suggestions); the e2e for the play route expected the old 204.
+- Learned: zustand v5 selectors that return a fresh object need `useShallow` (infinite re-render otherwise); an Embed iframe needs `frame-ancestors *` on its own path while everything else keeps `'self'` (both set in `next.config.js`); real plays only register after ~5 s of listening, which e2e cannot reach without audio in storage, so e2e asserts queue state, not play rows.
+- Totals when this entry was written: see the commit; unit 80, integration 145, lint 0 warnings, types clean e2e 53 + 1 skipped (+1 opt-in R2).
