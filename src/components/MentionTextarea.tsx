@@ -44,8 +44,7 @@ export function MentionTextarea({ value, onValueChange, onKeyDown, ...rest }: Pr
         {...rest}
         ref={box}
         value={value}
-        role="combobox"
-        aria-expanded={shown}
+        aria-haspopup="listbox"
         aria-controls={listId}
         aria-autocomplete="list"
         aria-activedescendant={shown ? `mention-${index}` : undefined}
