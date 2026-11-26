@@ -30,8 +30,8 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 | M3 Listening | **done** (see "M3 summary"; Lighthouse run still open, see deviations) |
 | M4 Social loop | **done** (see "M4 summary") |
 | M5 Discovery | **done** (see "M5 summary") |
-| M6 Creator tools & plans | **next** (see "Next up") |
-| M7 Trust & safety | not started |
+| M6 Creator tools & plans | **done** (see "M6 summary") |
+| M7 Trust & safety | **next** (see "Next up") |
 | M8 Polish | not started |
 
 **M0 summary: what exists now** (read these before starting M1)
@@ -149,6 +149,18 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 - "Liked by people you follow" avatars (LK-5, P2) are not built.
 - The player bar Follow button still does not know the relationship; Home/Discover lists still report play source `OTHER` [M5].
 
+**M6 summary: what exists now** (creator tools and plans)
+
+| Area | Where | Notes |
+|---|---|---|
+| Studio tables | `server/modules/studio`, router `studio`, `(player)/studio/{tracks,sets}`, `StudioFrame` / `StudioNav` | `/studio/tracks`: all your tracks (any visibility) with visibility filter, search, sort by any numeric column or date, "Load more", row menu (Edit, Copy link, Copy secret link, Add to playlist, Delete), usage bar (ST-3). `/studio/sets`: albums and playlists with stats, Edit / Copy link / Delete (with "also delete my tracks"). The layout only guards; table pages wrap themselves in `StudioFrame` so the editors keep their own layout. |
+| Bulk edit | `bulkPreview`, `bulkUpdate`, `bulkDelete`, `BulkEditDialog` | Genre, tags (add / remove / replace), privacy (public/private), license, record label, downloads/comments/embeds/stats toggles, preview "N of M will change". Each track goes through `updateTrack`, so every editor rule applies (Quiet Mode is Pro, activity, counters). Bulk add to playlist reuses `collections.addTracks` / `createPlaylist`. Bulk delete needs the typed word DELETE above 5 tracks. |
+| Insights | `server/modules/insights`, router `insights`, `studio/insights` | Tiles with change vs previous period, plays over time (SVG, daily; weekly above 90 days), top tracks with completion rate, and for Pro countries, sources, top listeners (respects `showInTopListeners`) and per-track drill-down. Free: 7 days and all-time totals; other ranges / drill-down answer `PLAN_REQUIRED`. Breakdowns read counted `PlayEvent`s, at most 90 days. The download route now bumps the `downloads` daily stat. |
+| Spotlight | `getSpotlight` / `setSpotlight`, `studio/spotlight` | Own public tracks and collections, ordered, limit from the plan (Free 1, Pro 5); after a downgrade extra rows are kept but hidden (the profile already limits by plan). |
+| Notifications | `notifications/index.ts` (`notifyNewRelease`), `collections/edit.ts` | `PLAYLIST_ADD` when someone adds your track to a public playlist (not own, not private playlists). `NEW_RELEASE` is opt-in: only followers who turned it on get a row (default in-app is off for this type). |
+| Gating audit | `plans/entitlements.ts` | Every entitlement has a server-side test: upload time, scheduling, Quiet Mode (single and bulk), replace audio, Spotlight count, Insights ranges and breakdowns. UI shows PRO tags and the upsell dialog (PL-4). |
+| Tests | integration `studio.test.ts` (11), e2e `studio.e2e.spec.ts` (J10, Free upsells, Studio bulk flow, Spotlight) | |
+
 **Deviations from M5** (owner milestone in brackets):
 
 - No quick-preview on hover (DI-4, P2) and no "Your mixes" Home module (P2); `previewStartMs` is stored but unused [M8].
@@ -158,13 +170,22 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 - Search results do not exclude blocked creators for the viewer [M7].
 - "Popular creators" on the landing page reuses `profiles.suggestions`.
 
-**Next up: M6 Creator tools & plans** (PRD §15 and §2.3; exit: J10 passes; entitlement tests for every gated feature)
+**Deviations from M6** (owner milestone in brackets):
 
-1. Studio (`/studio/tracks`, `/studio/sets`): tables with sort/filter, bulk edit (privacy, genre, tags, delete), replace-audio entry, the entry points to the existing editors.
-2. Insights (`/studio/insights`) from `TrackDailyStat` / `UserDailyStat`: plays, likes, reposts, comments, followers over time, top tracks, countries (`PlayEvent.countryCode`), traffic sources (`PlayEvent.source`); Pro gates (longer ranges, per-track detail).
-3. Plan gating everywhere via `getEntitlements` (scheduling, Quiet Mode, replace audio, spotlight count, upload time), Spotlight editing on the profile, Quiet Mode (`statsPublic`) toggles.
-4. Create the `PLAYLIST_ADD` notification when someone adds your track to a public playlist, and `NEW_RELEASE` (opt-in) for followers.
-5. Tests: J10, an entitlement test per gated feature.
+- Bulk edit runs track by track (each atomic), not in one transaction as PRD ST-2 says; the first failure stops the run and the message says how many were already changed [M8 if it matters].
+- Bulk edit does not offer scheduling or permalink changes; "Add to playlist" in the row menu opens the bulk dialog with that one track.
+- CSV export of Insights (IN-7, P2) is not built. Insights uses UTC days, so "today" can differ from the creator's local day.
+- Spotlight is edited in the Studio, not drag-and-drop on the profile (up/down buttons).
+- `PLAYLIST_ADD` is only created when tracks are added to an already-public playlist (not when a private playlist becomes public later).
+
+**Next up: M7 Trust & safety** (PRD §14, 9.7; exit: J9 passes)
+
+1. Reports (tracks, collections, comments, users) with reasons, rate limit (`reportPerDay`), report outcomes as `SYSTEM` notifications.
+2. Block / unblock users (BL-1: no follow, comments, messages, notifications; hides each other's content in feed, search, recommendations, comments) and a blocked list in Settings → Privacy.
+3. Admin (`ADMIN_EMAILS` / `role`): reports queue, moderation states (`REMOVED` with reason, which the owner banners already display), user suspension (`status`), audit log.
+4. Search and recommendations must exclude blocked creators for the viewer (noted as a deviation in M5).
+5. (P2) direct messages: the tables exist (`Conversation`, `Message`).
+6. Tests: J9, block/report integration tests.
 
 <details><summary>M4 plan as it was (done)</summary>
 
@@ -482,4 +503,10 @@ Rendering (`buildWaveformBars` in `lib/waveform-utils.ts`): bar count = display 
 - Totals when this entry was written: unit 86, integration 164, e2e 60 + 1 skipped, lint 0 warnings, types clean.
 - Layout shift fix (before M6): Radix dropdown menus were modal, so opening one removed the page scrollbar (body scroll lock) and every `position: fixed` bar (player bar, mini player, tab bar) widened and jumped while the content stayed put (body gets padding). `DropdownMenu` is now non-modal by default (`components/ui/dropdown-menu.tsx`), and the fixed bars carry `right-scroll-bar-position`, the class react-remove-scroll uses to compensate fixed elements while a modal Dialog (share, add to playlist, auth) locks scroll. `tests/e2e/layout.e2e.spec.ts` guards it (it needs classic scrollbars, so it launches Chromium without `--hide-scrollbars`; headless Chromium otherwise has none and could never see this bug) and also checks cumulative layout shift < 0.1 on Home, Discover, Charts and a track page.
 - CI fix: the schema-drift guard (`prisma migrate diff --exit-code`, in `.github/actions/verify`) failed because the trigram indexes of migration `1_search` were not in `schema.prisma`. They are now declared there (`@@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "...")`); the full-text expression indexes cannot be modelled and Prisma ignores them. Rule: any index added by raw SQL that Prisma can express must also be declared in the schema, and run the diff locally (`prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code` against a migrated database) before pushing a migration.
+
+### Session 17 - PRD M6 (creator tools and plans), branch `dev`
+- Before M6: layout shift fix (modal dropdowns locked scroll, fixed bars jumped) with an e2e guard, and the CI schema-drift fix for the trigram indexes (see the notes above).
+- Studio tables + bulk actions, Insights, Spotlight editor, new notification types, gating audit.
+- Learned: `groupBy` with a relation filter in `where` works for `TrackDailyStat` (`track: { creatorId }`); the Next page and its layout render in parallel, so keep the layout a pure guard and let pages bring their own frame.
+- Totals when this entry was written: unit 86, integration 175, e2e 66 + 1 skipped (+1 opt-in R2), lint 0 warnings, types clean.
 

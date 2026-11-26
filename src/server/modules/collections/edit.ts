@@ -8,6 +8,7 @@ import { removeAssetRows } from "@/server/modules/housekeeping";
 import { normalizeGenre } from "@/server/modules/publishing/genre";
 import { claimReadyAssets } from "@/server/modules/publishing";
 import { deleteTrack, lockCollection, normaliseCollection, renameSlug, slugAvailability } from "@/server/modules/publishing/edit";
+import { notify, notifyNewRelease } from "@/server/modules/notifications";
 import { newSecretToken } from "@/server/modules/tokens";
 import { publicTrackWhere } from "@/server/modules/visibility";
 
@@ -52,6 +53,7 @@ export async function updateCollection(db: PrismaClient, userId: string, collect
       if (fields.privacy === "public" && !current.publishedAt) {
         data.publishedAt = at;
         await tx.activity.create({ data: { actorId: userId, type: "COLLECTION_POSTED", collectionId, createdAt: at } });
+        if (isReleaseType(fields.type ?? current.type)) await notifyNewRelease(tx, { creatorId: userId, collectionId, now: at });
       }
     }
     if (fields.slug && fields.slug !== current.slug) {
@@ -114,7 +116,7 @@ export async function resetCollectionSecret(db: PrismaClient, userId: string, co
 export async function addTracksToCollection(db: PrismaClient, userId: string, collectionId: string, trackIds: string[]) {
   const at = clockNow();
   return db.$transaction(async (tx) => {
-    await ownedCollection(tx, userId, collectionId);
+    const collection = await ownedCollection(tx, userId, collectionId);
     await lockCollection(tx, collectionId);
     const allowed = await tx.track.findMany({
       where: { id: { in: trackIds }, OR: [{ creatorId: userId, creator: { status: "ACTIVE" } }, publicTrackWhere(at)] },
@@ -127,6 +129,11 @@ export async function addTracksToCollection(db: PrismaClient, userId: string, co
     let position = (last._max.position ?? -1) + 1;
     for (const trackId of fresh) {
       await tx.collectionTrack.create({ data: { collectionId, trackId, position: position++, addedById: userId, addedAt: at } });
+    }
+    // NT-1 PLAYLIST_ADD: the creators of tracks added to a public playlist (not their own) hear about it.
+    if (collection.type === "PLAYLIST" && collection.visibility === "PUBLIC" && fresh.length) {
+      const creators = await tx.track.findMany({ where: { id: { in: fresh } }, select: { id: true, creatorId: true } });
+      for (const track of creators) await notify(tx, { recipientId: track.creatorId, actorId: userId, type: "PLAYLIST_ADD", trackId: track.id, collectionId, now: at });
     }
     await normaliseCollection(tx, collectionId);
     return { added: fresh.length };

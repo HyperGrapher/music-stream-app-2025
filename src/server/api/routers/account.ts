@@ -157,7 +157,7 @@ export const accountRouter = createTRPCRouter({
   notificationPreferences: protectedProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db.notificationPreference.findMany({ where: { userId: ctx.session.user.id } });
     const byType = new Map(rows.map((r) => [r.type, r]));
-    return NOTIFICATION_TYPES.map((type) => ({ type, inApp: byType.get(type)?.inApp ?? true, email: byType.get(type)?.email ?? EMAIL_DEFAULT_ON.has(type) }));
+    return NOTIFICATION_TYPES.map((type) => ({ type, inApp: byType.get(type)?.inApp ?? type !== "NEW_RELEASE", email: byType.get(type)?.email ?? EMAIL_DEFAULT_ON.has(type) }));
   }),
 
   setNotificationPreference: protectedProcedure
@@ -166,7 +166,7 @@ export const accountRouter = createTRPCRouter({
       const userId = ctx.session.user.id;
       await ctx.db.notificationPreference.upsert({
         where: { userId_type: { userId, type: input.type } },
-        create: { userId, type: input.type, inApp: input.inApp ?? true, email: input.email ?? EMAIL_DEFAULT_ON.has(input.type) },
+        create: { userId, type: input.type, inApp: input.inApp ?? input.type !== "NEW_RELEASE", email: input.email ?? EMAIL_DEFAULT_ON.has(input.type) },
         update: { ...(input.inApp !== undefined ? { inApp: input.inApp } : {}), ...(input.email !== undefined ? { email: input.email } : {}) },
       });
       return { ok: true };

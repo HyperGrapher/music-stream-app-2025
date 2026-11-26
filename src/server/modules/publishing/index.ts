@@ -7,6 +7,7 @@ import { isReleaseType, MAX_COLLECTION_TRACKS, releaseDateProblem } from "@/lib/
 import { type TrackFields } from "@/lib/track-fields";
 import { now as clockNow } from "@/server/clock";
 import type { Plan } from "@/server/modules/plans/entitlements";
+import { notifyNewRelease } from "@/server/modules/notifications";
 import { newSecretToken } from "@/server/modules/tokens";
 
 import { normalizeGenre } from "./genre";
@@ -225,6 +226,7 @@ export async function publishCollection(db: PrismaClient, user: Publisher, input
 
       if (isPublic) {
         await tx.activity.create({ data: { actorId: user.id, type: "COLLECTION_POSTED", collectionId: collection.id, createdAt: at } });
+        if (isReleaseType(type)) await notifyNewRelease(tx, { creatorId: user.id, collectionId: collection.id, now: at });
       }
       await recountPublicTracks(tx, user.id, at);
       return collection;
