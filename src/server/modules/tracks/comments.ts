@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { now as clockNow } from "@/server/clock";
+import { appError } from "@/server/errors";
 import { notify } from "@/server/modules/notifications";
 import { enforceRateLimit, RATE_LIMITS } from "@/server/modules/rate-limit";
 import { bumpTrackDailyStat } from "@/server/modules/stats";
@@ -137,14 +138,17 @@ export async function listComments(
     return { comments: [], total: 0, commentsEnabled: track?.commentsEnabled ?? false };
   }
 
+  // BL-1: comments by people the viewer blocked, and by people the creator blocked (for everyone), are hidden.
+  const visibleAuthor = { author: { blockedBy: { none: { blockerId: { in: [track.creatorId, ...(viewer.id ? [viewer.id] : [])] } } } } };
   const rows = await db.comment.findMany({
-    where: { trackId, parentId: null },
+    where: { trackId, parentId: null, ...visibleAuthor },
     orderBy: [{ createdAt: "desc" }, { id: "asc" }],
     take: 100,
     select: {
       ...commentSelect,
       ...likedByViewer(viewer.id),
       replies: {
+        where: visibleAuthor,
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         take: 100,
         select: { ...commentSelect, ...likedByViewer(viewer.id) },
@@ -179,6 +183,10 @@ export async function createComment(
   if (!track) throw new TRPCError({ code: "NOT_FOUND", message: "Track not found" });
   if (!track.commentsEnabled && track.creatorId !== input.authorId) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Comments are turned off for this track" });
+  }
+  // BL-1: someone the creator blocked cannot comment on their content.
+  if (track.creatorId !== input.authorId && (await db.block.findUnique({ where: { blockerId_blockedId: { blockerId: track.creatorId, blockedId: input.authorId } }, select: { blockerId: true } }))) {
+    throw appError("FORBIDDEN", "BLOCKED", "You can't comment on this track");
   }
 
   if (input.timestampSeconds !== undefined) {
@@ -277,5 +285,23 @@ export async function deleteComment(
     await tx.comment.delete({ where: { id: commentId } });
     await tx.$executeRaw`UPDATE "track" SET "commentCount" = GREATEST(0, "commentCount" - ${removed}) WHERE "id" = ${found.trackId}`;
     return { removed };
+  });
+}
+
+/**
+ * AD-5: a moderator's removal deletes the comment for real (replies go with it) and decrements `commentCount` under
+ * the same per-track advisory lock as every other comment write.
+ */
+export async function removeCommentAsModerator(db: PrismaClient, commentId: string) {
+  return db.$transaction(async (tx) => {
+    const found = await tx.comment.findUnique({ where: { id: commentId }, select: { trackId: true } });
+    if (!found) return { removed: 0, trackId: null as string | null };
+    await lockTrackComments(tx, found.trackId);
+    const comment = await tx.comment.findUnique({ where: { id: commentId }, select: { _count: { select: { replies: true } } } });
+    if (!comment) return { removed: 0, trackId: found.trackId };
+    const removed = 1 + comment._count.replies;
+    await tx.comment.delete({ where: { id: commentId } });
+    await tx.$executeRaw`UPDATE "track" SET "commentCount" = GREATEST(0, "commentCount" - ${removed}) WHERE "id" = ${found.trackId}`;
+    return { removed, trackId: found.trackId };
   });
 }

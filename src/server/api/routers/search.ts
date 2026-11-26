@@ -41,6 +41,6 @@ export const searchRouter = createTRPCRouter({
 
   collections: publicProcedure.input(z.object({ q, kind: z.enum(["albums", "playlists"]), offset })).query(async ({ input, ctx }) => {
     await limit(ctx);
-    return searchCollections(ctx.db, input.q, input.kind, { offset: input.offset });
+    return searchCollections(ctx.db, input.q, input.kind, { viewerId: ctx.session?.user.id ?? null, offset: input.offset });
   }),
 });

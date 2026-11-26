@@ -93,8 +93,10 @@ export const auth = betterAuth({
                 before: async (session) => {
                     const user = await db.user.findUnique({
                         where: { id: session.userId },
-                        select: { email: true, role: true },
+                        select: { email: true, role: true, status: true },
                     });
+                    // Suspended accounts cannot start a session (PRD AD-2).
+                    if (user?.status === "SUSPENDED") throw new APIError("FORBIDDEN", { message: "This account has been suspended. Contact support if you think this is a mistake." });
                     if (user && isAdminEmail(user.email) && user.role !== "ADMIN") {
                         await db.user.update({ where: { id: session.userId }, data: { role: "ADMIN" } });
                     }

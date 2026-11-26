@@ -118,10 +118,13 @@ const timingMiddleware = t.middleware(async ({ next, path, ctx }) => {
 });
 
 /** Reusable middleware that enforces users are logged in before running the procedure. */
-const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
+const enforceUserIsAuthed = t.middleware(async ({ ctx, next }) => {
   if (!ctx.session?.user) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
+  // The session cookie is cached for minutes: a suspended or deleted account must stop working at once.
+  const account = await ctx.db.user.findUnique({ where: { id: ctx.session.user.id }, select: { status: true } });
+  if (account?.status !== "ACTIVE") throw new TRPCError({ code: "UNAUTHORIZED" });
   return next({
     ctx: {
       // infers the `session` as non-nullable
@@ -165,6 +168,13 @@ export const accountProcedure = protectedProcedure.use(async ({ ctx, next }) => 
   const user = await ctx.db.user.findUnique({ where: { id: ctx.session.user.id }, select: { status: true, plan: true, emailVerified: true } });
   if (user?.status !== "ACTIVE") throw new TRPCError({ code: "UNAUTHORIZED" });
   return next({ ctx: { account: { id: ctx.session.user.id, plan: user.plan, emailVerified: user.emailVerified } } });
+});
+
+/** Admins only (role read from the database, so a revoked admin loses access at once). Unknown to everyone else: NOT_FOUND. */
+export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  const user = await ctx.db.user.findUnique({ where: { id: ctx.session.user.id }, select: { role: true, status: true } });
+  if (user?.role !== "ADMIN" || user.status !== "ACTIVE") throw new TRPCError({ code: "NOT_FOUND" });
+  return next({ ctx: { adminId: ctx.session.user.id } });
 });
 
 /**

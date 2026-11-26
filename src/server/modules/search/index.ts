@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { now as clockNow } from "@/server/clock";
 import { collectionDtoSelect, RELEASE_TYPES, toCollectionDto } from "@/server/modules/collections/dto";
+import { blockedEitherWay } from "@/server/modules/social/blocks";
 import { likedByMeSelect, toTrackDto, trackDtoSelect, userAvatarUrl } from "@/server/modules/tracks/dto";
 import { publicCollectionWhere, publicTrackWhere } from "@/server/modules/visibility";
 
@@ -121,7 +122,8 @@ export async function searchTracks(db: PrismaClient, rawQuery: string, { viewerI
   if (!q) return { items: [], nextOffset: null as number | null };
   const ids = await trackIds(db, q, filters, now);
   const window = ids.slice(offset, offset + limit + 1);
-  const rows = await db.track.findMany({ where: { AND: [{ id: { in: window } }, publicTrackWhere(now)] }, select: { ...trackDtoSelect, ...likedByMeSelect(viewerId) } });
+  const blocked = await blockedEitherWay(db, viewerId);
+  const rows = await db.track.findMany({ where: { AND: [{ id: { in: window } }, publicTrackWhere(now), ...(blocked.size ? [{ creatorId: { notIn: [...blocked] } }] : [])] }, select: { ...trackDtoSelect, ...likedByMeSelect(viewerId) } });
   const items = inOrder(window, rows).slice(0, limit).map((row) => toTrackDto(row, { viewerId }));
   return { items, nextOffset: window.length > limit ? offset + limit : null };
 }
@@ -131,8 +133,9 @@ export async function searchPeople(db: PrismaClient, rawQuery: string, { viewerI
   if (!q) return { items: [], nextOffset: null as number | null };
   const ids = await userIds(db, q);
   const window = ids.slice(offset, offset + limit + 1);
+  const blocked = await blockedEitherWay(db, viewerId);
   const rows = await db.user.findMany({
-    where: { id: { in: window }, status: "ACTIVE" },
+    where: { id: { in: window.filter((id) => !blocked.has(id)) }, status: "ACTIVE" },
     select: { id: true, name: true, username: true, image: true, verified: true, followerCount: true, publicTrackCount: true, avatarAsset: { select: { id: true, publicUrl: true, imageWidths: true } } },
   });
   const mine = viewerId ? new Set((await db.follow.findMany({ where: { followerId: viewerId, followingId: { in: window } }, select: { followingId: true } })).map((f) => f.followingId)) : new Set<string>();
@@ -140,12 +143,13 @@ export async function searchPeople(db: PrismaClient, rawQuery: string, { viewerI
   return { items, nextOffset: window.length > limit ? offset + limit : null };
 }
 
-export async function searchCollections(db: PrismaClient, rawQuery: string, kind: "albums" | "playlists", { offset = 0, limit = SEARCH_PAGE_SIZE }: { offset?: number; limit?: number } = {}) {
+export async function searchCollections(db: PrismaClient, rawQuery: string, kind: "albums" | "playlists", { viewerId = null, offset = 0, limit = SEARCH_PAGE_SIZE }: { viewerId?: string | null; offset?: number; limit?: number } = {}) {
   const q = normaliseQuery(rawQuery);
   if (!q) return { items: [], nextOffset: null as number | null };
   const ids = await collectionIds(db, q, kind);
   const window = ids.slice(offset, offset + limit + 1);
-  const rows = await db.collection.findMany({ where: { AND: [{ id: { in: window } }, publicCollectionWhere()] }, select: collectionDtoSelect });
+  const blocked = await blockedEitherWay(db, viewerId);
+  const rows = await db.collection.findMany({ where: { AND: [{ id: { in: window } }, publicCollectionWhere(), ...(blocked.size ? [{ ownerId: { notIn: [...blocked] } }] : [])] }, select: collectionDtoSelect });
   const items = inOrder(window, rows).slice(0, limit).map((row) => toCollectionDto(row));
   return { items, nextOffset: window.length > limit ? offset + limit : null };
 }
@@ -157,8 +161,8 @@ export async function suggest(db: PrismaClient, rawQuery: string, viewerId: stri
   const [people, tracks, albums, playlists] = await Promise.all([
     searchPeople(db, q, { viewerId, limit: 3 }),
     searchTracks(db, q, { viewerId, limit: 4 }),
-    searchCollections(db, q, "albums", { limit: 2 }),
-    searchCollections(db, q, "playlists", { limit: 2 }),
+    searchCollections(db, q, "albums", { viewerId, limit: 2 }),
+    searchCollections(db, q, "playlists", { viewerId, limit: 2 }),
   ]);
   return { people: people.items, tracks: tracks.items, albums: albums.items, playlists: playlists.items };
 }

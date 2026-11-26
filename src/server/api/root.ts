@@ -3,6 +3,8 @@ import { collectionsRouter } from "./routers/collections";
 import { commentsRouter } from "./routers/comments";
 import { discoverRouter } from "./routers/discover";
 import { engagementRouter } from "./routers/engagement";
+import { trustRouter } from "./routers/trust";
+import { adminRouter } from "./routers/admin";
 import { insightsRouter } from "./routers/insights";
 import { studioRouter } from "./routers/studio";
 import { chartsRouter } from "./routers/charts";
@@ -34,6 +36,8 @@ export const appRouter = createTRPCRouter({
   charts: chartsRouter,
   studio: studioRouter,
   insights: insightsRouter,
+  trust: trustRouter,
+  admin: adminRouter,
   plans: plansRouter,
   profiles: profilesRouter,
   tracks: tracksRouter,

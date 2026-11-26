@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import { now as clockNow } from "@/server/clock";
 import { likedByMeSelect, toTrackDto, trackDtoSelect } from "@/server/modules/tracks/dto";
+import { blockedEitherWay } from "@/server/modules/social/blocks";
 import { jaccard } from "@/server/modules/recommendations/scoring";
 import { accessibleTrackWhere, publicTrackWhere } from "@/server/modules/visibility";
 
@@ -23,7 +24,8 @@ export async function relatedTracks(
   // A hidden seed (secret link) has no public signals worth sharing: answer empty.
   if (!seed) return [];
 
-  const visible = { ...publicTrackWhere(now), id: { not: seed.id }, creator: { status: "ACTIVE" as const } };
+  const blocked = await blockedEitherWay(db, viewerId);
+  const visible = { ...publicTrackWhere(now), id: { not: seed.id }, creator: { status: "ACTIVE" as const, ...(blocked.size ? { id: { notIn: [...blocked] } } : {}) } };
   const select = { ...trackDtoSelect, ...likedByMeSelect(viewerId) };
   const take = limit * 2;
 
