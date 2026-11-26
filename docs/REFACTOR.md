@@ -31,8 +31,8 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 | M4 Social loop | **done** (see "M4 summary") |
 | M5 Discovery | **done** (see "M5 summary") |
 | M6 Creator tools & plans | **done** (see "M6 summary") |
-| M7 Trust & safety | **next** (see "Next up") |
-| M8 Polish | not started |
+| M7 Trust & safety | **done** (see "M7 summary"; direct messages deferred) |
+| M8 Polish | **next** (see "Next up") |
 
 **M0 summary: what exists now** (read these before starting M1)
 
@@ -170,6 +170,16 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 - Search results do not exclude blocked creators for the viewer [M7].
 - "Popular creators" on the landing page reuses `profiles.suggestions`.
 
+**M7 summary: what exists now** (trust and safety)
+
+| Area | Where | Notes |
+|---|---|---|
+| Blocks | `server/modules/social/blocks.ts`, router `trust` (`setBlock`, `blocked`), `ProfileMenu`, `/settings/blocked` | Blocking removes follows both ways (counters adjusted by deleted rows) and the blocked user's unread notifications. Enforced where content is read: a blocked user cannot follow or comment (`BLOCKED`), comments by people the creator blocked are hidden from everyone, comments by people the viewer blocked are hidden from the viewer, and the pair is excluded from search (tracks, people, collections), related tracks, recommendations and the feed. Public pages stay reachable (not a privacy wall). `blockedEitherWay(db, viewerId)` is the helper to use for any new list. |
+| Reports | `server/modules/trust/reports.ts`, `trust.report`, `ReportDialog` (store `useDialogs.report`, helper `startReport`) | Tracks (menu), collections (button), comments (link), users (profile menu). Eight reasons, details <= 1000 chars, copyright needs the rights-holder box or details (+ original URL in `extra`). One open report per reporter per target (re-reporting updates it and is not counted), 20 new reports a day, own content refused, hidden content looks nonexistent. |
+| Admin | `server/modules/trust/admin.ts`, router `admin`, `adminProcedure` (`trpc.ts`), `(player)/admin/*` | Admin-only (role read from the DB) and a plain 404 for everyone else, incl. the pages. `/admin` dashboard, `/admin/reports` (grouped per target, most distinct reporters first; drawer with preview, all reports, audit log, owner history; Dismiss / Remove / Restore / Suspend owner), `/admin/users` and `/admin/users/[id]` (counts, suspend/unsuspend, verified badge, plan). Removing: tracks and collections get `moderationState = REMOVED` + reason (restorable; spotlight rows dropped; `publicTrackCount` recounted), comments are deleted for real under the track's advisory lock (`removeCommentAsModerator`), a reported user is suspended. Reporters get a `SYSTEM` notification with the outcome, the owner is told why. Every action writes a `ModerationAction`. |
+| Suspension | `suspendUser` / `unsuspendUser`, `lib/auth.ts` session hook, `enforceUserIsAuthed` | Sets `status = SUSPENDED`, deletes sessions, content disappears through the existing visibility rules; sign-in fails with "This account has been suspended...". `protectedProcedure` now also checks the account status in the DB (the session cookie is cached for minutes). Admins cannot be suspended in the UI. |
+| Tests | integration `trust.test.ts` (10), e2e `trust.e2e.spec.ts` (J9, block from a comment + Settings > Blocked, admin 404, suspended sign-in) | |
+
 **Deviations from M6** (owner milestone in brackets):
 
 - Bulk edit runs track by track (each atomic), not in one transaction as PRD ST-2 says; the first failure stops the run and the message says how many were already changed [M8 if it matters].
@@ -178,14 +188,22 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 - Spotlight is edited in the Studio, not drag-and-drop on the profile (up/down buttons).
 - `PLAYLIST_ADD` is only created when tracks are added to an already-public playlist (not when a private playlist becomes public later).
 
-**Next up: M7 Trust & safety** (PRD §14, 9.7; exit: J9 passes)
+**Deviations from M7** (owner milestone in brackets):
 
-1. Reports (tracks, collections, comments, users) with reasons, rate limit (`reportPerDay`), report outcomes as `SYSTEM` notifications.
-2. Block / unblock users (BL-1: no follow, comments, messages, notifications; hides each other's content in feed, search, recommendations, comments) and a blocked list in Settings → Privacy.
-3. Admin (`ADMIN_EMAILS` / `role`): reports queue, moderation states (`REMOVED` with reason, which the owner banners already display), user suspension (`status`), audit log.
-4. Search and recommendations must exclude blocked creators for the viewer (noted as a deviation in M5).
-5. (P2) direct messages: the tables exist (`Conversation`, `Message`).
-6. Tests: J9, block/report integration tests.
+- Direct messages (PRD 13.3, P2) are not built; the tables (`Conversation`, `Message`) exist and the track page's old "Message" button was removed in M3. Decide with the owner whether to build them [M8 or later].
+- Message reports and "Report" in the Share dialog's Message tab depend on DMs.
+- There is no dedicated suspension page: a suspended user sees the error message at sign-in (their old sessions are gone).
+- Blocked people are filtered after ranking in search (a page can come back a little shorter), not inside the SQL.
+- The admin UI cannot promote admins (by design, `ADMIN_EMAILS` only) and has no "Appeals" flow.
+- No notification is sent when a suspended user is unsuspended.
+
+**Next up: M8 Polish** (PRD §18, §19; exit: the PRD §1.4 definition of complete)
+
+1. Accessibility pass (WCAG 2.2 AA: focus order, labels, contrast, keyboard for waveform/drag-and-drop, reduced motion) with automated axe checks on key pages.
+2. Performance and SEO: Lighthouse on a production build for the track page (targets in PRD 1.4: Performance >= 85, Accessibility >= 95, Best Practices >= 95, SEO >= 95), image sizes, sitemap/robots, JSON-LD checks.
+3. The deferred P2 items collected in the "Deviations" lists above (comment `@` autocomplete, repost with caption, quick preview on hover, "Your mixes", chart rank change, Insights CSV, drag-and-drop Spotlight, embed waveform), and decide on direct messages with the owner.
+4. Error and empty states, loading skeletons, 404/500 pages, observability (structured logs), final README/docs, seed refresh (SEED_README), release checklist for Vercel/Neon.
+5. Full regression: unit, integration, e2e, drift guard, Lighthouse.
 
 <details><summary>M4 plan as it was (done)</summary>
 
@@ -509,4 +527,10 @@ Rendering (`buildWaveformBars` in `lib/waveform-utils.ts`): bar count = display 
 - Studio tables + bulk actions, Insights, Spotlight editor, new notification types, gating audit.
 - Learned: `groupBy` with a relation filter in `where` works for `TrackDailyStat` (`track: { creatorId }`); the Next page and its layout render in parallel, so keep the layout a pure guard and let pages bring their own frame.
 - Totals when this entry was written: unit 86, integration 175, e2e 66 + 1 skipped (+1 opt-in R2), lint 0 warnings, types clean.
+
+### Session 18 - PRD M7 (trust and safety), branch `dev`
+- First: readable validation errors (`friendlyError` turns tRPC zod JSON into one sentence per problem; link URLs say they need https://), pushed before M7.
+- Blocks, reports, admin/moderation, suspension, block effects across comments/search/related; UI for all of it.
+- Learned: the session cookie cache makes `auth.api.getSession` trust a session for minutes, so anything that must stop immediately (suspension) has to be checked in the DB on every protected call; Next layout redirects do not stop pages (admin pages rely on `notFound()` in the layout AND server-side `adminProcedure`).
+- Totals when this entry was written: unit 89, integration 185, e2e 70 + 1 skipped, lint 0 warnings, types clean.
 
