@@ -99,11 +99,11 @@ test.describe("discover", () => {
     expect(await cardTitles(page)).toEqual([]);
   });
 
-  test("the navbar search box feeds the discover page", async ({ page }) => {
-    await page.goto("/");
-    await page.getByRole("searchbox", { name: "Search tracks and creators" }).fill("public");
+  test("the navbar search box opens the search page", async ({ page }) => {
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.getByRole("combobox", { name: "Search tracks and creators" }).fill("public");
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/discover\?q=public$/);
-    expect(await cardTitles(page)).toEqual([TRACKS.public.title]);
+    await expect(page).toHaveURL(/\/search\?q=public$/);
+    await expect(page.getByRole("heading", { name: "E2E Public Track" }).or(page.getByText(TRACKS.public.title).first())).toBeVisible();
   });
 });

@@ -2,8 +2,7 @@
 import { hardNavigate } from "@/lib/navigate";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ChevronDown, MoreHorizontal, Search } from "lucide-react";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +12,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUser } from "@/hooks/useUser";
 import { toast } from "sonner";
+import { SearchBox } from "@/components/SearchBox";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 type User = {
@@ -79,17 +79,7 @@ export function Navbar({ initialUser }: NavbarProps) {
 
       {/* Center section - Search */}
       <div className="mx-6 hidden max-w-md flex-1 md:flex">
-        <form action="/discover" role="search" className="relative w-full">
-          <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
-          <Input
-            name="q"
-            type="search"
-            maxLength={100}
-            aria-label="Search tracks and creators"
-            placeholder="Search tracks and creators"
-            className="w-full rounded-md border-none bg-gray-800 py-2 pr-4 pl-10 text-white focus:ring-1 focus:ring-orange-500"
-          />
-        </form>
+        <SearchBox />
       </div>
 
       {/* Right section - Actions */}
