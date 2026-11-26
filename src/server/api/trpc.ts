@@ -6,6 +6,7 @@
  * TL;DR - This is where all the tRPC server stuff is created and plugged in. The pieces you will
  * need to use are documented accordingly near the end.
  */
+import { ensureAdminRole } from "@/server/modules/accounts/admin-role";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { flattenError, ZodError } from "zod";
@@ -172,8 +173,9 @@ export const accountProcedure = protectedProcedure.use(async ({ ctx, next }) => 
 
 /** Admins only (role read from the database, so a revoked admin loses access at once). Unknown to everyone else: NOT_FOUND. */
 export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-  const user = await ctx.db.user.findUnique({ where: { id: ctx.session.user.id }, select: { role: true, status: true } });
-  if (user?.role !== "ADMIN" || user.status !== "ACTIVE") throw new TRPCError({ code: "NOT_FOUND" });
+  const user = await ctx.db.user.findUnique({ where: { id: ctx.session.user.id }, select: { status: true } });
+  const role = user?.status === "ACTIVE" ? await ensureAdminRole(ctx.db, ctx.session.user.id) : "USER";
+  if (role !== "ADMIN") throw new TRPCError({ code: "NOT_FOUND" });
   return next({ ctx: { adminId: ctx.session.user.id } });
 });
 

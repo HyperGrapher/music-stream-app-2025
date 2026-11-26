@@ -5,6 +5,7 @@ import { cache } from "react";
 
 import { auth } from "@/lib/auth";
 import { db } from "@/server/db";
+import { ensureAdminRole } from "@/server/modules/accounts/admin-role";
 import { userAvatarUrl } from "@/server/modules/tracks/dto";
 
 export interface SessionUser {
@@ -34,5 +35,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     },
   });
   if (user?.status !== "ACTIVE") return null;
-  return { ...user, image: userAvatarUrl(user) };
+  // ADMIN_EMAILS applies without a new sign-in (e.g. the variable was added after the user last signed in).
+  const role = await ensureAdminRole(db, user.id);
+  return { ...user, role, image: userAvatarUrl(user) };
 });
