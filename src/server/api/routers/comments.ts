@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure, publicProcedure, verifiedProcedure } from "@/server/api/trpc";
+import { runAfter } from "@/server/after";
+import { sendImmediateEmails } from "@/server/modules/notifications/email";
 import {
   COMMENT_MAX_LENGTH,
   createComment,
@@ -31,9 +33,15 @@ export const commentsRouter = createTRPCRouter({
         access: accessInput,
       }),
     )
-    .mutation(({ input, ctx }) =>
-      createComment(ctx.db, { ...input, authorId: ctx.session.user.id }),
-    ),
+    .mutation(async ({ input, ctx }) => {
+      const comment = await createComment(ctx.db, { ...input, authorId: ctx.session.user.id });
+      // "Immediately" email users (NT-8) hear about it after the response.
+      runAfter(async () => {
+        const rows = await ctx.db.notification.findMany({ where: { commentId: comment.id }, select: { id: true } });
+        await sendImmediateEmails(ctx.db, rows.map((r) => r.id));
+      });
+      return comment;
+    }),
 
   delete: protectedProcedure
     .input(z.object({ commentId: z.string().uuid() }))

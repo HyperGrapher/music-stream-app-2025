@@ -4,6 +4,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import { imageObjectKeys } from "@/lib/artwork";
 import { now as clockNow } from "@/server/clock";
 import { purgeDeletedAccounts } from "@/server/modules/accounts/deletion";
+import { sendDailyDigests } from "@/server/modules/notifications/email";
 import { pruneEmailBodies } from "@/server/modules/email";
 import { pruneRateLimitBuckets } from "@/server/modules/rate-limit";
 import { drainStorageDeletions, enqueueStorageDeletion } from "@/server/modules/storage/deletion";
@@ -64,6 +65,8 @@ export interface DailyReport {
   expiredAssets: number;
   storage: { deleted: number; failed: number; remaining: number };
   rateLimitBuckets: number;
+  /** Digest emails sent (-1 when the step failed). */
+  digests: number;
   emailBodies: number;
   playEvents: number;
   usernameRedirects: number;
@@ -86,6 +89,10 @@ export async function runDailyHousekeeping(
   const accounts = await purgeDeletedAccounts(db, at);
   const storage = await drainStorageDeletions(db, r2, { limit: 200, deadline });
   const rateLimitBuckets = await pruneRateLimitBuckets(db, at);
+  const digests = await sendDailyDigests(db, at).catch((error: unknown) => {
+    console.error("[cron:daily] digests failed", error);
+    return -1;
+  });
   const emailBodies = await pruneEmailBodies(db, at);
   const playEvents = (
     await db.playEvent.deleteMany({
@@ -95,5 +102,5 @@ export async function runDailyHousekeeping(
   const usernameRedirects = (
     await db.usernameRedirect.deleteMany({ where: { createdAt: { lt: new Date(at.getTime() - 30 * DAY_MS) } } })
   ).count;
-  return { expiredAssets, storage, rateLimitBuckets, emailBodies, playEvents, usernameRedirects, accounts };
+  return { expiredAssets, storage, rateLimitBuckets, digests, emailBodies, playEvents, usernameRedirects, accounts };
 }

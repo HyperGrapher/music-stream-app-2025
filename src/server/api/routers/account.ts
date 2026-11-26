@@ -1,6 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { EMAIL_DEFAULT_ON } from "@/server/modules/notifications/email";
+
 import { r2Client } from "@/lib/r2";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { runAfter } from "@/server/after";
@@ -25,6 +27,7 @@ const httpsUrl = z
   .url()
   .refine((value) => value.startsWith("https://") || value.startsWith("http://"), "Links must be http(s) URLs");
 
+const NOTIFICATION_TYPES = ["FOLLOW", "TRACK_LIKE", "COLLECTION_LIKE", "TRACK_REPOST", "COLLECTION_REPOST", "COMMENT", "REPLY", "MENTION", "COMMENT_LIKE", "PLAYLIST_ADD", "NEW_RELEASE", "SYSTEM"] as const;
 const COUNTRY = z.string().length(2).regex(/^[A-Za-z]{2}$/);
 
 export const accountRouter = createTRPCRouter({
@@ -146,6 +149,25 @@ export const accountRouter = createTRPCRouter({
       runAfter(async () => {
         await purgeAccountContent(ctx.db, userId);
         await drainStorageDeletions(ctx.db, r2Client, { limit: 100 });
+      });
+      return { ok: true };
+    }),
+
+  /** Per-type notification preferences (NT-7), defaults filled in. */
+  notificationPreferences: protectedProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.db.notificationPreference.findMany({ where: { userId: ctx.session.user.id } });
+    const byType = new Map(rows.map((r) => [r.type, r]));
+    return NOTIFICATION_TYPES.map((type) => ({ type, inApp: byType.get(type)?.inApp ?? true, email: byType.get(type)?.email ?? EMAIL_DEFAULT_ON.has(type) }));
+  }),
+
+  setNotificationPreference: protectedProcedure
+    .input(z.object({ type: z.enum(NOTIFICATION_TYPES), inApp: z.boolean().optional(), email: z.boolean().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      await ctx.db.notificationPreference.upsert({
+        where: { userId_type: { userId, type: input.type } },
+        create: { userId, type: input.type, inApp: input.inApp ?? true, email: input.email ?? EMAIL_DEFAULT_ON.has(input.type) },
+        update: { ...(input.inApp !== undefined ? { inApp: input.inApp } : {}), ...(input.email !== undefined ? { email: input.email } : {}) },
       });
       return { ok: true };
     }),

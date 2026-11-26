@@ -13,6 +13,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUser } from "@/hooks/useUser";
 import { toast } from "sonner";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 type User = {
   id: string;
@@ -63,6 +64,16 @@ export function Navbar({ initialUser }: NavbarProps) {
           >
             Discover
           </Link>
+          {displayUser && (
+            <Link href="/feed" className="hidden font-medium transition-colors hover:text-orange-500 md:block">
+              Feed
+            </Link>
+          )}
+          {displayUser && (
+            <Link href="/you/library" className="hidden font-medium transition-colors hover:text-orange-500 md:block">
+              Library
+            </Link>
+          )}
         </div>
       </div>
 
@@ -98,6 +109,7 @@ export function Navbar({ initialUser }: NavbarProps) {
 
         {displayUser ? (
           <>
+            <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="p-1 hover:bg-gray-800">
@@ -117,16 +129,15 @@ export function Navbar({ initialUser }: NavbarProps) {
                 <DropdownMenuItem asChild className="hover:bg-gray-800">
                   <Link href={displayUser.username ? `/${displayUser.username}` : "/profile"}>Profile</Link>
                 </DropdownMenuItem>
-                {displayUser.username && (
-                  <>
-                    <DropdownMenuItem asChild className="hover:bg-gray-800">
-                      <Link href={`/${displayUser.username}/likes`}>Likes</Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild className="hover:bg-gray-800">
-                      <Link href={`/${displayUser.username}/following`}>Following</Link>
-                    </DropdownMenuItem>
-                  </>
-                )}
+                <DropdownMenuItem asChild className="hover:bg-gray-800">
+                  <Link href="/you/likes">Likes</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="hover:bg-gray-800">
+                  <Link href="/you/following">Following</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="hover:bg-gray-800">
+                  <Link href="/you/library">Library</Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild className="hover:bg-gray-800">
                   <Link href="/settings/profile">Settings</Link>
                 </DropdownMenuItem>

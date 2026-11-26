@@ -444,6 +444,35 @@ export function ContentSettings() {
   );
 }
 
+const TYPE_LABEL: Record<string, string> = {
+  FOLLOW: "New followers", TRACK_LIKE: "Likes on your tracks", COLLECTION_LIKE: "Likes on your albums and playlists", TRACK_REPOST: "Reposts of your tracks",
+  COLLECTION_REPOST: "Reposts of your albums and playlists", COMMENT: "Comments on your tracks", REPLY: "Replies to your comments", MENTION: "Mentions",
+  COMMENT_LIKE: "Likes on your comments", PLAYLIST_ADD: "Your tracks added to playlists", NEW_RELEASE: "New releases from people you follow", SYSTEM: "Account and moderation updates",
+};
+
+/** Per-type In-app / Email toggles (NT-7). */
+function NotificationTypes() {
+  const utils = api.useUtils();
+  const prefs = api.account.notificationPreferences.useQuery();
+  const set = api.account.setNotificationPreference.useMutation({ onSuccess: () => void utils.account.notificationPreferences.invalidate() });
+  return (
+    <Section title="What to notify me about" description="Choose where each kind of activity reaches you.">
+      <table className="w-full text-sm">
+        <thead><tr className="text-left text-zinc-400"><th className="py-1 font-medium">Activity</th><th className="w-20 font-medium">In-app</th><th className="w-20 font-medium">Email</th></tr></thead>
+        <tbody>
+          {(prefs.data ?? []).map((pref) => (
+            <tr key={pref.type} className="border-t border-zinc-800">
+              <td className="py-2">{TYPE_LABEL[pref.type] ?? pref.type}</td>
+              <td><input type="checkbox" aria-label={`${TYPE_LABEL[pref.type]} in-app`} checked={pref.inApp} onChange={(e) => set.mutate({ type: pref.type, inApp: e.target.checked })} /></td>
+              <td><input type="checkbox" aria-label={`${TYPE_LABEL[pref.type]} email`} checked={pref.email} onChange={(e) => set.mutate({ type: pref.type, email: e.target.checked })} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Section>
+  );
+}
+
 export function NotificationSettings() {
   const { data: me } = useMe();
   const save = useSettingsSaver();
@@ -451,13 +480,14 @@ export function NotificationSettings() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">Notifications</h1>
-      <Section title="Email" description="How often we email you about activity on your account. Per-notification choices arrive with notifications.">
+      <Section title="Email" description="How often we email you about activity on your account.">
         <select aria-label="Email frequency" value={me.emailFrequency} onChange={(e) => save({ emailFrequency: e.target.value as "OFF" | "DAILY" | "IMMEDIATE" })} className={select}>
           <option value="OFF">Off</option>
           <option value="DAILY">Daily digest</option>
           <option value="IMMEDIATE">Immediately (comments, replies, mentions)</option>
         </select>
       </Section>
+      <NotificationTypes />
     </div>
   );
 }
