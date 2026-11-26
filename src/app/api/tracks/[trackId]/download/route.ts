@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db } from "@/server/db";
+import { bumpTrackDailyStat } from "@/server/modules/stats";
 import { consumeRateLimit } from "@/server/modules/rate-limit";
 import { accessParamsFromUrl, isTrackId } from "@/server/modules/tracks/access";
 import { authorizeTrack } from "@/server/modules/tracks/authorize";
@@ -39,7 +40,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   if (track.creatorId !== viewerId) {
     const first = await consumeRateLimit(db, `download:${viewerId}:${trackId}`, { max: 1, windowSeconds: DAY_SECONDS });
-    if (first.ok) await db.track.update({ where: { id: trackId }, data: { downloadCount: { increment: 1 } } });
+    if (first.ok) {
+      await db.$transaction(async (tx) => {
+        await tx.track.update({ where: { id: trackId }, data: { downloadCount: { increment: 1 } } });
+        await bumpTrackDailyStat(tx, trackId, "downloads", 1, new Date());
+      });
+    }
   }
 
   const extension = /\.[a-z0-9]{2,5}$/i.exec(track.audioAsset.originalFilename ?? "")?.[0] ?? "";
