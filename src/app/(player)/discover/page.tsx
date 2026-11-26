@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { TrackGrid } from "@/app/_components/TrackGrid";
+import { TrackCarousel } from "@/app/_components/TrackCarousel";
+import { getSessionUser } from "@/server/session-user";
+import { DiscoverGrid } from "./DiscoverGrid";
 import { genreLabel } from "@/lib/genres";
 import { api } from "@/trpc/server";
 
@@ -41,9 +43,13 @@ export default async function DiscoverPage({
     q: params.q?.trim().slice(0, 100) || undefined,
   };
 
-  const [tracks, genres] = await Promise.all([
+  const user = await getSessionUser();
+  const browsing = !filters.q && !filters.genre && filters.sort === "latest";
+  const [tracks, genres, forYou, fresh] = await Promise.all([
     api.discover.tracks({ ...filters, limit: 48 }).catch(() => []),
     api.discover.genres().catch(() => []),
+    user && browsing ? api.discover.forYou({ limit: 12 }).catch(() => []) : Promise.resolve([]),
+    user && browsing ? api.discover.trending({ genre: (await api.account.me().catch(() => null))?.favoriteGenres?.[0], limit: 12 }).catch(() => []) : Promise.resolve([]),
   ]);
 
   const heading = filters.q
@@ -100,9 +106,16 @@ export default async function DiscoverPage({
           </nav>
         )}
 
+        {user && browsing && (
+          <div className="mt-8 space-y-10">
+            <TrackCarousel id="made-for-you" title="Made for you" tracks={forYou} context={{ name: "Made for you", source: "DISCOVER" }} />
+            <TrackCarousel id="fresh-genres" title="Fresh from your genres" tracks={fresh} context={{ name: "Fresh from your genres", source: "DISCOVER" }} />
+          </div>
+        )}
+
         <div className="mt-8">
           {tracks.length ? (
-            <TrackGrid tracks={tracks} />
+            <DiscoverGrid key={`${filters.sort}|${filters.genre ?? ""}|${filters.q ?? ""}`} initial={tracks} filters={filters} pageSize={48} />
           ) : (
             <div className="rounded border border-dashed border-zinc-800 px-6 py-20 text-center">
               <p className="text-lg font-semibold">

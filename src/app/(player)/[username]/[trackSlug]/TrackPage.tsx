@@ -184,12 +184,13 @@ export async function TrackPage(params: TrackPageParams) {
                 {(track.tags?.length ?? 0) > 0 && (
                   <div className="mt-5 flex flex-wrap gap-2">
                     {track.tags?.map((tag: string) => (
-                      <span
+                      <Link
                         key={tag}
-                        className="rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300"
+                        href={`/tags/${encodeURIComponent(tag)}`}
+                        className="rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
                       >
                         # {tag}
-                      </span>
+                      </Link>
                     ))}
                   </div>
                 )}

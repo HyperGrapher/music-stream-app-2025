@@ -64,6 +64,9 @@ export function Navbar({ initialUser }: NavbarProps) {
           >
             Discover
           </Link>
+          <Link href="/charts" className="hidden font-medium transition-colors hover:text-orange-500 md:block">
+            Charts
+          </Link>
           {displayUser && (
             <Link href="/feed" className="hidden font-medium transition-colors hover:text-orange-500 md:block">
               Feed
