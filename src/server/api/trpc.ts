@@ -160,17 +160,19 @@ export const protectedProcedure = t.procedure
   .use(timingMiddleware)
   .use(enforceUserIsAuthed);
 
+/** Signed in with an active account; adds `ctx.account` = { id, plan } read fresh from the database. */
+export const accountProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  const user = await ctx.db.user.findUnique({ where: { id: ctx.session.user.id }, select: { status: true, plan: true, emailVerified: true } });
+  if (user?.status !== "ACTIVE") throw new TRPCError({ code: "UNAUTHORIZED" });
+  return next({ ctx: { account: { id: ctx.session.user.id, plan: user.plan, emailVerified: user.emailVerified } } });
+});
+
 /**
  * Actions that need a verified email (PRD AU-4: upload, comment, repost, message). Reads the
  * database, not the cached session, so verifying in another tab takes effect immediately.
  */
-export const verifiedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-  const user = await ctx.db.user.findUnique({
-    where: { id: ctx.session.user.id },
-    select: { emailVerified: true, status: true },
-  });
-  if (user?.status !== "ACTIVE") throw new TRPCError({ code: "UNAUTHORIZED" });
-  if (!user.emailVerified) {
+export const verifiedProcedure = accountProcedure.use(({ ctx, next }) => {
+  if (!ctx.account.emailVerified) {
     throw appError("FORBIDDEN", "EMAIL_NOT_VERIFIED", "Verify your email to do that");
   }
   return next();

@@ -55,7 +55,7 @@ export async function drainStorageDeletions(
       deleted++;
     } catch (error) {
       failed++;
-      await db.storageDeletion.update({
+      await db.storageDeletion.updateMany({
         where: { id: row.id },
         data: {
           attempts: { increment: 1 },

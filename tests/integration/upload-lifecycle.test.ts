@@ -38,7 +38,7 @@ describe("createTrack", () => {
     const owner = await createUser("publish");
     const asset = await createAsset(owner, { durationMs: 61_000 });
     const { track, permalink } = await callerFor(owner).upload.createTrack(
-      trackInput(asset.id, { title: "Gitarda Bir Riff #4!", tags: "Lo-Fi, lo-fi, chill" }),
+      trackInput(asset.id, { title: "Gitarda Bir Riff #4!", tags: ["Lo-Fi", "lo-fi", "chill"] }),
     );
     assert.equal(track.slug, "gitarda-bir-riff-4");
     assert.equal(permalink, `/${usernameOf(owner)}/gitarda-bir-riff-4`);

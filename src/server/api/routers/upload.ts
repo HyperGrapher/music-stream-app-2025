@@ -35,7 +35,10 @@ import { now } from "@/server/clock";
 import { removeAssetRows } from "@/server/modules/housekeeping";
 import { getEntitlements } from "@/server/modules/plans/entitlements";
 import { enforceRateLimit, RATE_LIMITS } from "@/server/modules/rate-limit";
+import { collectionFieldsSchema, MAX_UPLOAD_BATCH } from "@/lib/collection-fields";
+import { trackFieldsSchema } from "@/lib/track-fields";
 import { publishCollection, publishTrack } from "@/server/modules/publishing";
+import { assertUploadQuota, usedUploadMs } from "@/server/modules/publishing/fields";
 import { drainStorageDeletions } from "@/server/modules/storage/deletion";
 import { trackPermalink } from "@/server/modules/tracks/dto";
 
@@ -127,18 +130,6 @@ async function claimAndDeleteMediaAsset(upload: MediaAsset): Promise<boolean> {
   runAfter(() => drainStorageDeletions(db, r2Client, { limit: 20 }));
   return true;
 }
-
-const trackFields = {
-  title: z.string().trim().min(1).max(100),
-  artistName: z.string().trim().max(100).optional(),
-  genre: z.string().trim().min(1).max(100),
-  description: z.string().max(4000).optional(),
-  privacy: z.enum(["public", "private"]),
-  tags: z.string().max(1000).optional(),
-  artworkAssetId: z.string().uuid().optional(),
-};
-
-const splitTags = (tags: string | undefined) => tags?.split(",") ?? [];
 
 export const uploadRouter = createTRPCRouter({
   // Get a presigned URL for direct upload to R2
@@ -327,6 +318,14 @@ export const uploadRouter = createTRPCRouter({
         );
 
         const analysis = input.analysis;
+        // UP-8: the analysed duration must fit the user's upload time; if not, the object goes away.
+        try {
+          await assertUploadQuota(db, { id: userId, plan: user.plan }, analysis.durationMs);
+        } catch (error) {
+          const full = await db.mediaAsset.findUnique({ where: { id: input.mediaAssetId } });
+          if (full) await claimAndDeleteMediaAsset(full);
+          throw error;
+        }
         const waveformJson = serializeWaveform(analysis);
         const waveformKey = waveformStorageKey(userId, input.mediaAssetId);
 
@@ -500,52 +499,43 @@ export const uploadRouter = createTRPCRouter({
       }
     }),
 
+  /** How much upload time the user has used (UP-1 usage bar, UP-8). */
+  quota: protectedProcedure.query(async ({ ctx }) => {
+    const user = await ctx.db.user.findUniqueOrThrow({ where: { id: ctx.session.user.id }, select: { plan: true } });
+    const used = await usedUploadMs(ctx.db, ctx.session.user.id);
+    const limit = getEntitlements(user).uploadTimeLimitMs;
+    return { plan: user.plan, usedMs: used, limitMs: limit, remainingMs: limit === null ? null : Math.max(0, limit - used) };
+  }),
+
   // Publish one uploaded file as a track
   createTrack: verifiedProcedure
-    .input(z.object({ mediaAssetId: z.string().uuid(), ...trackFields }))
+    .input(trackFieldsSchema.extend({ mediaAssetId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const { tags, ...rest } = input;
-      const track = await publishTrack(ctx.db, ctx.session.user.id, { ...rest, tags: splitTags(tags) });
+      const track = await publishTrack(ctx.db, ctx.account, input);
       const username = ctx.session.user.username!;
       return {
         track: { id: track.id, slug: track.slug },
         permalink: trackPermalink({ slug: track.slug, creator: { username } }),
+        visibility: track.visibility,
+        publishAt: track.publishAt,
       };
     }),
 
   // Publish several uploaded files as one collection (album, EP, ...)
   createCollection: verifiedProcedure
     .input(
-      z.object({
-        title: z.string().trim().min(1).max(100),
-        type: z.enum(["ALBUM", "EP", "SINGLE", "COMPILATION", "PLAYLIST"]).default("ALBUM"),
-        tracks: z
-          .array(
-            z.object({
-              mediaAssetId: z.string().uuid(),
-              title: z.string().trim().min(1).max(100),
-            }),
-          )
-          .min(1)
-          .max(100),
-        genre: z.string().trim().min(1).max(100),
-        description: z.string().max(4000).optional(),
-        privacy: z.enum(["public", "private"]),
-        tags: z.string().max(1000).optional(),
-        artworkAssetId: z.string().uuid().optional(),
-        releaseDate: z.coerce.date().optional(),
+      collectionFieldsSchema.extend({
+        tracks: z.array(trackFieldsSchema.extend({ mediaAssetId: z.string().uuid() })).min(1).max(MAX_UPLOAD_BATCH),
+        useArtworkForTracks: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { tags, ...rest } = input;
-      const collection = await publishCollection(ctx.db, ctx.session.user.id, {
-        ...rest,
-        tags: splitTags(tags),
-      });
+      const collection = await publishCollection(ctx.db, ctx.account, input);
       const username = ctx.session.user.username!;
       return {
         collection: { id: collection.id, slug: collection.slug },
         permalink: `/${username}/sets/${collection.slug}`,
+        type: collection.type,
       };
     }),
 });

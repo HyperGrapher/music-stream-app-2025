@@ -3,7 +3,16 @@ import { z } from "zod";
 import type { Prisma } from "@/generated/prisma/client";
 
 import { now } from "@/server/clock";
-import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
+import { TRPCError } from "@trpc/server";
+
+import { accountProcedure, createTRPCRouter, publicProcedure } from "@/server/api/trpc";
+import { r2Client } from "@/lib/r2";
+import { collectionFieldsSchema } from "@/lib/collection-fields";
+import { runAfter } from "@/server/after";
+import { addTracksToCollection, deleteCollection, removeTrackFromCollection, reorderCollection, resetCollectionSecret, updateCollection } from "@/server/modules/collections/edit";
+import { slugAvailability } from "@/server/modules/publishing/edit";
+import { drainStorageDeletions } from "@/server/modules/storage/deletion";
+import { imageUrls } from "@/server/modules/tracks/dto";
 import {
   collectionDtoSelect,
   collectionPermalink,
@@ -100,5 +109,59 @@ export const collectionsRouter = createTRPCRouter({
           tracks,
         },
       };
+    }),
+
+  forEdit: accountProcedure.input(z.object({ id: z.string().uuid() })).query(async ({ input, ctx }) => {
+    const c = await ctx.db.collection.findFirst({
+      where: { id: input.id, ownerId: ctx.account.id },
+      include: {
+        artworkAsset: { select: { id: true, publicUrl: true, imageWidths: true } },
+        owner: { select: { username: true } },
+        tracks: { orderBy: { position: "asc" }, select: { position: true, track: { select: { ...trackAccessSelect, ...trackDtoSelect } } } },
+      },
+    });
+    if (!c) throw new TRPCError({ code: "NOT_FOUND", message: "Collection not found" });
+    return {
+      id: c.id, slug: c.slug, username: c.owner.username, type: c.type, title: c.title, description: c.description, genre: c.genre,
+      tags: c.tags, visibility: c.visibility, releaseDate: c.releaseDate, recordLabel: c.recordLabel, publisher: c.publisher,
+      license: c.license, secretToken: c.secretToken, artworkAssetId: c.artworkAssetId,
+      artworkUrl: imageUrls(c.artworkAsset).artworkUrl, trackCount: c.trackCount, durationMs: c.durationMs,
+      tracks: c.tracks.map((e) => ({ position: e.position, ...toTrackDto(e.track, { viewerId: ctx.account.id }), ownTrack: e.track.creatorId === ctx.account.id, visibilityRaw: e.track.visibility })),
+    };
+  }),
+
+  update: accountProcedure
+    .input(collectionFieldsSchema.partial().extend({ id: z.string().uuid(), applyToTracks: z.boolean().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const { id, ...fields } = input;
+      const c = await updateCollection(ctx.db, ctx.account.id, id, fields as never);
+      runAfter(() => drainStorageDeletions(ctx.db, r2Client, { limit: 20 }));
+      return { id: c.id, slug: c.slug, permalink: `/${ctx.session.user.username!}/sets/${c.slug}` };
+    }),
+
+  checkSlug: accountProcedure
+    .input(z.object({ slug: z.string().max(100), selfId: z.string().uuid().optional() }))
+    .query(({ input, ctx }) => slugAvailability(ctx.db, ctx.account.id, "COLLECTION", input.slug, input.selfId)),
+
+  resetSecret: accountProcedure.input(z.object({ id: z.string().uuid() })).mutation(({ input, ctx }) => resetCollectionSecret(ctx.db, ctx.account.id, input.id)),
+
+  addTracks: accountProcedure
+    .input(z.object({ id: z.string().uuid(), trackIds: z.array(z.string().uuid()).min(1).max(100) }))
+    .mutation(({ input, ctx }) => addTracksToCollection(ctx.db, ctx.account.id, input.id, input.trackIds)),
+
+  removeTrack: accountProcedure
+    .input(z.object({ id: z.string().uuid(), trackId: z.string().uuid() }))
+    .mutation(({ input, ctx }) => removeTrackFromCollection(ctx.db, ctx.account.id, input.id, input.trackId)),
+
+  reorder: accountProcedure
+    .input(z.object({ id: z.string().uuid(), trackIds: z.array(z.string().uuid()).max(500) }))
+    .mutation(({ input, ctx }) => reorderCollection(ctx.db, ctx.account.id, input.id, input.trackIds)),
+
+  delete: accountProcedure
+    .input(z.object({ id: z.string().uuid(), deleteTracks: z.boolean().default(false) }))
+    .mutation(async ({ input, ctx }) => {
+      const result = await deleteCollection(ctx.db, ctx.account.id, input.id, input.deleteTracks);
+      runAfter(() => drainStorageDeletions(ctx.db, r2Client, { limit: 50 }));
+      return result;
     }),
 });
