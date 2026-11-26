@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
 
 import { NotificationItems, type NotificationEntry } from "@/components/notifications/NotificationItems";
@@ -32,7 +33,7 @@ export function NotificationsPage() {
         ))}
       </div>
       <div className="mt-4 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/60">
-        {first.isLoading ? <p className="p-6 text-sm text-zinc-400">Loading…</p> : null}
+        {first.isLoading ? <div className="space-y-4 p-6" role="status" aria-label="Loading">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="flex items-center gap-3"><Skeleton className="h-10 w-10 rounded-full" /><div className="flex-1 space-y-2"><Skeleton className="h-3 w-3/4" /><Skeleton className="h-3 w-1/4" /></div><Skeleton className="h-10 w-10" /></div>)}</div> : null}
         {!first.isLoading && items.length === 0 ? <p className="p-6 text-sm text-zinc-400">Nothing here yet.</p> : null}
         <NotificationItems items={items} />
       </div>

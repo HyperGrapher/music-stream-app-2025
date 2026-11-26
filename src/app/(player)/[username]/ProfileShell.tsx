@@ -84,7 +84,7 @@ export async function ProfileShell({ username, active, children }: { username: s
         </section>
 
         <div className="flex min-h-14 flex-wrap items-center justify-between gap-4 border-b border-zinc-800 px-5 sm:px-7">
-          <nav aria-label="Profile sections" className="flex gap-5 overflow-x-auto sm:gap-7">
+          <nav aria-label="Profile sections" className="no-scrollbar flex gap-5 overflow-x-auto sm:gap-7">
             {TABS.map((tab) => (
               <Link
                 key={tab.key}

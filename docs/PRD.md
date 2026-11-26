@@ -86,8 +86,8 @@ All limits live in **one module** (`src/server/modules/plans/entitlements.ts`) e
 
 | Entitlement | FREE | PRO |
 |---|---|---|
-| Total upload time (sum of durations of the user's existing tracks) | 180 minutes | Unlimited (fair-use cap 50 GB stored audio) |
-| Max file size | 100 MB | 100 MB (browser-side analysis decodes the whole file; see §3.3) |
+| Total upload time (sum of durations of the user's existing tracks) | 60 minutes | Unlimited (fair-use cap 50 GB stored audio) |
+| Max file size | 10 MB | 100 MB (browser-side analysis decodes the whole file; see §3.3) |
 | Spotlight items on profile | 1 | 5 |
 | Scheduled release (publish at a future time) | — | ✓ |
 | Quiet Mode (hide public stats on a track) | — | ✓ |
@@ -270,7 +270,7 @@ This section implements research doc §3, §7.2 and §10.1–10.7.
 
 **Stage A — Choose files**
 
-- UP-1 Large drop zone: "Drag and drop your tracks & albums here" + **Choose files** button (multi-select). A checkbox **"Make a playlist when multiple files are selected"** is checked by default (SoundCloud behaviour: multiple files → collection). Shows the account's upload-time usage bar ("47 of 180 minutes used" or "Unlimited — Pro") and accepted formats/size.
+- UP-1 Large drop zone: "Drag and drop your tracks & albums here" + **Choose files** button (multi-select). A checkbox **"Make a playlist when multiple files are selected"** is checked by default (SoundCloud behaviour: multiple files → collection). Shows the account's upload-time usage bar ("47 of 60 minutes used" or "Unlimited — Pro") and accepted formats/size.
 - UP-2 Files are validated client-side immediately (type, size, count ≤ 100 per batch, remaining upload time once durations are known). Invalid files are listed with the reason and excluded; valid files continue.
 - UP-3 Selecting **1 file** → single-track editor. Selecting **2+ files** with the checkbox on → release editor; with it off → N independent single-track editors stacked (each saved separately, "Save all" button).
 

@@ -79,3 +79,13 @@ test("pages do not shift while they load (cumulative layout shift stays low)", a
     expect(cls, `CLS of ${path}`).toBeLessThan(0.1);
   }
 });
+
+test("a page too short to scroll keeps the same width as a long one (scrollbar gutter is reserved)", async ({ page }) => {
+  const width = () => page.evaluate(() => ({ nav: Math.round(document.querySelector("nav")!.getBoundingClientRect().width) }));
+  await page.goto("/forgot-password", { waitUntil: "networkidle" });
+  expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight), "this page must be short for the test to mean anything").toBe(true);
+  const short = await width();
+  await page.goto("/discover", { waitUntil: "networkidle" });
+  expect(await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight)).toBe(true);
+  expect(await width()).toEqual(short);
+});

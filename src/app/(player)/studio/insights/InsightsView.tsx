@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -131,7 +132,7 @@ export function InsightsView() {
           {d.breakdowns && range !== "7" && range !== "30" && <p className="mt-3 text-xs text-zinc-400">Countries, sources and listeners cover at most the last 90 days.</p>}
         </>
       )}
-      {data.isLoading && <p className="mt-6 text-sm text-zinc-400">Loading…</p>}
+      {data.isLoading && <div className="mt-6 grid gap-4 sm:grid-cols-3" role="status" aria-label="Loading">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-24" />)}<Skeleton className="h-64 sm:col-span-3" /></div>}
       <UpsellDialog open={upsell !== null} onClose={() => setUpsell(null)} feature={upsell ?? ""} />
     </div>
   );

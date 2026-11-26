@@ -504,7 +504,7 @@ export const uploadRouter = createTRPCRouter({
     const user = await ctx.db.user.findUniqueOrThrow({ where: { id: ctx.session.user.id }, select: { plan: true } });
     const used = await usedUploadMs(ctx.db, ctx.session.user.id);
     const limit = getEntitlements(user).uploadTimeLimitMs;
-    return { plan: user.plan, usedMs: used, limitMs: limit, remainingMs: limit === null ? null : Math.max(0, limit - used) };
+    return { plan: user.plan, maxFileBytes: getEntitlements(user).maxFileBytes, usedMs: used, limitMs: limit, remainingMs: limit === null ? null : Math.max(0, limit - used) };
   }),
 
   // Publish one uploaded file as a track

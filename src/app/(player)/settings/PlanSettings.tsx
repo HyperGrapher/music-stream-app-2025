@@ -8,8 +8,8 @@ import { friendlyError } from "@/lib/error-messages";
 import { api } from "@/trpc/react";
 
 const ROWS: { label: string; free: string | boolean; pro: string | boolean }[] = [
-  { label: "Upload time", free: "180 minutes", pro: "Unlimited" },
-  { label: "Max file size", free: "100 MB", pro: "100 MB" },
+  { label: "Upload time", free: "60 minutes", pro: "Unlimited" },
+  { label: "Max file size", free: "10 MB", pro: "100 MB" },
   { label: "Spotlight items on your profile", free: "1", pro: "5" },
   { label: "Scheduled releases", free: false, pro: true },
   { label: "Quiet Mode (hide public stats)", free: false, pro: true },

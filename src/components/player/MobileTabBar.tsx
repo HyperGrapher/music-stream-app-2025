@@ -19,7 +19,7 @@ export function MobileTabBar() {
     { href: user?.username ? `/${user.username}` : "/signin", label: user ? "You" : "Sign in", icon: Library },
   ];
   return (
-    <nav aria-label="Main" className="right-scroll-bar-position sm:hidden fixed bottom-0 left-0 right-0 z-50 flex h-[calc(56px+env(safe-area-inset-bottom))] items-start border-t border-[#282828] bg-[#181818] pb-[env(safe-area-inset-bottom)]">
+    <nav aria-label="Main" className="sm:hidden fixed bottom-0 left-0 right-0 z-50 flex h-[calc(56px+env(safe-area-inset-bottom))] items-start border-t border-[#282828] bg-[#181818] pb-[env(safe-area-inset-bottom)]">
       {items.map(({ href, label, icon: Icon }) => {
         const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
         return (

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ScrollPanel } from "@/components/ui/scroll-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { friendlyError } from "@/lib/error-messages";
 import { useDialogs } from "@/store/dialogs";
@@ -27,16 +28,17 @@ function Body({ track, close }: { track: PlayerTrack; close: () => void }) {
   const shown = (playlists.data ?? []).filter((p) => p.title.toLowerCase().includes(filter.trim().toLowerCase()));
 
   return (
-    <Tabs defaultValue="add">
-      <TabsList>
+    <Tabs defaultValue="add" className="gap-3">
+      <TabsList className="w-full">
         <TabsTrigger value="add">Add to playlist</TabsTrigger>
         <TabsTrigger value="create">Create a playlist</TabsTrigger>
       </TabsList>
-      <TabsContent value="add" className="space-y-3">
+      {/* Both tabs share one fixed-height pane, so the dialog never resizes; a long playlist list scrolls inside it. */}
+      <TabsContent value="add" className="flex h-72 flex-none flex-col gap-3">
         <Input placeholder="Filter playlists" aria-label="Filter playlists" value={filter} onChange={(e) => setFilter(e.target.value)} />
-        <ul className="max-h-64 space-y-1 overflow-y-auto">
-          {playlists.isLoading ? <li className="text-sm text-zinc-400">Loading…</li> : null}
-          {!playlists.isLoading && shown.length === 0 ? <li className="text-sm text-zinc-400">No playlists yet. Create one in the other tab.</li> : null}
+        <ScrollPanel className="flex-1"><ul className="space-y-1" aria-label="Your playlists">
+          {playlists.isLoading ? <li className="px-2 py-1.5 text-sm text-zinc-400">Loading…</li> : null}
+          {!playlists.isLoading && shown.length === 0 ? <li className="px-2 py-1.5 text-sm text-zinc-400">{filter.trim() ? "No playlist matches that." : "No playlists yet. Create one in the other tab."}</li> : null}
           {shown.map((playlist) => (
             <li key={playlist.id} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-zinc-800">
               <span className="min-w-0 flex-1 truncate text-sm">{playlist.title}{playlist.visibility === "PRIVATE" ? <Lock className="ml-1 inline h-3 w-3 text-zinc-400" aria-label="Private" /> : null}</span>
@@ -52,11 +54,11 @@ function Body({ track, close }: { track: PlayerTrack; close: () => void }) {
               </Button>
             </li>
           ))}
-        </ul>
+        </ul></ScrollPanel>
       </TabsContent>
-      <TabsContent value="create">
+      <TabsContent value="create" className="h-72 flex-none">
         <form
-          className="space-y-3"
+          className="flex h-full flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             create.mutate({ title, privacy: isPublic ? "public" : "private", trackIds: [track.id] });
@@ -66,7 +68,7 @@ function Body({ track, close }: { track: PlayerTrack; close: () => void }) {
           <label className="flex items-center gap-2 text-sm text-zinc-300">
             <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} /> Public (anyone can find it)
           </label>
-          <Button type="submit" disabled={!title.trim() || create.isPending}>Create playlist</Button>
+          <Button type="submit" className="mt-auto" disabled={!title.trim() || create.isPending}>Create playlist</Button>
         </form>
       </TabsContent>
     </Tabs>
@@ -78,7 +80,7 @@ export function AddToPlaylistDialog() {
   const close = useDialogs((s) => s.close);
   return (
     <Dialog open={!!track} onOpenChange={(open) => !open && close()}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add to playlist</DialogTitle>
           <DialogDescription className="truncate">{track?.title}</DialogDescription>
