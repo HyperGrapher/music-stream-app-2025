@@ -3,7 +3,6 @@
 import { formatDistanceToNow } from "date-fns";
 import {
   Copy,
-  MoreHorizontal,
   Pause,
   Pencil,
   Play,
@@ -12,11 +11,16 @@ import {
   Share2,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { useTrackWaveform } from "@/hooks/useTrackWaveform";
 import { usePlayerStore } from "@/store/player";
+import { useDialogs } from "@/store/dialogs";
+import { useAuthPrompt } from "@/store/authPrompt";
+import { useUser } from "@/hooks/useUser";
+import { parseTimeFragment } from "@/lib/time-fragment";
+import { TrackMenu, absoluteUrl, copyText } from "@/components/player/TrackMenu";
 import type { PlayerTrack } from "@/types/player-track";
 import { CommentMarkers } from "./CommentMarkers";
 import { LikeButton } from "./LikeButton";
@@ -28,6 +32,7 @@ const roundActionClass =
   "flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700 bg-black/50 text-zinc-300 backdrop-blur transition hover:border-zinc-400 hover:text-white";
 
 export function TrackDetailHero({ track, editHref }: { track: PlayerTrack & { likedByMe?: boolean }; editHref?: string }) {
+  const { user } = useUser();
   const { peaks, isLoading, error } = useTrackWaveform(
     track.waveformUrl,
     track.waveformStatus === "FAILED",
@@ -38,8 +43,7 @@ export function TrackDetailHero({ track, editHref }: { track: PlayerTrack & { li
   const {
     isCurrentTrack,
     isPlaying,
-    playTrack,
-    setPlaylist,
+    playContext,
     togglePlay,
     seek,
   } = usePlayerStore(useShallow(
@@ -47,16 +51,21 @@ export function TrackDetailHero({ track, editHref }: { track: PlayerTrack & { li
       isCurrentTrack: state.currentTrack?.id === track.id,
       isPlaying:
         state.currentTrack?.id === track.id && state.status === "playing",
-      playTrack: state.playTrack,
-      setPlaylist: state.setPlaylist,
+      playContext: state.playContext,
       togglePlay: state.togglePlay,
       seek: state.seek,
     })));
 
+  // `#t=1m23s` links start the track at that time on the first play.
+  const [startAt] = useState(() => (typeof window === "undefined" ? null : parseTimeFragment(window.location.hash)));
+  const startedAtRef = useRef(false);
   const startTrack = useCallback(() => {
-    setPlaylist([track]);
-    playTrack(track);
-  }, [playTrack, setPlaylist, track]);
+    playContext([track], track, { source: "TRACK_PAGE" });
+    if (startAt !== null && !startedAtRef.current) {
+      startedAtRef.current = true;
+      seek(Math.min(startAt, Math.max(0, track.duration - 1)));
+    }
+  }, [playContext, seek, startAt, track]);
   const handlePlayPause = useCallback(() => {
     if (isCurrentTrack) togglePlay();
     else startTrack();
@@ -166,6 +175,7 @@ export function TrackDetailHero({ track, editHref }: { track: PlayerTrack & { li
               type="button"
               className={roundActionClass}
               aria-label="Share track"
+              onClick={() => track.permalink && useDialogs.getState().openShare({ kind: "track", id: track.id, title: track.title, path: track.permalink, isPrivate: track.isPrivate, embeddable: track.embeddable, secret: new URLSearchParams(track.accessQuery).get("s"), atSeconds: isCurrentTrack ? currentTime : 0 })}
             >
               <Share2 className="h-4 w-4" />
             </button>
@@ -173,6 +183,7 @@ export function TrackDetailHero({ track, editHref }: { track: PlayerTrack & { li
               type="button"
               className={roundActionClass}
               aria-label="Copy track link"
+              onClick={() => track.permalink && copyText(absoluteUrl(track.permalink))}
             >
               <Copy className="h-4 w-4" />
             </button>
@@ -187,16 +198,11 @@ export function TrackDetailHero({ track, editHref }: { track: PlayerTrack & { li
               type="button"
               className={roundActionClass}
               aria-label="Add to playlist"
+              onClick={() => (user ? useDialogs.getState().openAddToPlaylist(track) : useAuthPrompt.getState().show("Sign in to add tracks to playlists", () => useDialogs.getState().openAddToPlaylist(track)))}
             >
               <Plus className="h-5 w-5" />
             </button>
-            <button
-              type="button"
-              className={roundActionClass}
-              aria-label="More track actions"
-            >
-              <MoreHorizontal className="h-5 w-5" />
-            </button>
+            <TrackMenu track={track} className={`${roundActionClass} h-10 w-10`} />
           </div>
         </div>
 

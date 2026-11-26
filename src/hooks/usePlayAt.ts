@@ -11,8 +11,7 @@ export function usePlayAt(track: PlayerTrack) {
     (seconds: number) => {
       const state = usePlayerStore.getState();
       if (state.currentTrack?.id !== track.id) {
-        state.setPlaylist([track]);
-        state.playTrack(track);
+        state.playContext([track], track, { source: "TRACK_PAGE" });
         state.seek(seconds); // while loading, the seek is applied once the media is ready
         return;
       }

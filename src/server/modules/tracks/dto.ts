@@ -52,6 +52,8 @@ export const trackDtoSelect = {
   visibility: true,
   explicit: true,
   statsPublic: true,
+  downloadable: true,
+  embeddable: true,
   durationMs: true,
   publishedAt: true,
   createdAt: true,

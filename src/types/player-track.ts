@@ -33,6 +33,10 @@ export interface PlayerTrack {
   commentCount?: number;
   repostCount?: number;
   downloadCount?: number;
+  /** The creator allows signed-in listeners to download the original file. */
+  downloadable?: boolean;
+  /** The creator allows the track to be embedded on other sites. */
+  embeddable?: boolean;
   isOriginal?: boolean;
   isPrivate?: boolean;
   bpm?: number | null;

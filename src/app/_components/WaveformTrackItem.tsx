@@ -3,11 +3,10 @@
 import { memo, useCallback } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
-  Copy,
   MessageCircle,
-  MoreHorizontal,
   Pause,
   Play,
+  Link2,
   Repeat2,
   Share2,
 } from "lucide-react";
@@ -15,7 +14,9 @@ import Link from "next/link";
 import { useShallow } from "zustand/react/shallow";
 
 import { useTrackWaveform } from "@/hooks/useTrackWaveform";
-import { usePlayerStore } from "@/store/player";
+import { usePlayerStore, type ContextMeta } from "@/store/player";
+import { useDialogs } from "@/store/dialogs";
+import { TrackMenu, copyText, absoluteUrl } from "@/components/player/TrackMenu";
 import type { PlayerTrack as Track } from "@/types/player-track";
 import { LikeButton } from "./LikeButton";
 import WaveformVisualizer from "./WaveformVisualizer";
@@ -28,6 +29,8 @@ interface WaveformTrackItemProps {
   };
   compact?: boolean;
   playlist?: Track[];
+  /** Where the list comes from: names the queue and credits plays (collection page, profile, ...). */
+  context?: ContextMeta;
 }
 
 const actionClass =
@@ -37,6 +40,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
   track,
   compact = false,
   playlist,
+  context,
 }: WaveformTrackItemProps) {
   const { peaks, isLoading, error } = useTrackWaveform(
     track.waveformUrl,
@@ -49,8 +53,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
     isCurrentTrack,
     isPlaying,
     togglePlay,
-    playTrack,
-    setPlaylist,
+    playContext,
     seek,
   } = usePlayerStore(useShallow(
     (state) => ({
@@ -58,24 +61,18 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
       isPlaying:
         state.currentTrack?.id === track.id && state.status === "playing",
       togglePlay: state.togglePlay,
-      playTrack: state.playTrack,
-      setPlaylist: state.setPlaylist,
+      playContext: state.playContext,
       seek: state.seek,
     })));
 
   const playFromQueue = useCallback(() => {
-    setPlaylist(playlist?.length ? playlist : [track]);
-    playTrack(track);
-  }, [playlist, playTrack, setPlaylist, track]);
+    playContext(playlist?.length ? playlist : [track], track, context);
+  }, [context, playContext, playlist, track]);
 
   const handlePlayPause = useCallback(() => {
-    if (isCurrentTrack) {
-      setPlaylist(playlist?.length ? playlist : [track]);
-      togglePlay();
-    } else {
-      playFromQueue();
-    }
-  }, [isCurrentTrack, playFromQueue, playlist, setPlaylist, togglePlay, track]);
+    if (isCurrentTrack) togglePlay();
+    else playFromQueue();
+  }, [isCurrentTrack, playFromQueue, togglePlay]);
 
   const handleSeek = useCallback(
     (position: number) => {
@@ -192,6 +189,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
               type="button"
               className={actionClass}
               aria-label="Share track"
+              onClick={() => track.permalink && useDialogs.getState().openShare({ kind: "track", id: track.id, title: track.title, path: track.permalink, isPrivate: track.isPrivate, embeddable: track.embeddable, secret: new URLSearchParams(track.accessQuery).get("s"), atSeconds: isCurrentTrack ? currentTime : 0 })}
             >
               <Share2 className="h-3.5 w-3.5" />
             </button>
@@ -199,16 +197,11 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
               type="button"
               className={actionClass}
               aria-label="Copy track link"
+              onClick={() => track.permalink && copyText(absoluteUrl(track.permalink))}
             >
-              <Copy className="h-3.5 w-3.5" />
+              <Link2 className="h-3.5 w-3.5" />
             </button>
-            <button
-              type="button"
-              className={actionClass}
-              aria-label="More options"
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </button>
+            <TrackMenu track={track} className="h-8 w-8 rounded border border-zinc-700 bg-zinc-900" />
             <div className="ml-auto hidden items-center gap-3 text-xs text-zinc-500 md:flex">
               <span className="inline-flex items-center gap-1">
                 <Play className="h-3 w-3 fill-current" /> {track.playCount ?? 0}

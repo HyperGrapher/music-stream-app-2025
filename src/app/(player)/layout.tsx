@@ -3,6 +3,8 @@ import { OnboardingGuard, VerifyEmailBanner } from "@/components/auth/AppShellGu
 import { PlaybackControls } from "../_components/GlobalPlaybackControls";
 import { PlayerControllerWrapper } from "@/components/PlayerControllerWrapper";
 import { ServerNavbar } from "../_components/ServerNavbar";
+import { GlobalDialogs } from "@/components/player/GlobalDialogs";
+import { MobileTabBar } from "@/components/player/MobileTabBar";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 
@@ -22,10 +24,12 @@ export default async function Layout({
             <VerifyEmailBanner />
             <OnboardingGuard />
             <AuthDialog />
-            <main className="bg-zinc-950 min-h-[calc(100vh-190px)] relative">
+            <main className="bg-zinc-950 min-h-[calc(100vh-190px)] relative pb-32 sm:pb-0">
                 {children}
             </main>
             <PlaybackControls />
+            <GlobalDialogs />
+            <MobileTabBar />
             <PlayerControllerWrapper initialUserId={userId} />
         </>
     )

@@ -174,8 +174,7 @@ export function OnboardingForm({ initialUsername, initialName, initialImage }: {
                         aria-label={`Play ${creator.topTrack.title}`}
                         className="rounded-full border border-zinc-700 p-2 text-zinc-300 hover:border-orange-500 hover:text-orange-400"
                         onClick={() => {
-                          player.setPlaylist([creator.topTrack!]);
-                          player.playTrack(creator.topTrack!);
+                          player.playContext([creator.topTrack!], creator.topTrack!, { source: "OTHER" });
                         }}
                       >
                         <Play className="h-3.5 w-3.5 fill-current" />
