@@ -5,18 +5,10 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 import { db } from "@/server/db";
 import { firstFree, usernameBase } from "@/lib/names";
 import { PASSWORD_PROBLEM_MESSAGES, passwordProblem } from "@/lib/passwords";
+import { ensureAdminRole, isAdminEmail } from "@/server/modules/accounts/admin-role";
 import { sendEmail } from "@/server/modules/email";
 import { passwordResetEmail, verificationEmail } from "@/server/modules/email/templates";
 import { consumeRateLimit, RATE_LIMITS } from "@/server/modules/rate-limit";
-
-/** Emails listed in ADMIN_EMAILS (comma-separated, case-insensitive) get the ADMIN role at sign-in. */
-const adminEmails = new Set(
-  (env.ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean),
-);
-const isAdminEmail = (email: string) => adminEmails.has(email.toLowerCase());
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -81,7 +73,8 @@ export const auth = betterAuth({
                         data: {
                             ...user,
                             username: await freeUsername(seed),
-                            role: isAdminEmail(user.email) ? "ADMIN" : "USER",
+                            // Only a verified address may be an admin (Google accounts are verified on creation).
+                            role: user.emailVerified && isAdminEmail(user.email) ? "ADMIN" : "USER",
                         },
                     };
                 },
@@ -91,15 +84,10 @@ export const auth = betterAuth({
             create: {
                 // Keeps `ADMIN_EMAILS` authoritative: edits to the variable apply at the next sign-in.
                 before: async (session) => {
-                    const user = await db.user.findUnique({
-                        where: { id: session.userId },
-                        select: { email: true, role: true, status: true },
-                    });
+                    const user = await db.user.findUnique({ where: { id: session.userId }, select: { status: true } });
                     // Suspended accounts cannot start a session (PRD AD-2).
                     if (user?.status === "SUSPENDED") throw new APIError("FORBIDDEN", { message: "This account has been suspended. Contact support if you think this is a mistake." });
-                    if (user && isAdminEmail(user.email) && user.role !== "ADMIN") {
-                        await db.user.update({ where: { id: session.userId }, data: { role: "ADMIN" } });
-                    }
+                    await ensureAdminRole(db, session.userId);
                     return { data: session };
                 },
             },
