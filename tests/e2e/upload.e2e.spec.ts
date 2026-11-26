@@ -37,8 +37,9 @@ test("J3: upload one file, fill in the details and publish: the track is live", 
   await allReady(page, 1);
   await page.getByLabel("Title").fill("Night Drive (Demo)");
   await page.getByLabel("Genre", { exact: true }).selectOption("electronic");
-  await page.getByLabel("Tags").fill("synth, lo-fi");
-  await page.getByLabel("Tags").press("Enter");
+  const tags = page.locator('input[aria-label="Tags"]');
+  await tags.fill("synth, lo-fi");
+  await tags.press("Enter");
   await page.getByRole("tab", { name: "Metadata" }).click();
   await page.getByLabel("BPM").fill("120");
   await page.getByLabel("ISRC").fill("us-abc-24-12345");
@@ -70,9 +71,10 @@ test("UP-2, UP-5: unsupported files are refused with a reason; a failed file can
   const { page, context, user } = await creator(browser, baseURL!);
   await page.goto("/upload", { waitUntil: "networkidle" });
   await choose(page, { name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("hello") }, { name: "empty.mp3", mimeType: "audio/mpeg", buffer: Buffer.alloc(0) });
-  await expect(page.getByRole("alert")).toContainText("notes.txt");
-  await expect(page.getByRole("alert")).toContainText("Unsupported format");
-  await expect(page.getByRole("alert")).toContainText("empty.mp3");
+  const refused = page.locator("ul[role=alert]");
+  await expect(refused).toContainText("notes.txt");
+  await expect(refused).toContainText("Unsupported format");
+  await expect(refused).toContainText("empty.mp3");
 
   // a file the browser cannot decode fails with the UP-F2 message; the good one still becomes ready
   await choose(page, { name: "broken.mp3", mimeType: "audio/mpeg", buffer: Buffer.from("this is not audio at all".repeat(50)) }, wav("good.wav"));
@@ -86,7 +88,7 @@ test("UP-2, UP-5: unsupported files are refused with a reason; a failed file can
 test("J4: five files become an album: rename, reorder by keyboard, privacy warning, publish, then change the type to EP", async ({ browser, baseURL }) => {
   const { username, page, context } = await creator(browser, baseURL!);
   await page.goto("/upload", { waitUntil: "networkidle" });
-  await choose(page, ...[1, 2, 3, 4, 5].map((n) => wav(`0${n} Track ${n}.wav`, 2, 220 * n)));
+  await choose(page, ...[1, 2, 3, 4, 5].map((n) => wav(`0${n} - Track ${n}.wav`, 2, 220 * n)));
   await allReady(page, 5);
 
   await page.getByLabel("Release title").fill("Five Songs");
@@ -249,8 +251,8 @@ test("editing: change title and permalink (old URL redirects), then delete with 
 
   await page.getByTestId("published-banner").getByRole("link", { name: "Edit" }).click();
   await expect(page).toHaveURL(/\/studio\/tracks\/.+\/edit\?return=/);
-  await page.getByLabel("Title", { exact: true }).fill("Renamed Track");
-  await page.getByLabel("Permalink").fill("renamed-track");
+  await page.getByLabel("Title").first().fill("Renamed Track");
+  await page.getByLabel("Permalink").first().fill("renamed-track");
   await expect(page.getByText("That permalink is taken")).toHaveCount(0);
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/${username}/renamed-track$`));
