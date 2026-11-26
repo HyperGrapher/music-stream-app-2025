@@ -38,7 +38,7 @@ export function NotificationBell() {
           {unread > 0 ? <span className="absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-orange-700 px-1 text-[10px] leading-4 font-bold text-white" data-testid="unread-badge">{unread > 99 ? "99+" : unread}</span> : null}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-96 max-w-[calc(100vw-1rem)] border-zinc-800 bg-zinc-900 p-0 text-white">
+      <DropdownMenuContent align="end" className="w-96 max-w-[calc(100vw-1rem)] p-0">
         <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
           <h2 className="text-sm font-semibold">Notifications</h2>
           <button type="button" className="text-xs text-zinc-400 hover:text-white" onClick={() => markRead.mutate({})}>Mark all as read</button>

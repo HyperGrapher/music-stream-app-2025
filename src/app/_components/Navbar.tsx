@@ -2,18 +2,22 @@
 import { hardNavigate } from "@/lib/navigate";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, MoreHorizontal } from "lucide-react";
+import { AudioLines, ChevronDown, Copyright, Heart, Info, Keyboard, Library, LogOut, MessageSquare, MoreHorizontal, Scale, Settings, ShieldCheck, Smartphone, User, Users } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUser } from "@/hooks/useUser";
+import { useDialogs } from "@/store/dialogs";
 import { toast } from "sonner";
 import { SearchBox } from "@/components/SearchBox";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { MessageBell } from "@/components/messages/MessageBell";
 
 type User = {
   id: string;
@@ -105,51 +109,44 @@ export function Navbar({ initialUser }: NavbarProps) {
         {displayUser ? (
           <>
             <NotificationBell />
+            <MessageBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="p-1 hover:bg-gray-800" aria-label="Account menu">
-                  <Avatar className="h-8 w-8">
+                <Button variant="ghost" className="gap-0.5 rounded-full p-1 hover:bg-zinc-800 data-[state=open]:bg-zinc-800" aria-label="Account menu">
+                  <Avatar className="h-8 w-8 ring-2 ring-transparent transition group-hover:ring-orange-500">
                     <AvatarImage src={displayUser.image || ""} />
                     <AvatarFallback>
                       {displayUser.name?.charAt(0) || "U"}
                     </AvatarFallback>
                   </Avatar>
-                  <ChevronDown className="ml-1 h-4 w-4 text-gray-400" />
+                  <ChevronDown className="ml-1 h-4 w-4 text-zinc-400" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="border-gray-800 bg-gray-900 text-white"
-              >
-                <DropdownMenuItem asChild className="hover:bg-gray-800">
-                  <Link href={displayUser.username ? `/${displayUser.username}` : "/profile"}>Profile</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="hover:bg-gray-800">
-                  <Link href="/you/likes">Likes</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="hover:bg-gray-800">
-                  <Link href="/you/following">Following</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="hover:bg-gray-800">
-                  <Link href="/you/library">Library</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="hover:bg-gray-800">
-                  <Link href="/studio/tracks">Studio</Link>
-                </DropdownMenuItem>
+              <DropdownMenuContent align="end" className="w-64">
+                <div className="flex items-center gap-3 px-2.5 pt-1.5 pb-2.5">
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={displayUser.image || ""} />
+                    <AvatarFallback>{displayUser.name?.charAt(0) || "U"}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-white">{displayUser.name ?? "Your account"}</p>
+                    {displayUser.username ? <p className="truncate text-xs text-zinc-400">@{displayUser.username}</p> : null}
+                  </div>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild><Link href={displayUser.username ? `/${displayUser.username}` : "/profile"}><User /> Profile</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href="/you/likes"><Heart /> Likes</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href="/you/following"><Users /> Following</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href="/you/library"><Library /> Library</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href="/messages"><MessageSquare /> Messages</Link></DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild><Link href="/studio/tracks"><AudioLines /> Studio</Link></DropdownMenuItem>
                 {role === "ADMIN" && (
-                  <DropdownMenuItem asChild className="hover:bg-gray-800">
-                    <Link href="/admin">Admin</Link>
-                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link href="/admin"><ShieldCheck /> Admin</Link></DropdownMenuItem>
                 )}
-                <DropdownMenuItem asChild className="hover:bg-gray-800">
-                  <Link href="/settings/profile">Settings</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="hover:bg-gray-800"
-                  onClick={handleSignOut}
-                >
-                  Sign out
-                </DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href="/settings/profile"><Settings /> Settings</Link></DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onSelect={() => void handleSignOut()}><LogOut /> Sign out</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -169,28 +166,20 @@ export function Navbar({ initialUser }: NavbarProps) {
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              className="rounded-full p-2 hover:bg-gray-800"
+              className="rounded-full p-2 hover:bg-zinc-800 data-[state=open]:bg-zinc-800"
               aria-label="More"
             >
               <MoreHorizontal className="h-5 w-5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            className="border-gray-800 bg-gray-900 text-white"
-          >
-            <DropdownMenuItem className="hover:bg-gray-800">
-              About us
-            </DropdownMenuItem>
-            <DropdownMenuItem className="hover:bg-gray-800">
-              Legal
-            </DropdownMenuItem>
-            <DropdownMenuItem className="hover:bg-gray-800">
-              Copyright
-            </DropdownMenuItem>
-            <DropdownMenuItem className="hover:bg-gray-800">
-              Mobile app
-            </DropdownMenuItem>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>Music Stream</DropdownMenuLabel>
+            <DropdownMenuItem><Info /> About us</DropdownMenuItem>
+            <DropdownMenuItem><Scale /> Legal</DropdownMenuItem>
+            <DropdownMenuItem><Copyright /> Copyright</DropdownMenuItem>
+            <DropdownMenuItem><Smartphone /> Mobile app</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => useDialogs.getState().setShortcutsOpen(true)}><Keyboard /> Keyboard shortcuts</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

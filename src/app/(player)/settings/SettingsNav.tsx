@@ -16,7 +16,7 @@ const LINKS = [
 export function SettingsNav() {
   const pathname = usePathname();
   return (
-    <nav aria-label="Settings" className="flex gap-1 overflow-x-auto md:flex-col">
+    <nav aria-label="Settings" className="no-scrollbar flex gap-1 overflow-x-auto md:flex-col">
       {LINKS.map((link) => (
         <Link
           key={link.href}

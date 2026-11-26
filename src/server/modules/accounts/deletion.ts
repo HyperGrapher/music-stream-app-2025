@@ -66,6 +66,8 @@ export async function purgeAccountContent(db: PrismaClient, userId: string) {
       await tx.report.deleteMany({ where: { reporterId: userId } });
       await tx.message.deleteMany({ where: { senderId: userId } });
       await tx.conversationMember.deleteMany({ where: { userId } });
+      // A conversation nobody belongs to any more has nothing left to show; the other person's side stays until they delete it.
+      await tx.conversation.deleteMany({ where: { members: { none: {} } } });
       // Their tracks leave other users' playlists with them (collection_track cascades from the track).
       await tx.collection.deleteMany({ where: { ownerId: userId } });
       await tx.track.deleteMany({ where: { creatorId: userId } });

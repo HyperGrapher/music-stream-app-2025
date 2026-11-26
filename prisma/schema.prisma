@@ -823,11 +823,14 @@ model NotificationPreference {
   @@map("notification_preference")
 }
 
+/// Exactly two members. `pairKey` (the two user ids, sorted, joined by ":") makes a pair of people share one conversation.
 model Conversation {
-  id        String               @id @default(uuid())
-  createdAt DateTime             @default(now())
-  members   ConversationMember[]
-  messages  Message[]
+  id            String               @id @default(uuid())
+  pairKey       String               @unique
+  createdAt     DateTime             @default(now())
+  lastMessageAt DateTime             @default(now())
+  members       ConversationMember[]
+  messages      Message[]
 
   @@map("conversation")
 }
@@ -853,6 +856,8 @@ model Message {
   sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
   body           String       @db.Text
   createdAt      DateTime     @default(now())
+  /// Set when an admin removes a reported message; the body is blanked and the thread shows "removed".
+  removedAt      DateTime?
 
   @@index([conversationId, createdAt])
   @@map("message")

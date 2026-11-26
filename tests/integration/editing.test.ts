@@ -16,11 +16,11 @@ const publish = (owner: string, durationMs: number, fields: Record<string, unkno
   createAsset(owner, { durationMs }).then((asset) => callerFor(owner).upload.createTrack({ title: "T", mediaAssetId: asset.id, ...fields }));
 
 describe("upload-time quota (UP-8, 2.3)", () => {
-  it("Free users have 180 minutes in total; Pro users are unlimited", async () => {
+  it("Free users have 60 minutes in total; Pro users are unlimited", async () => {
     const free = await createUser("quota-free");
-    await publish(free, 100 * MIN);
-    await assert.rejects(publish(free, 100 * MIN), withAppCode("UPLOAD_LIMIT_REACHED"));
-    await publish(free, 80 * MIN); // exactly fills the allowance
+    await publish(free, 40 * MIN);
+    await assert.rejects(publish(free, 40 * MIN), withAppCode("UPLOAD_LIMIT_REACHED"));
+    await publish(free, 20 * MIN); // exactly fills the allowance
     assert.deepEqual((await callerFor(free).upload.quota()).remainingMs, 0);
 
     const pro = await createUser("quota-pro", { plan: "PRO" });
@@ -32,7 +32,7 @@ describe("upload-time quota (UP-8, 2.3)", () => {
 
   it("a rejected publish leaves the files READY and untouched; releases are checked as a whole", async () => {
     const owner = await createUser("quota-rel");
-    const [a, b] = await Promise.all([createAsset(owner, { durationMs: 100 * MIN }), createAsset(owner, { durationMs: 100 * MIN })]);
+    const [a, b] = await Promise.all([createAsset(owner, { durationMs: 40 * MIN }), createAsset(owner, { durationMs: 40 * MIN })]);
     await assert.rejects(
       callerFor(owner).upload.createCollection({ title: "Too long", tracks: [{ mediaAssetId: a.id, title: "a" }, { mediaAssetId: b.id, title: "b" }] }),
       withAppCode("UPLOAD_LIMIT_REACHED"),
@@ -43,10 +43,10 @@ describe("upload-time quota (UP-8, 2.3)", () => {
 
   it("deleting a track gives its time back", async () => {
     const owner = await createUser("quota-back");
-    const { track } = await publish(owner, 150 * MIN);
-    assert.equal((await callerFor(owner).upload.quota()).remainingMs, 30 * MIN);
+    const { track } = await publish(owner, 45 * MIN);
+    assert.equal((await callerFor(owner).upload.quota()).remainingMs, 15 * MIN);
     await callerFor(owner).tracks.delete({ id: track.id });
-    assert.equal((await callerFor(owner).upload.quota()).remainingMs, 180 * MIN);
+    assert.equal((await callerFor(owner).upload.quota()).remainingMs, 60 * MIN);
   });
 });
 

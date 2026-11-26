@@ -1,5 +1,6 @@
 "use client";
 
+import { ScrollPanel } from "@/components/ui/scroll-panel";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -48,15 +49,15 @@ export function SpotlightEditor() {
         {items.length === 0 && <li className="text-sm text-zinc-400">Nothing pinned yet.</li>}
       </ol>
       <h2 className="mt-6 mb-2 text-sm font-bold tracking-wide text-zinc-400 uppercase">Your public tracks and collections</h2>
-      <ul className="max-h-72 space-y-1 overflow-y-auto">
+      <ScrollPanel className="max-h-72"><ul className="space-y-1" aria-label="Your public tracks and collections">
         {all.map((p) => (
-          <li key={`${p.kind}${p.id}`} className="flex items-center justify-between gap-2 rounded px-2 py-1.5 hover:bg-zinc-900">
+          <li key={`${p.kind}${p.id}`} className="flex items-center justify-between gap-2 rounded px-2 py-1.5 hover:bg-zinc-800/70">
             <span className="truncate text-sm">{p.title} <span className="text-xs text-zinc-400">{p.kind === "track" ? "Track" : "Collection"}</span></span>
             <Button size="sm" variant="outline" disabled={has(p)} onClick={() => add(p)} aria-label={`Add ${p.title}`}>{has(p) ? "Added" : "Add"}</Button>
           </li>
         ))}
         {all.length === 0 && <li className="text-sm text-zinc-400">Publish something first.</li>}
-      </ul>
+      </ul></ScrollPanel>
       <Button className="mt-5 bg-orange-700 text-white hover:bg-orange-800" disabled={!draft || save.isPending} onClick={() => draft && save.mutate({ items: draft.map(({ kind, id }) => ({ kind, id })) })}>Save spotlight</Button>
       <UpsellDialog open={upsell} onClose={() => setUpsell(false)} feature="More than one Spotlight item" />
     </div>

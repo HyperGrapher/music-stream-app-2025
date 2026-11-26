@@ -23,6 +23,8 @@ export const RATE_LIMITS = {
   uploadUrlPerDay: { max: 300, windowSeconds: 86_400 },
   reportPerDay: { max: 20, windowSeconds: 86_400 },
   messagePerMinute: { max: 30, windowSeconds: 60 },
+  /** MS-4: accounts younger than 7 days may open 10 new conversations a day. */
+  newConversationPerDay: { max: 10, windowSeconds: 86_400 },
   searchAnonymousPerMinute: { max: 60, windowSeconds: 60 },
   emailPerHour: { max: 3, windowSeconds: 3_600 },
 } as const satisfies Record<string, RateRule>;

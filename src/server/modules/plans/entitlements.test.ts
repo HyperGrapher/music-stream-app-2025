@@ -25,13 +25,13 @@ test("PL-4 gated capabilities throw PLAN_REQUIRED for free users only", () => {
   }
 });
 
-test("2.3 upload time: 180 minutes on Free, unlimited on Pro", () => {
-  assert.equal(getEntitlements({ plan: "FREE" }).uploadTimeLimitMs, 180 * MINUTE_MS);
-  assert.equal(uploadTimeRemainingMs({ plan: "FREE" }, 47 * MINUTE_MS), 133 * MINUTE_MS);
+test("2.3 upload time: 60 minutes on Free, unlimited on Pro", () => {
+  assert.equal(getEntitlements({ plan: "FREE" }).uploadTimeLimitMs, 60 * MINUTE_MS);
+  assert.equal(uploadTimeRemainingMs({ plan: "FREE" }, 47 * MINUTE_MS), 13 * MINUTE_MS);
   assert.equal(uploadTimeRemainingMs({ plan: "FREE" }, 500 * MINUTE_MS), 0);
   assert.equal(uploadTimeRemainingMs({ plan: "PRO" }, 500 * MINUTE_MS), null);
-  assert.ok(fitsUploadTime({ plan: "FREE" }, 170 * MINUTE_MS, 10 * MINUTE_MS));
-  assert.ok(!fitsUploadTime({ plan: "FREE" }, 170 * MINUTE_MS, 10 * MINUTE_MS + 1));
+  assert.ok(fitsUploadTime({ plan: "FREE" }, 50 * MINUTE_MS, 10 * MINUTE_MS));
+  assert.ok(!fitsUploadTime({ plan: "FREE" }, 50 * MINUTE_MS, 10 * MINUTE_MS + 1));
   assert.ok(fitsUploadTime({ plan: "PRO" }, 10 ** 12, 10 ** 9));
 });
 

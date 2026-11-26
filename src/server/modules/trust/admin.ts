@@ -5,7 +5,7 @@ import { now as clockNow } from "@/server/clock";
 import { recountPublicTracks } from "@/server/modules/publishing/fields";
 import { removeCommentAsModerator } from "@/server/modules/tracks/comments";
 
-type Target = { targetType: Exclude<ReportTarget, "MESSAGE">; targetId: string };
+type Target = { targetType: ReportTarget; targetId: string };
 const notFound = () => new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
 /** AD-4: every admin action leaves an audit row. */
@@ -69,6 +69,11 @@ export async function previewTarget(db: PrismaClient, { targetType, targetId }: 
     const c = await db.comment.findUnique({ where: { id: targetId }, select: { content: true, timestampSeconds: true, author: { select: { id: true, username: true, name: true } }, track: { select: { title: true, slug: true, creator: { select: { username: true } } } } } });
     return c ? { kind: "COMMENT" as const, title: `Comment on “${c.track.title}”`, href: `/${c.track.creator.username}/${c.track.slug}`, owner: c.author, removed: false, reason: null as string | null, text: c.content } : { kind: "COMMENT" as const, title: "Comment (already removed)", href: null, owner: null, removed: true, reason: null as string | null, text: null as string | null };
   }
+  if (targetType === "MESSAGE") {
+    // Admins see a message only because it was reported: its text and sender, nothing else of the conversation.
+    const m = await db.message.findUnique({ where: { id: targetId }, select: { body: true, removedAt: true, sender: { select: { id: true, username: true, name: true } } } });
+    return m ? { kind: "MESSAGE" as const, title: `Message from ${m.sender.name}`, href: `/admin/users/${m.sender.id}`, owner: m.sender, removed: !!m.removedAt, reason: null as string | null, text: m.body } : null;
+  }
   const u = await db.user.findUnique({ where: { id: targetId }, select: { id: true, username: true, name: true, status: true, bio: true } });
   return u ? { kind: "USER" as const, title: u.name, href: `/${u.username}`, owner: { id: u.id, username: u.username, name: u.name }, removed: u.status === "SUSPENDED", reason: null as string | null, text: u.bio } : null;
 }
@@ -126,6 +131,11 @@ export async function removeContent(db: PrismaClient, adminId: string, target: T
     ownerId = c.ownerId;
     label = `your collection “${c.title}”`;
     await db.spotlightItem.deleteMany({ where: { collectionId: target.targetId } });
+  } else if (target.targetType === "MESSAGE") {
+    const m = await db.message.update({ where: { id: target.targetId }, data: { removedAt: now }, select: { senderId: true } }).catch(() => null);
+    if (!m) throw notFound();
+    ownerId = m.senderId;
+    label = "one of your messages";
   } else {
     const comment = await db.comment.findUnique({ where: { id: target.targetId }, select: { authorId: true } });
     if (!comment) throw notFound();
@@ -147,6 +157,8 @@ export async function restoreContent(db: PrismaClient, adminId: string, target: 
     await db.$transaction((tx) => recountPublicTracks(tx, t.creatorId, now));
   } else if (target.targetType === "COLLECTION") {
     await db.collection.update({ where: { id: target.targetId }, data: { moderationState: "VISIBLE", moderationReason: null } }).catch(() => { throw notFound(); });
+  } else if (target.targetType === "MESSAGE") {
+    await db.message.update({ where: { id: target.targetId }, data: { removedAt: null } }).catch(() => { throw notFound(); });
   } else if (target.targetType === "USER") {
     return unsuspendUser(db, adminId, target.targetId, note, now);
   } else throw new TRPCError({ code: "BAD_REQUEST", message: "Removed comments cannot be restored" });

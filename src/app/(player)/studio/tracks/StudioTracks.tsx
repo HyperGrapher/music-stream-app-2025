@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNowStrict } from "date-fns";
 import { ArrowDown, ArrowUp, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
@@ -160,7 +161,7 @@ export function StudioTracks() {
             ))}
           </tbody>
         </table>
-        {list.isLoading && <p className="p-6 text-sm text-zinc-400">Loading…</p>}
+        {list.isLoading && <div className="space-y-3 p-6" role="status" aria-label="Loading">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-9 w-full" />)}</div>}
         {!list.isLoading && rows.length === 0 && <p className="p-8 text-center text-sm text-zinc-400">{search || visibility !== "all" ? "No tracks match." : "You have not uploaded anything yet."}</p>}
       </div>
       <p className="mt-2 text-xs text-zinc-400">{list.data?.total ?? 0} {list.data?.total === 1 ? "track" : "tracks"}</p>

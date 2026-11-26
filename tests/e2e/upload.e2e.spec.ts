@@ -225,13 +225,13 @@ test("J8: a Pro creator schedules a track; it is invisible until its time, then 
 
 test("UP-8: Free upload time is enforced when a file would exceed it", async ({ browser, baseURL }) => {
   const { user, page, context, username } = await creator(browser, baseURL!);
-  // almost the whole allowance is used already (178 of 180 minutes)
+  // almost the whole allowance is used already (59 of 60 minutes)
   const audio = await db.mediaAsset.create({ data: { ownerId: user.id, kind: "AUDIO", status: "ATTACHED", bucket: "e2e-bucket", storageKey: `uploads/${user.id}/${crypto.randomUUID()}-big.mp3`, originalFilename: "big.mp3", mimeType: "audio/mpeg" } });
-  await db.audioAnalysis.create({ data: { audioAssetId: audio.id, status: "READY", durationMs: 179 * 60_000 } });
-  await db.track.create({ data: { creatorId: user.id, slug: "big-one", audioAssetId: audio.id, title: "Big", publishedAt: new Date(), secretToken: "q".repeat(22), durationMs: 179 * 60_000, mimeType: "audio/mpeg" } });
+  await db.audioAnalysis.create({ data: { audioAssetId: audio.id, status: "READY", durationMs: 59 * 60_000 } });
+  await db.track.create({ data: { creatorId: user.id, slug: "big-one", audioAssetId: audio.id, title: "Big", publishedAt: new Date(), secretToken: "q".repeat(22), durationMs: 59 * 60_000, mimeType: "audio/mpeg" } });
 
   await page.goto("/upload", { waitUntil: "networkidle" });
-  await expect(page.getByText("179 of 180 minutes used")).toBeVisible();
+  await expect(page.getByText("59 of 60 minutes used")).toBeVisible();
   await choose(page, wav("Two Minutes.wav", 130));
   await allReady(page, 1);
   await expect(page.getByRole("alert").filter({ hasText: "upload time left" })).toBeVisible();

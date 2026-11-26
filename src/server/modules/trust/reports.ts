@@ -19,7 +19,7 @@ export const REPORT_DETAILS_MAX = 1000;
 
 export interface ReportInput {
   reporterId: string;
-  targetType: Exclude<ReportTarget, "MESSAGE">;
+  targetType: ReportTarget;
   targetId: string;
   reason: ReportReason;
   details?: string | null;
@@ -48,13 +48,19 @@ async function ownerOf(db: PrismaClient, type: ReportInput["targetType"], id: st
     if (!row || !trackAccess(row.track, { viewerId: reporterId, now })) throw notFound();
     return row.authorId;
   }
+  if (type === "MESSAGE") {
+    // MS-6: only someone in the conversation can report one of its messages.
+    const row = await db.message.findUnique({ where: { id }, select: { senderId: true, removedAt: true, conversation: { select: { members: { select: { userId: true } } } } } });
+    if (!row || row.removedAt || !row.conversation.members.some((m) => m.userId === reporterId)) throw notFound();
+    return row.senderId;
+  }
   const user = await db.user.findUnique({ where: { id }, select: { id: true, status: true } });
   if (user?.status !== "ACTIVE") throw notFound();
   return user.id;
 }
 
 /**
- * TS-1/TS-2: reports a track, collection, comment or user. One open report per reporter per target (reporting again
+ * TS-1/TS-2: reports a track, collection, comment, user or message. One open report per reporter per target (reporting again
  * updates it), at most 20 a day. You cannot report your own content or yourself.
  */
 export async function createReport(db: PrismaClient, input: ReportInput) {

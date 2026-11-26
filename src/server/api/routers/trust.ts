@@ -8,7 +8,7 @@ export const trustRouter = createTRPCRouter({
   /** TS-1: report a track, collection, comment or user. */
   report: accountProcedure
     .input(z.object({
-      targetType: z.enum(["TRACK", "COLLECTION", "COMMENT", "USER"]),
+      targetType: z.enum(["TRACK", "COLLECTION", "COMMENT", "USER", "MESSAGE"]),
       targetId: z.string().min(1).max(64),
       reason: z.enum(["COPYRIGHT", "SPAM", "HARASSMENT", "HATE", "SEXUAL", "VIOLENCE", "IMPERSONATION", "OTHER"]),
       details: z.string().max(REPORT_DETAILS_MAX).optional(),

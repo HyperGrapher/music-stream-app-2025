@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useUser } from "@/hooks/useUser";
 import { formatTimeFragment } from "@/lib/time-fragment";
 import { formatDuration } from "@/lib/utils";
 import { type ShareTarget, useDialogs } from "@/store/dialogs";
 
+import { ShareMessageTab } from "./ShareMessageTab";
 import { copyText } from "./TrackMenu";
 
 /** The iframe snippet of the Embed tab. */
@@ -21,6 +23,7 @@ export function embedCode(target: Pick<ShareTarget, "kind" | "id" | "secret">, o
 }
 
 function Body({ target }: { target: ShareTarget }) {
+  const { user } = useUser();
   const [atTime, setAtTime] = useState(false);
   const hasTime = target.kind === "track" && (target.atSeconds ?? 0) >= 1;
   const url = new URL(target.path, window.location.origin).toString() + (atTime && hasTime ? `#t=${formatTimeFragment(target.atSeconds!)}` : "");
@@ -40,6 +43,7 @@ function Body({ target }: { target: ShareTarget }) {
       <TabsList>
         <TabsTrigger value="share">Share</TabsTrigger>
         {canEmbed ? <TabsTrigger value="embed">Embed</TabsTrigger> : null}
+        {user ? <TabsTrigger value="message">Message</TabsTrigger> : null}
       </TabsList>
       <TabsContent value="share" className="space-y-3">
         {target.isPrivate ? <p className="text-sm text-amber-300">This is private. Anyone with this link can listen.</p> : null}
@@ -61,6 +65,7 @@ function Body({ target }: { target: ShareTarget }) {
           ) : null}
         </div>
       </TabsContent>
+      {user ? <TabsContent value="message"><ShareMessageTab url={url} /></TabsContent> : null}
       {canEmbed ? (
         <TabsContent value="embed" className="space-y-3">
           <textarea readOnly aria-label="Embed code" rows={4} className="w-full rounded-md border border-zinc-700 bg-zinc-900 p-2 font-mono text-xs" value={embedCode(target, window.location.origin)} onFocus={(e) => e.currentTarget.select()} />

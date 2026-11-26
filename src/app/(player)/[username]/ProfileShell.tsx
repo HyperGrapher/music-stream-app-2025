@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { FollowButton } from "@/components/FollowButton";
+import { MessageButton } from "@/components/MessageButton";
 import { ProfileMenu } from "@/components/ProfileMenu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -84,7 +85,7 @@ export async function ProfileShell({ username, active, children }: { username: s
         </section>
 
         <div className="flex min-h-14 flex-wrap items-center justify-between gap-4 border-b border-zinc-800 px-5 sm:px-7">
-          <nav aria-label="Profile sections" className="flex gap-5 overflow-x-auto sm:gap-7">
+          <nav aria-label="Profile sections" className="no-scrollbar flex gap-5 overflow-x-auto sm:gap-7">
             {TABS.map((tab) => (
               <Link
                 key={tab.key}
@@ -106,6 +107,7 @@ export async function ProfileShell({ username, active, children }: { username: s
             ) : (
               <FollowButton userId={profile.id} initialFollowing={relationship.following} />
             )}
+            {!profile.isOwner && <MessageButton username={profile.username} />}
             <CopyLinkButton path={base} />
             {!profile.isOwner && <ProfileMenu userId={profile.id} name={profile.name} />}
           </div>

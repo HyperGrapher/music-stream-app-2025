@@ -10,8 +10,8 @@ export const MINUTE_MS = 60_000;
 
 const FREE = {
   /** Total duration of the user's existing tracks; null means unlimited. */
-  uploadTimeLimitMs: 180 * MINUTE_MS as number | null,
-  maxFileBytes: 100 * 1024 * 1024,
+  uploadTimeLimitMs: 60 * MINUTE_MS as number | null,
+  maxFileBytes: 10 * 1024 * 1024,
   /** Fair-use ceiling on stored audio for unlimited-time plans. */
   storedAudioCapBytes: null as number | null,
   spotlightItems: 1,

@@ -332,7 +332,7 @@ function MiniPlayer() {
   if (!currentTrack) return null;
   const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   return (
-    <div className="right-scroll-bar-position sm:hidden fixed left-0 right-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-50 bg-[#181818] border-t border-[#282828]">
+    <div className="sm:hidden fixed left-0 right-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-50 bg-[#181818] border-t border-[#282828]">
       <div className="h-0.5 bg-neutral-700"><div className="h-full bg-orange-700" style={{ width: `${pct}%` }} /></div>
       <div className="flex items-center gap-3 px-3 py-2">
         <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setSheetOpen(true)}>
@@ -408,7 +408,7 @@ export function PlaybackControls() {
     <>
       <MiniPlayer />
       <PlayerSheet />
-      <div className="right-scroll-bar-position hidden sm:flex h-[69px] fixed bottom-0 left-0 right-0 items-center justify-between p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] bg-[#181818] border-t border-[#282828] z-50">
+      <div className="hidden sm:flex h-[69px] fixed bottom-0 left-0 right-0 items-center justify-between p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] bg-[#181818] border-t border-[#282828] z-50">
         <div className="flex items-center justify-between w-full max-w-screen-xl mx-auto px-4 sm:px-8">
           <div className="w-1/3 flex justify-start">
             <TrackInfo />

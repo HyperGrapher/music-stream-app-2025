@@ -1,5 +1,6 @@
 "use client";
 
+import { FeedSkeleton } from "@/components/ui/feed-skeleton";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -27,7 +28,7 @@ export function HistoryList() {
           <Button size="sm" variant="outline" className="border-zinc-700 bg-transparent text-white hover:bg-zinc-800" onClick={() => setConfirming(true)}>Clear listening history</Button>
         ))}
       </div>
-      {history.isLoading && <p className="mt-6 text-sm text-zinc-400">Loading…</p>}
+      {history.isLoading && <div className="mt-6"><FeedSkeleton /></div>}
       {history.data?.length === 0 && <p className="mt-10 text-center text-sm text-zinc-400">Tracks you listen to will show up here.</p>}
       <div className="mt-4">
         {(history.data ?? []).map((entry) => (

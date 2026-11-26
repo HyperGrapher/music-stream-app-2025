@@ -31,8 +31,10 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 | M4 Social loop | **done** (see "M4 summary") |
 | M5 Discovery | **done** (see "M5 summary") |
 | M6 Creator tools & plans | **done** (see "M6 summary") |
-| M7 Trust & safety | **done** (see "M7 summary"; direct messages deferred) |
+| M7 Trust & safety | **done** (see "M7 summary") |
 | M8 Polish | **done** (see "M8 summary"; owner decisions open) |
+| N1 Owner UI fixes + Free limits | **done** (see "After M8: owner requests") |
+| N2 Direct messages (PRD 13.3) | **done** (see "After M8: owner requests") |
 
 **M0 summary: what exists now** (read these before starting M1)
 
@@ -202,15 +204,42 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 
 **Open items / owner decisions after M8**:
 
-- **Direct messages** (PRD 13.3, P2): not built. Build them, or drop them from the PRD? If kept: `/messages`, "Who can message me" in Privacy, rate limits (MS-4), report message.
+- ~~Direct messages~~ were built after M8 (see "After M8: owner requests").
 - P2 items still not built (each listed in its milestone's deviations): comment `@` autocomplete, repost with caption, hover quick preview, "Your mixes", chart rank change, Insights CSV export, drag-and-drop Spotlight, embed waveform, suspension page, appeals.
 - Bulk edit is not one transaction (see M6 deviations).
 - `RESEND_API_KEY` is still unset: all emails are logged only.
 
+**After M8: owner requests** (session 20, branch `dev`)
+
+| Request | What was done | Where |
+|---|---|---|
+| Free plan: 10 MB per file, 60 minutes of upload time | `ENTITLEMENTS.FREE` (`maxFileBytes`, `uploadTimeLimitMs`); Pro keeps 100 MB / unlimited. The upload page asks `upload.quota` for the account's file limit (`useUploadBatch.maxFileBytes`) so oversize files are refused before uploading; the server still checks. PRD §2.3 and README updated. | `server/modules/plans/entitlements.ts`, `store/uploadBatch.ts`, `UploadApp.tsx` |
+| Nicer Account / More menus | One dark menu style for every dropdown (`ui/dropdown-menu.tsx`: zinc surface, rounded, orange hover tint and icon, red destructive item, uppercase group labels). Account menu has a header (avatar, name, @username), icons, groups and a red Sign out; More has icons and a Keyboard shortcuts item. | `ui/dropdown-menu.tsx`, `app/_components/Navbar.tsx` |
+| Scroll areas that look scrollable; custom scrollbars everywhere | `ScrollPanel` (recessed well + fade at the bottom while more is below) used by Spotlight's list, the playlist dialog and the share dialog. Global thin dark scrollbar (`scrollbar-width: thin` + `scrollbar-color`) in `globals.css`; carousels, profile tabs, settings nav and chip rows use `.no-scrollbar` (arrows and swipe still scroll). | `ui/scroll-panel.tsx`, `styles/globals.css` |
+| Layout shift when a page is too short to scroll | `html { scrollbar-gutter: stable }` reserves the scrollbar width on every page. The old `right-scroll-bar-position` workaround was removed, and `body[data-scroll-locked]` compensation is neutralised (the gutter is always there). E2E: a short page and a long page keep the same nav width (`layout.e2e.spec.ts`). | `globals.css` |
+| Skeletons instead of empty pages | `Skeleton` is now a warm light sweep (no grey pulse, still for reduced motion); `FeedSkeleton` (artwork, lines, waveform bars) on Feed and History; row/card skeletons on Notifications, Studio tracks and Insights. | `ui/skeleton.tsx`, `ui/feed-skeleton.tsx` |
+| Orange selection and checkboxes | `accent-color: #f97316` on `:root` (native checkboxes/radios) and `::selection` in orange. | `globals.css` |
+| Add-to-playlist dialog must not resize | Both tabs share a fixed-height pane (`h-72`, `flex-none`; the list scrolls inside a `ScrollPanel`), fixed width `max-w-md`. | `AddToPlaylistDialog.tsx` |
+| Direct messages | See the table below. | |
+
+**Direct messages (PRD 13.3)**
+
+| Area | Where | Notes |
+|---|---|---|
+| Schema | migration `2_messages` | `Conversation.pairKey` (the two user ids, sorted: one conversation per pair, unique), `lastMessageAt`; `Message.removedAt` (moderation). Members keep `lastReadAt` and `hiddenAt`. |
+| Rules | `server/modules/messages/index.ts` | 2 000 characters, verified email (AU-4), 30 messages/minute, accounts younger than 7 days open at most 10 new conversations a day. Recipient's "Who can message me" (Privacy settings: Everyone / People I follow = the recipient follows the sender / No one). Blocks refuse both ways. Replying to someone who messaged you first is always allowed. |
+| Delete conversation | `hide` | Hides it and its history for you only (`hiddenAt`); a new message brings it back with only the newer messages. Blocking the other person hides the conversation from you. |
+| Unread | `unreadCount`, `conversations` | The badge counts conversations with something unread (raw SQL; blocked senders and removed messages do not count). Polled with the bell (60 s); an open thread polls every 10 s while visible and marks itself read. |
+| Link cards | `resolveCards`, `lib/message-links.ts` | Track and collection links of this site in a message become mini cards (play button, artwork, title) resolved for the *reader*: hidden content shows only with its secret link, and the secret token is stripped from the DTO. Other links are plain `<a rel="noopener noreferrer nofollow">`. |
+| Reports | `trust.report` with `MESSAGE` | Only a member who is not the sender can report; admins see the reported text only, can remove it (the thread shows "Message removed", sender notified) or restore it. |
+| UI | `components/messages/*`, `(player)/messages/*` | `/messages` (list + thread, separate screens on phones), `/messages?to=username` (first message), navbar icon with badge, profile **Message** button, Share dialog **Message** tab (recent conversations or search a person, optional note). |
+| Tests | `tests/integration/messages.test.ts`, `tests/e2e/messages.e2e.spec.ts` (J11), `src/lib/message-links.test.ts` | Include privacy (non-members get 404), policy, blocks, rate limits, cards and secrets, moderation, phone layout and axe. |
+
+Not built (P2 leftovers): typing indicators, attachments, group chats, message search, email notifications for new messages, edit/unsend by the sender.
+
 **Deviations from M7** (owner milestone in brackets):
 
-- Direct messages (PRD 13.3, P2) are not built; the tables (`Conversation`, `Message`) exist and the track page's old "Message" button was removed in M3. Decide with the owner whether to build them [M8 or later].
-- Message reports and "Report" in the Share dialog's Message tab depend on DMs.
+- Direct messages and message reports were not part of M7; they were built afterwards (see "After M8: owner requests").
 - There is no dedicated suspension page: a suspended user sees the error message at sign-in (their old sessions are gone).
 - Blocked people are filtered after ranking in search (a page can come back a little shorter), not inside the SQL.
 - The admin UI cannot promote admins (by design, `ADMIN_EMAILS` only) and has no "Appeals" flow.
@@ -551,3 +580,7 @@ Rendering (`buildWaveformBars` in `lib/waveform-utils.ts`): bar count = display 
 - Learned: axe's `label-content-name-mismatch` wants the visible text inside the accessible name, so icon+count buttons use visually hidden text instead of `aria-label`; `target-size` (WCAG 2.2) flags 20 px tall text links, `leading-6` / `py-1` fixes them; a `loading.tsx` in the `(player)` group turned every `notFound()` into HTTP 200 (streaming starts before the page can fail), so use `<Suspense>` inside pages instead; Lighthouse's Performance moves with main-thread JS, so lazy-loading rarely used UI (dialogs) paid off more than image tweaks; `next start` after a build in the same checkout reuses `.next`, rebuild before every Lighthouse run.
 - Totals when this entry was written: unit 91, integration 185, e2e 82 + 1 skipped, axe on 22 page states, lint 0 warnings, types clean.
 
+
+### Session 20 - owner requests after M8, branch `dev`
+- Free plan limits, menus, scrollbars, skeletons, scrollbar gutter, orange selection, fixed playlist dialog, then direct messages (PRD 13.3). Explained how "Start station" and "More of what you like" work (answer is in the chat; code in `recommendations/index.ts`, `tracks/related.ts`).
+- Learned: a flex item with `flex-1` ignores its `height` (basis 0): use `flex-none` for fixed-height tab panes; `html { scrollbar-gutter: stable }` makes Radix's scroll-lock compensation double-count, so neutralise it in CSS instead of using `right-scroll-bar-position`; never spread two Prisma selects that both have `creator` (the later one wins) - add the missing columns by hand and strip them before building a DTO.

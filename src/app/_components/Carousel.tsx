@@ -18,7 +18,7 @@ export function Carousel({ id, title, href, children }: { id: string; title: str
           <button type="button" aria-label={`Scroll ${title} right`} onClick={() => scroll(1)} className="hidden h-8 w-8 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 hover:text-white md:flex"><ChevronRight className="h-4 w-4" /></button>
         </div>
       </div>
-      <ul ref={track} className="-mx-1 flex snap-x gap-4 overflow-x-auto px-1 pb-2 [scrollbar-width:thin]">
+      <ul ref={track} className="-mx-1 flex snap-x gap-4 no-scrollbar overflow-x-auto px-1 pb-2">
         {Array.isArray(children) ? children.map((child, i) => <li key={i} className="w-40 shrink-0 snap-start sm:w-44">{child}</li>) : <li className="w-40 shrink-0 snap-start sm:w-44">{children}</li>}
       </ul>
     </section>

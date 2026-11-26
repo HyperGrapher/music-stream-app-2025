@@ -130,3 +130,58 @@
     cursor: pointer;
   }
 }
+
+/* --- App-wide polish ------------------------------------------------------------------------ */
+@layer base {
+  :root {
+    /* Native checkboxes, radios and range inputs follow the brand colour instead of browser blue. */
+    accent-color: #f97316;
+  }
+
+  /*
+   * Reserve the page scrollbar's width even when a page is too short to scroll. Without it the page
+   * (and every `position: fixed` bar) jumps sideways when you move between a short and a long page.
+   * `both-edges` is not used: the gutter is only on the scrollbar side.
+   */
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  /* One scrollbar look everywhere: thin, dark, rounded by the browser, no light-grey default. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #52525b transparent;
+  }
+
+  ::selection {
+    background-color: rgb(249 115 22 / 0.45);
+    color: #fff;
+  }
+}
+
+@layer utilities {
+  /** Hides the scrollbar but keeps the element scrollable (carousels have arrow buttons and swipe). */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /** A bar under an element that scrolls, so it reads as scrollable (fades content at the edge). */
+  .scroll-fade-y {
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  }
+}
+
+/* Account for the always-present gutter when a modal locks scroll: nothing else should move. */
+html body[data-scroll-locked] {
+  --removed-body-scroll-bar-size: 0px !important;
+  padding-right: 0 !important;
+  margin-right: 0 !important;
+}
+
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}

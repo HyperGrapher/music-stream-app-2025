@@ -30,15 +30,17 @@ const MAX_UPLOADS = 3;
 const MAX_DECODES = 2;
 const AUDIO_TYPES: Record<string, string> = { mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", flac: "audio/flac", aac: "audio/aac", m4a: "audio/m4a" };
 export const ACCEPTED_EXTENSIONS = Object.keys(AUDIO_TYPES);
+/** Largest file any plan accepts; the account's own limit comes from `upload.quota` (the server decides). */
 export const MAX_FILE_BYTES = 100 * 1024 * 1024;
+const formatMb = (bytes: number) => `${Math.round(bytes / (1024 * 1024))} MB`;
 
 const extensionOf = (name: string) => name.split(".").pop()?.toLowerCase() ?? "";
 
 /** UP-2: validates a file before anything is uploaded; returns the reason it is refused, or null. */
-export function fileProblem(file: File): string | null {
+export function fileProblem(file: File, maxBytes = MAX_FILE_BYTES): string | null {
   if (!ACCEPTED_EXTENSIONS.includes(extensionOf(file.name))) return "Unsupported format. Use MP3, WAV, OGG, FLAC, AAC or M4A.";
   if (file.size === 0) return "The file is empty.";
-  if (file.size > MAX_FILE_BYTES) return "Larger than 100 MB.";
+  if (file.size > maxBytes) return `Larger than ${formatMb(maxBytes)}.`;
   return null;
 }
 const contentTypeOf = (file: File) => AUDIO_TYPES[extensionOf(file.name)] ?? file.type;
@@ -47,6 +49,9 @@ interface BatchState {
   items: BatchItem[];
   /** Files that were refused up front, with the reason (UP-2). */
   rejected: { name: string; reason: string }[];
+  /** The account's per-file limit (Free 10 MB, Pro 100 MB). */
+  maxFileBytes: number;
+  setMaxFileBytes: (bytes: number) => void;
   addFiles: (files: File[]) => void;
   retry: (id: string) => void;
   remove: (id: string) => void;
@@ -146,12 +151,14 @@ export const useUploadBatch = create<BatchState>((set, get) => {
   return {
     items: [],
     rejected: [],
+    maxFileBytes: MAX_FILE_BYTES,
+    setMaxFileBytes: (bytes) => set({ maxFileBytes: bytes }),
     addFiles: (files) => {
       const rejected: { name: string; reason: string }[] = [];
       const accepted: BatchItem[] = [];
       const room = MAX_UPLOAD_BATCH - get().items.length;
       for (const file of files) {
-        const problem = fileProblem(file) ?? (accepted.length >= room ? `A batch holds at most ${MAX_UPLOAD_BATCH} files.` : null);
+        const problem = fileProblem(file, get().maxFileBytes) ?? (accepted.length >= room ? `A batch holds at most ${MAX_UPLOAD_BATCH} files.` : null);
         if (problem) rejected.push({ name: file.name, reason: problem });
         else accepted.push({ id: crypto.randomUUID(), file, state: "queued", progress: 0, fields: { title: titleFromFilename(file.name) }, selected: false });
       }

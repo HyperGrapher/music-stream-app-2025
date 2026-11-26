@@ -41,6 +41,7 @@ export const usernameOf = (userId: string) => usernames.get(userId)!;
 export async function cleanup() {
   resetClock();
   await db.user.deleteMany({ where: { id: { in: created } } });
+  await db.conversation.deleteMany({ where: { members: { none: {} } } });
   created.length = 0;
 }
 

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { adminProcedure, createTRPCRouter } from "@/server/api/trpc";
 import { adminSetPlan, dashboard, dismissReports, listReports, removeContent, reportDetail, restoreContent, searchUsers, setVerifiedBadge, suspendUser, unsuspendUser, userDetail } from "@/server/modules/trust/admin";
 
-const target = z.object({ targetType: z.enum(["TRACK", "COLLECTION", "COMMENT", "USER"]), targetId: z.string().min(1).max(64) });
+const target = z.object({ targetType: z.enum(["TRACK", "COLLECTION", "COMMENT", "USER", "MESSAGE"]), targetId: z.string().min(1).max(64) });
 const reason = z.string().trim().min(1, "A reason is required").max(500);
 
 /** AD-1..AD-4. Every procedure is admin-only and unknown (NOT_FOUND) to everyone else. */
@@ -11,7 +11,7 @@ export const adminRouter = createTRPCRouter({
   dashboard: adminProcedure.query(({ ctx }) => dashboard(ctx.db)),
 
   reports: adminProcedure
-    .input(z.object({ status: z.enum(["OPEN", "RESOLVED", "DISMISSED"]).default("OPEN"), targetType: z.enum(["TRACK", "COLLECTION", "COMMENT", "USER"]).optional(), offset: z.number().int().min(0).default(0) }))
+    .input(z.object({ status: z.enum(["OPEN", "RESOLVED", "DISMISSED"]).default("OPEN"), targetType: z.enum(["TRACK", "COLLECTION", "COMMENT", "USER", "MESSAGE"]).optional(), offset: z.number().int().min(0).default(0) }))
     .query(({ input, ctx }) => listReports(ctx.db, input)),
 
   reportDetail: adminProcedure.input(target).query(({ input, ctx }) => reportDetail(ctx.db, input)),

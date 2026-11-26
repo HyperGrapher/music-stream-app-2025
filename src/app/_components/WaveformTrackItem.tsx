@@ -179,7 +179,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
             )}
           </div>
 
-          <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+          <div className="mt-3 no-scrollbar flex items-center gap-2 overflow-x-auto pb-1">
             <LikeButton
               trackId={track.id}
               creatorId={track.userId}

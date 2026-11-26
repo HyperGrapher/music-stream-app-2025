@@ -21,7 +21,7 @@ const minutes = (ms: number) => Math.round(ms / 60_000);
 /** Stage A + B of the upload page (PRD 7.1): choose files, then edit while they upload in the background. */
 export function UploadApp({ username }: { username: string }) {
   const router = useRouter();
-  const { items, rejected, addFiles, reset } = useUploadBatch();
+  const { items, rejected, addFiles, reset, setMaxFileBytes } = useUploadBatch();
   const { data: quota } = api.upload.quota.useQuery();
   const [asPlaylist, setAsPlaylist] = useState(true);
   const [dragging, setDragging] = useState(false);
@@ -29,6 +29,8 @@ export function UploadApp({ username }: { username: string }) {
   const [saved, setSaved] = useState<Record<string, string>>({});
   const create = api.upload.createTrack.useMutation();
   const plan = quota?.plan ?? "FREE";
+  const maxFileBytes = quota?.maxFileBytes;
+  useEffect(() => { if (maxFileBytes) setMaxFileBytes(maxFileBytes); }, [maxFileBytes, setMaxFileBytes]);
   const busy = isBusy(items);
 
   // UP-7: leaving while something uploads or is unsaved warns, and cancels what was not published.
@@ -61,7 +63,7 @@ export function UploadApp({ username }: { username: string }) {
         >
           <UploadCloud className="mx-auto h-10 w-10 text-zinc-400" />
           <p className="mt-4 text-lg font-semibold">Drag and drop your tracks &amp; albums here</p>
-          <p className="mt-1 text-xs text-zinc-400">MP3, WAV, OGG, FLAC, AAC or M4A, up to 100 MB each, up to {MAX_UPLOAD_BATCH} files.</p>
+          <p className="mt-1 text-xs text-zinc-400">MP3, WAV, OGG, FLAC, AAC or M4A, up to {Math.round((quota?.maxFileBytes ?? 100 * 1024 * 1024) / (1024 * 1024))} MB each, up to {MAX_UPLOAD_BATCH} files.</p>
           <input ref={input} id="files" type="file" multiple accept={ACCEPTED_EXTENSIONS.map((e) => `.${e}`).join(",")} className="sr-only" aria-label="Choose files" onChange={(e) => { if (e.target.files) choose(e.target.files); e.target.value = ""; }} />
           <Button type="button" onClick={() => input.current?.click()} className="mt-5 bg-orange-700 text-white hover:bg-orange-800">Choose files</Button>
           <label className="mt-6 flex items-center justify-center gap-2 text-sm text-zinc-300">

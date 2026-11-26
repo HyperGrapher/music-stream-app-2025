@@ -7,6 +7,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { CollectionCard } from "@/app/_components/CollectionCard";
 import { WaveformTrackItem } from "@/app/_components/WaveformTrackItem";
 import { Button } from "@/components/ui/button";
+import { FeedSkeleton } from "@/components/ui/feed-skeleton";
 import { cn } from "@/lib/utils";
 import { api, type RouterOutputs } from "@/trpc/react";
 import type { PlayerTrack } from "@/types/player-track";
@@ -53,7 +54,7 @@ export function FeedPage({ empty }: { empty: ReactNode }) {
       ) : null}
 
       <div className="mt-6">
-        {first.isLoading ? <p className="text-sm text-zinc-400">Loading…</p> : null}
+        {first.isLoading ? <FeedSkeleton /> : null}
         {!first.isLoading && items.length === 0 ? (
           <div className="space-y-6">
             <p className="text-zinc-300">Follow creators to fill your feed.</p>
