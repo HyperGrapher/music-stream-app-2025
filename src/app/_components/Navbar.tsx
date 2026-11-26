@@ -66,7 +66,7 @@ export function Navbar({ initialUser }: NavbarProps) {
           </Link>
           <Link
             href="/discover"
-            className="font-medium transition-colors hover:text-orange-500"
+            className="hidden font-medium transition-colors hover:text-orange-500 md:block"
           >
             Discover
           </Link>
