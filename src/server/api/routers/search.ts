@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
-import { ADDED_WINDOWS, DURATION_BUCKETS, LICENSE_USES, searchCollections, searchPeople, searchTracks, suggest } from "@/server/modules/search";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "@/server/api/trpc";
+import { ADDED_WINDOWS, DURATION_BUCKETS, LICENSE_USES, mentionSuggestions, searchCollections, searchPeople, searchTracks, suggest } from "@/server/modules/search";
 import { enforceRateLimit, RATE_LIMITS } from "@/server/modules/rate-limit";
 
 const q = z.string().trim().min(1).max(100);
@@ -15,6 +15,9 @@ async function limit(ctx: { db: Parameters<typeof enforceRateLimit>[0]; session:
 }
 
 export const searchRouter = createTRPCRouter({
+  /** CM-4: usernames for the `@` autocomplete in comments. */
+  mentions: protectedProcedure.input(z.object({ q: z.string().max(25) })).query(({ input, ctx }) => mentionSuggestions(ctx.db, ctx.session.user.id, input.q)),
+
   suggest: publicProcedure.input(z.object({ q: z.string().trim().max(100) })).query(async ({ input, ctx }) => {
     await limit(ctx);
     return suggest(ctx.db, input.q, ctx.session?.user.id ?? null);

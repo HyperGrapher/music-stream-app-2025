@@ -26,7 +26,16 @@ export interface ReportTarget {
   label: string;
 }
 
+/** What is being reposted with a caption (RP-1, P2). */
+export interface RepostTarget {
+  kind: "track" | "collection";
+  id: string;
+  title: string;
+}
+
 interface DialogState {
+  repostCaption: RepostTarget | null;
+  openRepostCaption: (target: RepostTarget) => void;
   addToPlaylist: PlayerTrack | null;
   share: ShareTarget | null;
   report: ReportTarget | null;
@@ -40,6 +49,8 @@ interface DialogState {
 
 /** Dialogs opened from menus anywhere in the app and rendered once by `GlobalDialogs`. */
 export const useDialogs = create<DialogState>((set) => ({
+  repostCaption: null,
+  openRepostCaption: (repostCaption) => set({ repostCaption }),
   addToPlaylist: null,
   share: null,
   report: null,
@@ -48,5 +59,5 @@ export const useDialogs = create<DialogState>((set) => ({
   openAddToPlaylist: (track) => set({ addToPlaylist: track }),
   openShare: (target) => set({ share: target }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
-  close: () => set({ addToPlaylist: null, share: null, report: null }),
+  close: () => set({ addToPlaylist: null, share: null, report: null, repostCaption: null }),
 }));

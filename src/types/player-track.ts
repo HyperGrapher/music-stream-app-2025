@@ -13,6 +13,8 @@ export interface PlayerTrack {
   /** Artist display text (`artistName` override, else the creator's name). */
   artistName?: string | null;
   duration: number;
+  /** Where the 30 s quick-preview clip starts (DI-4). */
+  previewStartMs?: number;
   /** Audio mime type, so the player can skip formats the browser cannot play. */
   mimeType?: string;
   userId?: string;

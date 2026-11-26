@@ -2,6 +2,7 @@
 
 import { AddToPlaylistDialog } from "./AddToPlaylistDialog";
 import { NextUpPanel } from "./NextUpPanel";
+import { RepostCaptionDialog } from "./RepostCaptionDialog";
 import { ReportDialog } from "./ReportDialog";
 import { ShareDialog } from "./ShareDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
@@ -13,6 +14,7 @@ export function GlobalDialogs() {
       <AddToPlaylistDialog />
       <ShareDialog />
       <ReportDialog />
+      <RepostCaptionDialog />
       <ShortcutsDialog />
       <NextUpPanel />
     </>

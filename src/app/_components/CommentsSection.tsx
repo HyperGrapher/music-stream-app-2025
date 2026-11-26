@@ -1,5 +1,6 @@
 "use client";
 
+import { MentionTextarea } from "@/components/MentionTextarea";
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Heart, MessageCircle, Play } from "lucide-react";
@@ -152,9 +153,9 @@ function Composer({
         <AvatarFallback>{user.name?.charAt(0) ?? "U"}</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
-        <textarea
+        <MentionTextarea
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onValueChange={setText}
           onKeyDown={(event) => {
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) submit();
           }}

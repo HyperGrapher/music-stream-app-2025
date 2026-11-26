@@ -7,7 +7,7 @@ import {
   discoverOrderBy,
   discoverWhere,
 } from "@/server/modules/tracks/discover";
-import { recommendForUser, trendingTracks } from "@/server/modules/recommendations";
+import { recommendForUser, trendingTracks, yourMixes } from "@/server/modules/recommendations";
 import { byTag } from "@/server/modules/tracks/tags";
 import { collectionDtoSelect, RELEASE_TYPES, toCollectionDto } from "@/server/modules/collections/dto";
 import { publicCollectionWhere } from "@/server/modules/visibility";
@@ -51,6 +51,9 @@ export const discoverRouter = createTRPCRouter({
   }),
 
   /** "More of what you like" (RC-2) for signed-in users; trending for everyone else. */
+  /** "Your mixes" (P2): one generated queue per favourite genre. */
+  mixes: protectedProcedure.query(({ ctx }) => yourMixes(ctx.db, ctx.session.user.id)),
+
   forYou: publicProcedure
     .input(z.object({ limit: z.number().int().min(1).max(24).default(12) }).optional())
     .query(({ input, ctx }) => {

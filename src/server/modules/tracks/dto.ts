@@ -55,6 +55,7 @@ export const trackDtoSelect = {
   downloadable: true,
   embeddable: true,
   durationMs: true,
+  previewStartMs: true,
   publishedAt: true,
   createdAt: true,
   playCount: true,

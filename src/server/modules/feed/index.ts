@@ -65,7 +65,23 @@ export async function listFeed(
     }
   }
 
-  const items = [...byTarget.values()].slice(0, limit).map((entry) => ({
+  const page = [...byTarget.values()].slice(0, limit);
+  // RP-1: the first reposter's caption (P2) travels with the item.
+  const reposts = page.filter((e) => e.reposted && e.actors[0]);
+  const [trackCaptions, collectionCaptions] = reposts.length
+    ? await Promise.all([
+        db.trackRepost.findMany({ where: { caption: { not: null }, userId: { in: reposts.flatMap((e) => (e.track ? [e.actors[0]!.id] : [])) }, trackId: { in: reposts.flatMap((e) => (e.track ? [e.track.id] : [])) } }, select: { userId: true, trackId: true, caption: true } }),
+        db.collectionRepost.findMany({ where: { caption: { not: null }, userId: { in: reposts.flatMap((e) => (e.collection ? [e.actors[0]!.id] : [])) }, collectionId: { in: reposts.flatMap((e) => (e.collection ? [e.collection.id] : [])) } }, select: { userId: true, collectionId: true, caption: true } }),
+      ])
+    : [[], []];
+  const captionOf = (entry: (typeof page)[number]) => {
+    const actor = entry.actors[0]?.id;
+    if (!entry.reposted || !actor) return null;
+    return (entry.track ? trackCaptions.find((c) => c.userId === actor && c.trackId === entry.track!.id)?.caption : collectionCaptions.find((c) => c.userId === actor && c.collectionId === entry.collection?.id)?.caption) ?? null;
+  };
+
+  const items = page.map((entry) => ({
+    caption: captionOf(entry),
     id: entry.id,
     at: entry.at,
     verb: entry.reposted ? ("reposted" as const) : ("posted" as const),
