@@ -18,9 +18,19 @@ export interface ShareTarget {
   atSeconds?: number;
 }
 
+/** What is being reported (TS-1). */
+export interface ReportTarget {
+  targetType: "TRACK" | "COLLECTION" | "COMMENT" | "USER";
+  targetId: string;
+  /** Shown in the dialog title: the track title, user name, "this comment"... */
+  label: string;
+}
+
 interface DialogState {
   addToPlaylist: PlayerTrack | null;
   share: ShareTarget | null;
+  report: ReportTarget | null;
+  openReport: (target: ReportTarget) => void;
   shortcutsOpen: boolean;
   openAddToPlaylist: (track: PlayerTrack) => void;
   openShare: (target: ShareTarget) => void;
@@ -32,9 +42,11 @@ interface DialogState {
 export const useDialogs = create<DialogState>((set) => ({
   addToPlaylist: null,
   share: null,
+  report: null,
+  openReport: (report) => set({ report }),
   shortcutsOpen: false,
   openAddToPlaylist: (track) => set({ addToPlaylist: track }),
   openShare: (target) => set({ share: target }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
-  close: () => set({ addToPlaylist: null, share: null }),
+  close: () => set({ addToPlaylist: null, share: null, report: null }),
 }));

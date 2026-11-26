@@ -1,12 +1,13 @@
 "use client";
 
-import { Download, Radio, ExternalLink, Link2, ListEnd, ListPlus, ListStart, MoreHorizontal, Pencil, Share2 } from "lucide-react";
+import { Download, Flag, Radio, ExternalLink, Link2, ListEnd, ListPlus, ListStart, MoreHorizontal, Pencil, Share2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useUser } from "@/hooks/useUser";
 import { vanillaApi } from "@/trpc/vanilla";
+import { startReport } from "./ReportDialog";
 import { useAuthPrompt } from "@/store/authPrompt";
 import { useDialogs } from "@/store/dialogs";
 import { usePlayerStore } from "@/store/player";
@@ -80,6 +81,7 @@ export function TrackMenu({ track, className }: { track: PlayerTrack; className?
           </DropdownMenuItem>
         ) : null}
         {isOwner ? <DropdownMenuItem asChild><Link href={`/studio/tracks/${track.id}/edit`}><Pencil /> Edit</Link></DropdownMenuItem> : null}
+        {!isOwner ? <DropdownMenuItem onSelect={() => startReport(!!user, { targetType: "TRACK", targetId: track.id, label: track.title })}><Flag /> Report</DropdownMenuItem> : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

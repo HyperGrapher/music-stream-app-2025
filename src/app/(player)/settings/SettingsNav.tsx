@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/settings/profile", label: "Profile" },
   { href: "/settings/account", label: "Account" },
   { href: "/settings/privacy", label: "Privacy" },
+  { href: "/settings/blocked", label: "Blocked" },
   { href: "/settings/content", label: "Content" },
   { href: "/settings/plan", label: "Plan" },
   { href: "/settings/notifications", label: "Notifications" },

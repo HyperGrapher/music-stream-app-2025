@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Heart, MessageCircle, Play } from "lucide-react";
+import { startReport } from "@/components/player/ReportDialog";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useShallow } from "zustand/react/shallow";
@@ -215,6 +216,12 @@ function CommentRow({
   onDelete: () => void;
 }) {
   const playAt = usePlayAt(track);
+  const { user } = useUser();
+  const utils = api.useUtils();
+  const blockAuthor = api.trust.setBlock.useMutation({
+    onSuccess: () => { toast.success(`Blocked ${comment.author.name}`); void utils.comments.list.invalidate({ trackId: track.id }); },
+    onError: (error) => toast.error(friendlyError(error, "Could not block this person")),
+  });
   return (
     <article className="flex gap-3" data-testid="comment">
       <Link href={`/${comment.author.username}`} className="shrink-0">
@@ -257,6 +264,14 @@ function CommentRow({
             <button type="button" onClick={onDelete} className={smallButton}>
               Delete
             </button>
+          )}
+          {user?.id !== comment.author.id && (
+            <>
+              <button type="button" className={smallButton} onClick={() => startReport(!!user, { targetType: "COMMENT", targetId: comment.id, label: `Comment by ${comment.author.name}` })}>Report</button>
+              {user && (
+                <button type="button" className={smallButton} onClick={() => { if (window.confirm(`Block ${comment.author.name}? They won't be able to comment on your tracks or follow you.`)) blockAuthor.mutate({ userId: comment.author.id, blocked: true }); }}>Block</button>
+              )}
+            </>
           )}
         </div>
       </div>

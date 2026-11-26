@@ -21,6 +21,7 @@ type User = {
   username?: string | null;
   email?: string | null;
   image?: string | null;
+  role?: "USER" | "ADMIN";
 };
 
 interface NavbarProps {
@@ -32,6 +33,7 @@ export function Navbar({ initialUser }: NavbarProps) {
 
   // Use initial user data for first render, then use store data after hydration
   const displayUser = user || initialUser;
+  const role = displayUser?.role;
 
   const handleSignOut = async () => {
     await signOut();
@@ -134,6 +136,11 @@ export function Navbar({ initialUser }: NavbarProps) {
                 <DropdownMenuItem asChild className="hover:bg-gray-800">
                   <Link href="/studio/tracks">Studio</Link>
                 </DropdownMenuItem>
+                {role === "ADMIN" && (
+                  <DropdownMenuItem asChild className="hover:bg-gray-800">
+                    <Link href="/admin">Admin</Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem asChild className="hover:bg-gray-800">
                   <Link href="/settings/profile">Settings</Link>
                 </DropdownMenuItem>

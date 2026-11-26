@@ -1,7 +1,7 @@
 "use client";
 
 import { useShallow } from "zustand/react/shallow";
-import { Heart, Link2, Pause, Play, Share2, Shuffle } from "lucide-react";
+import { Flag, Heart, Link2, Pause, Play, Share2, Shuffle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -10,6 +10,7 @@ import { useUser } from "@/hooks/useUser";
 import { friendlyError } from "@/lib/error-messages";
 import { useAuthPrompt } from "@/store/authPrompt";
 import { api } from "@/trpc/react";
+import { startReport } from "@/components/player/ReportDialog";
 import { RepostButton } from "./RepostButton";
 import { absoluteUrl, copyText } from "@/components/player/TrackMenu";
 import { useDialogs } from "@/store/dialogs";
@@ -51,6 +52,7 @@ export function CollectionActions({
   };
   tracks: PlayerTrack[];
 }) {
+  const { user } = useUser();
   const { playContext, toggleShuffle, togglePlay, status, contextCollectionId, shuffle } = usePlayerStore(useShallow((s) => ({
     playContext: s.playContext,
     toggleShuffle: s.toggleShuffle,
@@ -89,6 +91,11 @@ export function CollectionActions({
       </Button>
       <CollectionLike id={collection.id} ownerId={collection.ownerId} isPrivate={isPrivate} initialLiked={collection.likedByMe} initialCount={collection.likeCount} secret={isPrivate ? secret : null} />
       <RepostButton kind="collection" id={collection.id} ownerId={collection.ownerId} isPrivate={isPrivate} initialReposted={collection.repostedByMe} initialCount={collection.repostCount} variant="pill" className="inline-flex h-9 items-center gap-1.5 rounded-full border border-zinc-700 px-3 text-sm text-white hover:bg-zinc-800" />
+      {user?.id !== collection.ownerId && (
+        <Button type="button" variant="outline" size="icon" aria-label="Report" className="rounded-full border-zinc-700 bg-transparent text-white hover:bg-zinc-800" onClick={() => startReport(!!user, { targetType: "COLLECTION", targetId: collection.id, label: collection.title })}>
+          <Flag className="h-4 w-4" />
+        </Button>
+      )}
       <Button type="button" variant="outline" size="icon" aria-label="Copy link" className="rounded-full border-zinc-700 bg-transparent text-white hover:bg-zinc-800" onClick={() => copyText(absoluteUrl(collection.permalink))}>
         <Link2 className="h-4 w-4" />
       </Button>

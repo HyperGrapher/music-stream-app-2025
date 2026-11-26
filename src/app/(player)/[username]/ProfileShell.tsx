@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { FollowButton } from "@/components/FollowButton";
+import { ProfileMenu } from "@/components/ProfileMenu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { api } from "@/trpc/server";
@@ -106,6 +107,7 @@ export async function ProfileShell({ username, active, children }: { username: s
               <FollowButton userId={profile.id} initialFollowing={relationship.following} />
             )}
             <CopyLinkButton path={base} />
+            {!profile.isOwner && <ProfileMenu userId={profile.id} name={profile.name} />}
           </div>
         </div>
 

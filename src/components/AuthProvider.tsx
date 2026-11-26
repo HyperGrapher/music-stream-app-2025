@@ -13,6 +13,7 @@ type AuthProviderProps = {
     image?: string | null;
     emailVerified?: boolean;
     onboardedAt?: Date | string | null;
+    role?: "USER" | "ADMIN";
   } | null;
 };
 
