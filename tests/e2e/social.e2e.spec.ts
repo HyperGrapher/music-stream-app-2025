@@ -75,6 +75,8 @@ test("likes show in the library; history starts empty and the library needs an a
   await page.goto(TRACKS.likes.path, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Like track" }).click();
   await expect(page.getByRole("button", { name: "Unlike track" })).toBeVisible();
+  // the heart flips optimistically: wait for the server before leaving the page
+  await expect.poll(() => db.trackLike.count({ where: { userId: users.fan.id, trackId: TRACKS.likes.id } })).toBe(1);
   await page.goto("/you/likes", { waitUntil: "networkidle" });
   await expect(page.getByText(TRACKS.likes.title).first()).toBeVisible();
   await page.goto("/you/history", { waitUntil: "networkidle" });

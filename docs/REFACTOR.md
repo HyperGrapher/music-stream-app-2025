@@ -28,8 +28,8 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 | M1 Accounts & profiles | **done** (see "M1 summary") |
 | M2 Upload & editing | **done** (see "M2 summary") |
 | M3 Listening | **done** (see "M3 summary"; Lighthouse run still open, see deviations) |
-| M4 Social loop | **next** (see "Next up") |
-| M5 Discovery | not started |
+| M4 Social loop | **done** (see "M4 summary") |
+| M5 Discovery | **next** (see "Next up") |
 | M6 Creator tools & plans | not started |
 | M7 Trust & safety | not started |
 | M8 Polish | not started |
@@ -105,6 +105,18 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 - Image uploads have no crop UI (M1 note still applies). Replacing audio re-runs the whole upload pipeline for one file.
 - Quota counts the durations of existing tracks only; READY-but-unpublished uploads do not count until published.
 
+**M4 summary: what exists now** (social loop)
+
+| Area | Where | Notes |
+|---|---|---|
+| Engagement | `server/modules/social/engagement.ts`, router `engagement` | `setCollectionLike`, `setCommentLike`, `setTrackRepost`, `setCollectionRepost` (+ the older `setTrackLike`, `setFollow`). Same rules as track likes: idempotent, not your own, public only (reposts and likes), counters change with real rows in the transaction, rate limits (`like`, `repost`). Reposts create/delete an `Activity` and a notification. |
+| Notifications | `server/modules/notifications/{index,read,email}.ts`, router `notifications`, `lib/notification-text.ts` | `notify` (never self, never when the recipient blocked the actor, respects the in-app preference, once per actor+type+target) / `unnotify` (deletes the unread one, NT-4) are called inside the action's transaction: follow, track/collection/comment like, reposts, comment, reply, mention (`@username`, max 5). Read side groups by `groupKey` (`listNotifications`, filters All/Likes/Reposts/Comments/Follows/Mentions, `unreadCount` counts groups, `markRead`). `describeNotification` builds the sentence for UI and email. |
+| Email | `notifications/email.ts`, `/api/unsubscribe` | Daily digest runs in the daily cron (`sendDailyDigests`, once per notification via `emailedAt`), "Immediately" users get comment/reply/mention emails after the response (`sendImmediateEmails`, coalesced per 5 min). Defaults per NT-7 (`EMAIL_DEFAULT_ON`). Every email carries a signed one-click unsubscribe link + `List-Unsubscribe` headers. All emails stay LOGGED until `RESEND_API_KEY` is set. `account.notificationPreferences` / `setNotificationPreference` back the table in Settings → Notifications. |
+| Feed | `server/modules/feed`, router `feed`, `(player)/feed` | Followed actors' activity, public targets only, blocks respected, de-duplicated per target with "A, B and N others reposted", tabs All/Tracks/Albums & playlists/Reposts, cursor `(createdAt,id)`, "N new posts" pill polled every 60 s, queue context "Your feed". |
+| Library | `server/modules/library`, router `library`, `(player)/you/*` | `/you/library` (overview), `/likes` (Play all / Shuffle), `/sets`, `/albums` (created + liked, filter chips, create playlist), `/following`, `/history` (last 200 distinct tracks, "Clear listening history" via `historyClearedAt`). Each page guards itself with `requireUser` (pages render in parallel with their layout). |
+| UI | `NotificationBell`, `/notifications`, `RepostButton`, `CollectionActions` (like + repost), `CommentsSection` | Navbar: bell, Feed, Library for signed-in users. Comments: likes, sort (Newest/Oldest/Track time), 20 threads per "Load more", first 3 replies + "View N more", `@mentions` render as profile links. |
+| Tests | integration `social.test.ts` (9), e2e `social.e2e.spec.ts` (J6, bell + grouped notifications page, library) | |
+
 **Deviations from M3** (owner milestone in brackets):
 
 - Lighthouse targets on the track page have not been measured yet (no Chrome-based Lighthouse run in the sandbox). Run it against a production build before release [M8].
@@ -115,7 +127,25 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 - The embed player is minimal (artwork, seek bar, list); no waveform [M8].
 - Chosen play sources are set where the list is known (collection page, track page, related); Home/Discover/Profile lists still report `OTHER` unless their callers pass `context` to `TrackCard` / `WaveformTrackItem` [M4/M5].
 
-**Next up: M4 Social loop** (PRD §9..: collection and comment likes, reposts, Activity + Feed, notifications in-app + email + digest, Library, history, comment upgrades CM-*; exit: J6 and counter tests green)
+**Deviations from M4** (owner milestone in brackets):
+
+- `@` autocomplete in the comment composer is not built (mentions work when typed in full) [M8].
+- Comment sorting/paging happens in the browser over the (max 100) threads the server returns [M8].
+- Repost captions are accepted by the API but there is no "Repost with caption" UI (P2) [M8].
+- `PLAYLIST_ADD` and `NEW_RELEASE` notification types exist in preferences but nothing creates them yet [M6].
+- "Liked by people you follow" avatars (LK-5, P2) are not built.
+- The player bar Follow button still does not know the relationship; Home/Discover lists still report play source `OTHER` [M5].
+
+**Next up: M5 Discovery** (PRD §10; exit: search/recommendation integration tests; Home populated for a fresh onboarded user)
+
+1. Search: Postgres full-text + trigram over tracks, creators, collections, with navbar autocomplete (`/discover?q=` exists as a LIKE search today).
+2. Home modules (trending, new releases, genre rows, "Because you liked", who to follow), Discover filters/sorts, `/charts`, genre and tag pages (`/tags/[tag]`).
+3. Recommendations: replace the `related` heuristic with ranked signals (co-likes, same-genre trending, not already played via `historyClearedAt` rules) and use them for autoplay; pass `context` (play source) from Home/Discover lists.
+4. Tests: search ranking and visibility integration tests, Home for a fresh user.
+
+<details><summary>M4 plan as it was (done)</summary>
+
+**Next up (old): M4 Social loop** (PRD §9..: collection and comment likes, reposts, Activity + Feed, notifications in-app + email + digest, Library, history, comment upgrades CM-*; exit: J6 and counter tests green)
 
 1. Likes for collections and comments, reposts (tracks and collections) with the counters-in-transaction rule and `db:recount` coverage; show real "Liked by / Reposted by" on track and collection pages; enable the Repost buttons that are placeholders today (`TrackDetailHero`, `WaveformTrackItem`).
 2. `Activity` rows (new track, repost, playlist add, new follower) and the `/feed` page; wire the `PLAYLIST_ADD` activity into `createPlaylist` / `addTracks` for public playlists.
@@ -123,6 +153,8 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 4. Library (`/library`: Likes, Playlists, Albums, Following, History) and play history (PlayEvent already stores `listenedMs`).
 5. Comment upgrades (CM-*), then pass `context` (source) from Home/Discover/Profile lists.
 6. Tests: J6, counter consistency, e2e for the Library.
+
+</details>
 
 <details><summary>M3 plan as it was (done)</summary>
 
@@ -411,3 +443,10 @@ Rendering (`buildWaveformBars` in `lib/waveform-utils.ts`): bar count = display 
 - Bugs found by the new tests and fixed: `tracks.related` spread two `OR` keys into one `where` (the genre filter silently replaced the visibility filter, so private tracks leaked into suggestions); the e2e for the play route expected the old 204.
 - Learned: zustand v5 selectors that return a fresh object need `useShallow` (infinite re-render otherwise); an Embed iframe needs `frame-ancestors *` on its own path while everything else keeps `'self'` (both set in `next.config.js`); real plays only register after ~5 s of listening, which e2e cannot reach without audio in storage, so e2e asserts queue state, not play rows.
 - Totals when this entry was written: see the commit; unit 80, integration 145, lint 0 warnings, types clean e2e 53 + 1 skipped (+1 opt-in R2).
+
+### Session 15 - PRD M4 (social loop), branch `dev`
+- Also fixed first: the upload page had no visible publish action (a silently disabled "Save"); buttons are now Publish / Publish release / Publish all with an on-screen list of what is missing.
+- Server: collection/comment likes, reposts with activity + notifications, notification write/read/email modules, feed, library, preferences, daily digest in the cron, unsubscribe route.
+- UI: bell + page, feed, `/you/*` library, repost buttons, collection like/repost, comment upgrades.
+- Learned: Next renders a page in parallel with its layout, so a layout `redirect` does not stop the page from running (guard in both); never put two `OR` keys in one Prisma `where` (the second replaces the first, so use `AND: [{ OR }, { OR }]`); `createTrack` in the integration helpers writes no `Activity`, so feed tests must create one.
+- Totals when this entry was written: unit 80, integration 154, e2e 56 + 1 skipped, lint 0 warnings, types clean.
