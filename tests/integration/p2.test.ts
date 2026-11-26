@@ -44,7 +44,7 @@ describe("@mention suggestions (CM-4)", () => {
       await db.user.update({ where: { id }, data: { username: `${prefix}${suffix}` } });
       return id;
     };
-    const [zed, amy, blocked] = [await make("zed"), await make("amy"), await make("bad")];
+    const [zed, , blocked] = [await make("zed"), await make("amy"), await make("bad")];
     await callerFor(me).engagement.setFollow({ userId: zed, follow: true });
     await callerFor(me).trust.setBlock({ userId: blocked, blocked: true });
     const list = await callerFor(me).search.mentions({ q: prefix });

@@ -1,4 +1,4 @@
-import { expect, request as playwrightRequest, test } from "@playwright/test";
+import { expect, request as playwrightRequest, test, type Browser } from "@playwright/test";
 
 import { TRACKS } from "./fixtures";
 import { db, signUp } from "./helpers";
@@ -8,7 +8,7 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-async function signedIn(browser: import("@playwright/test").Browser, baseURL: string) {
+async function signedIn(browser: Browser, baseURL: string) {
   const request = await playwrightRequest.newContext({ baseURL });
   const { id } = await signUp(request, baseURL);
   const state = await request.storageState();
