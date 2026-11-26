@@ -21,7 +21,8 @@ One Next.js app on **Vercel**, **Neon** Postgres and **Cloudflare R2**.
 
 ## What works today
 
-- **Accounts:** email + password and Google sign-in ([Better Auth](https://www.better-auth.com)).
+- **Accounts:** email + password (verification email, password reset, common-password check) and Google sign-in ([Better Auth](https://www.better-auth.com)); onboarding (username, avatar, genres, creators to follow); settings for profile, email, password, connected accounts, sessions, privacy and account deletion. Unverified accounts can listen and like but not upload or comment.
+- **Profiles and follows:** `/{username}` with All, Popular tracks, Tracks, Albums, Playlists, Reposts, Likes, Followers and Following as real pages (infinite scroll), Spotlight, links, follow/unfollow with exact counters, and a "Who to follow" module.
 - **Uploading:** MP3, WAV, OGG, FLAC, AAC or M4A up to 100 MB, straight from the browser to R2. A single track, or several files as an album/EP collection with ordered tracks and shared artwork. A file the browser cannot decode is rejected.
 - **Permalinks:** every account gets a lowercase username; tracks live at `/{username}/{slug}` and collections (album, EP, single, compilation, playlist) at `/{username}/sets/{slug}`. Old `/track/{id}` and `/u/{id}` URLs redirect.
 - **Visibility and secret links:** public, private (owner only) or scheduled tracks (a Pro feature, evaluated at read time). Private tracks and collections open for anyone holding their secret link (`/…/s-{token}`), and nowhere else.
@@ -35,7 +36,7 @@ One Next.js app on **Vercel**, **Neon** Postgres and **Cloudflare R2**.
 - **Play counts** that cannot be inflated by refreshing: one count per listener per track per 30 minutes; the owner's own plays are never counted. Daily statistics are kept for charts and insights.
 - **Platform plumbing:** Postgres-backed rate limiter, email module (Resend, or logged when no key is set), durable R2 deletion queue with a daily cron, simulated Free/Pro entitlements, injectable clock.
 
-**Work in progress:** the product is being built out milestone by milestone against [`docs/PRD.md`](docs/PRD.md) (status in [`docs/REFACTOR.md`](docs/REFACTOR.md)). The data model already contains reposts, follows, blocks, notifications, reports, messages and insights tables, but the UI and procedures for them arrive in later milestones: some controls (follow, repost, add to playlist, share) are visible but not functional yet.
+**Work in progress:** the product is being built out milestone by milestone against [`docs/PRD.md`](docs/PRD.md) (M0 and M1 done; status in [`docs/REFACTOR.md`](docs/REFACTOR.md)). The data model already contains reposts, blocks, notifications, reports, messages and insights tables, but their UI and procedures arrive in later milestones: some controls (repost, add to playlist, share) are visible but not functional yet.
 
 ## How it works
 

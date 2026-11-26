@@ -7,6 +7,13 @@ export const db = createPrismaClient(process.env.TEST_DATABASE_URL!);
 
 export const PASSWORD = "e2e-password-123";
 
+/** The first link of the latest stored (LOGGED) email of a template for an address (QA-4). */
+export async function latestEmailLink(to: string, template: string) {
+  const mail = await db.emailMessage.findFirst({ where: { to, template }, orderBy: { createdAt: "desc" } });
+  const href = /href="([^"]+)"/.exec(mail?.bodyHtml ?? "")?.[1];
+  return href?.replaceAll("&amp;", "&") ?? null;
+}
+
 export const uniqueEmail = (label: string) =>
   `e2e-${label}-${crypto.randomUUID()}@example.test`;
 
@@ -15,6 +22,7 @@ export async function signUp(
   request: APIRequestContext,
   baseURL: string,
   email = uniqueEmail("user"),
+  { verified = true, onboarded = true }: { verified?: boolean; onboarded?: boolean } = {},
 ) {
   const attempt = () =>
     request.post("/api/auth/sign-up/email", {
@@ -30,6 +38,11 @@ export async function signUp(
   }
   if (!response.ok()) throw new Error(`sign-up failed: ${response.status()}`);
   const body = (await response.json()) as { user: { id: string } };
+  // Most specs are about something other than accounts: skip the verification email and onboarding.
+  await db.user.update({
+    where: { id: body.user.id },
+    data: { ...(verified ? { emailVerified: true } : {}), ...(onboarded ? { onboardedAt: new Date(), favoriteGenres: ["rock", "pop", "electronic"] } : {}) },
+  });
   return { id: body.user.id, email };
 }
 

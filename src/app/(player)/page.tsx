@@ -2,6 +2,8 @@ import { Upload } from "lucide-react";
 import Link from "next/link";
 
 import { TrackGrid } from "@/app/_components/TrackGrid";
+import { WhoToFollow } from "@/app/_components/WhoToFollow";
+import { getSessionUser } from "@/server/session-user";
 import { api } from "@/trpc/server";
 
 const sectionLink = "text-sm font-semibold text-zinc-400 hover:text-white";
@@ -11,6 +13,7 @@ export default async function HomePage() {
     api.discover.tracks({ sort: "popular", limit: 6 }).catch(() => []),
     api.discover.tracks({ sort: "latest", limit: 6 }).catch(() => []),
   ]);
+  const signedIn = (await getSessionUser()) !== null;
   const hasPlays = trending.some((track) => (track.playCount ?? 0) > 0);
 
   return (
@@ -80,6 +83,7 @@ export default async function HomePage() {
             </section>
           </>
         )}
+        {signedIn && <WhoToFollow />}
       </div>
     </div>
   );

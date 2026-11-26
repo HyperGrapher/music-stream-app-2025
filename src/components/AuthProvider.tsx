@@ -35,8 +35,9 @@ export function AuthProvider({ initialUser }: AuthProviderProps) {
   useEffect(() => {
     if (!isPending) {
       if (session) {
-        // The server-resolved avatar wins over the OAuth image carried by the session.
-        setUser({ ...session.user, image: initialUser?.image ?? session.user.image });
+        // What the server resolved from the database (avatar, onboarding, verification) wins over the
+        // cached session cookie, which can lag by minutes.
+        setUser({ ...session.user, ...(initialUser ?? {}) });
       } else if (!initialUser) {
         // Only set to null if we don't have an initialUser
         // This prevents flashing before session is loaded

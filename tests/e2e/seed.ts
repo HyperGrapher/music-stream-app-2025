@@ -97,6 +97,14 @@ async function main() {
   for (const [position, id] of [TRACKS.public.id, TRACKS.private.id].entries()) {
     await db.collectionTrack.create({ data: { collectionId: priv.id, trackId: id, position, addedById: CREATOR_ID } });
   }
+  // Profile "All" is activity-based: standalone public tracks and the album (not the album's tracks).
+  const standalone = [TRACKS.public, TRACKS.likes, TRACKS.plays];
+  await db.activity.createMany({
+    data: [
+      ...standalone.map((t, i) => ({ actorId: CREATOR_ID, type: "TRACK_POSTED" as const, trackId: t.id, createdAt: new Date(publishedAt.getTime() + i * 1000) })),
+      { actorId: CREATOR_ID, type: "COLLECTION_POSTED" as const, collectionId: ALBUM.id, createdAt: publishedAt },
+    ],
+  });
   await db.user.update({ where: { id: CREATOR_ID }, data: { publicTrackCount: 5 } });
   console.log("e2e seed done");
 }

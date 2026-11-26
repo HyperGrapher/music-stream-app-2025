@@ -18,7 +18,9 @@ test("anonymous visitors are asked to sign in and nothing changes", async ({ pag
   const like = page.getByRole("button", { name: "Like track" });
   await expect(like).toHaveAttribute("aria-pressed", "false");
   await like.click();
-  await expect(page.getByText("Sign in to like tracks")).toBeVisible();
+  // AU-2: the sign-in modal opens (the like is retried only after signing in)
+  await expect(page.getByRole("dialog").getByText("Sign in to like tracks")).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(like).toHaveAttribute("aria-pressed", "false");
 });
 
