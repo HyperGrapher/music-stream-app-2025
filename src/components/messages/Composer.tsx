@@ -26,7 +26,7 @@ export function Composer({ onSend, pending, disabledReason, autoFocus = false }:
   }
   return (
     <form
-      className="border-t border-zinc-800 p-3"
+      className="border-t border-zinc-800 px-4 py-3 sm:px-6"
       onSubmit={(event) => {
         event.preventDefault();
         submit();
