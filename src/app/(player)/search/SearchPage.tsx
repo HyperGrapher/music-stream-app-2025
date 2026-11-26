@@ -105,7 +105,8 @@ export function SearchPage({ q, tab, filters }: { q: string; tab: Tab; filters: 
   const queue = tracks.items as PlayerTrack[];
   const firstPerson = people.items[0];
   const firstTrack = tracks.items[0];
-  const top = firstPerson && (firstPerson.username.startsWith(q.toLowerCase()) || firstPerson.name.toLowerCase().startsWith(q.toLowerCase())) ? { person: firstPerson } : firstTrack ? { track: firstTrack } : null;
+  const personFirst = !!firstPerson && (firstPerson.username.startsWith(q.toLowerCase()) || firstPerson.name.toLowerCase().startsWith(q.toLowerCase()));
+  const top: { person: Person } | { track: NonNullable<typeof firstTrack> } | null = personFirst ? { person: firstPerson } : firstTrack ? { track: firstTrack } : null;
   const more = (label: string, next: number | null, load: () => Promise<void>) => next !== null && <div className="mt-4 text-center"><Button variant="outline" className="border-zinc-700 bg-transparent text-white hover:bg-zinc-800" onClick={() => void load()}>{label}</Button></div>;
 
   return (
