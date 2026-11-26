@@ -1,11 +1,12 @@
 "use client";
 
-import { Download, ExternalLink, Link2, ListEnd, ListPlus, ListStart, MoreHorizontal, Pencil, Share2 } from "lucide-react";
+import { Download, Radio, ExternalLink, Link2, ListEnd, ListPlus, ListStart, MoreHorizontal, Pencil, Share2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useUser } from "@/hooks/useUser";
+import { vanillaApi } from "@/trpc/vanilla";
 import { useAuthPrompt } from "@/store/authPrompt";
 import { useDialogs } from "@/store/dialogs";
 import { usePlayerStore } from "@/store/player";
@@ -45,6 +46,16 @@ export function TrackMenu({ track, className }: { track: PlayerTrack; className?
           }}
         >
           <ListPlus /> Add to playlist
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => {
+            // RC-4: the seed plus 49 related tracks as a queue named "Station: <title>"; plays are counted as STATION.
+            void vanillaApi.tracks.related.query({ trackId: track.id, limit: 49 }).then((related) => {
+              usePlayerStore.getState().playContext([track, ...related], track, { name: `Station: ${track.title}`, source: "STATION" });
+            }).catch(() => toast.error("Could not start the station"));
+          }}
+        >
+          <Radio /> Start station
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {path ? <DropdownMenuItem asChild><Link href={path}><ExternalLink /> Go to track</Link></DropdownMenuItem> : null}

@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import { now as clockNow } from "@/server/clock";
 import { likedByMeSelect, toTrackDto, trackDtoSelect } from "@/server/modules/tracks/dto";
+import { jaccard } from "@/server/modules/recommendations/scoring";
 import { accessibleTrackWhere, publicTrackWhere } from "@/server/modules/visibility";
 
 /** At most this many related tracks may come from one creator, so a sidebar is not a single artist's catalogue. */
@@ -49,10 +50,14 @@ export async function relatedTracks(
       : Promise.resolve([]),
   ]);
 
+  // RC-3: among the genre/tag matches, same genre and shared tags (Jaccard) come first, then popularity (already the query order).
+  const rankSimilar = (row: (typeof similar)[number]) => (row.genre && row.genre === seed.genre ? 1 : 0) + 2 * jaccard(row.tags, seed.tags);
+  const similarRanked = [...similar].sort((a, b) => rankSimilar(b) - rankSimilar(a));
+
   const seen = new Set<string>();
   const perCreator = new Map<string, number>();
   const picked = [];
-  for (const row of [...sameCreator, ...coLiked, ...similar]) {
+  for (const row of [...sameCreator, ...coLiked, ...similarRanked]) {
     if (seen.has(row.id)) continue;
     const count = perCreator.get(row.creatorId) ?? 0;
     if (count >= RELATED_PER_CREATOR) continue;
