@@ -45,7 +45,7 @@ test("J3: upload one file, fill in the details and publish: the track is live", 
   await page.getByLabel("ISRC").fill("us-abc-24-12345");
   await page.getByRole("tab", { name: "Permissions" }).click();
   await page.getByRole("switch", { name: "Enable downloads" }).click();
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: /^(Publish|Publish release|Save release \(private\))$/ }).click();
 
   await expect(page).toHaveURL(new RegExp(`/${username}/night-drive-demo\\?new=1$`));
   const banner = page.getByTestId("published-banner");
@@ -118,7 +118,7 @@ test("J4: five files become an album: rename, reorder by keyboard, privacy warni
   await page.getByLabel("Bulk artist").fill("The Quintet");
   await page.getByRole("button", { name: "Set artist" }).click();
 
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: /^(Publish|Publish release|Save release \(private\))$/ }).click();
   await expect(page).toHaveURL(new RegExp(`/${username}/sets/five-songs\\?new=1$`));
   await expect(page.getByTestId("published-banner")).toContainText("Your album is live");
   for (const label of ["View release", "Edit release", "Edit tracks", "Upload more", "Go to profile"]) await expect(page.getByTestId("published-banner").getByRole("link", { name: label }).first()).toBeVisible();
@@ -148,7 +148,7 @@ test("multiple files with the playlist checkbox off become independent tracks sa
   await page.getByLabel("Make a playlist when multiple files are selected").uncheck();
   await choose(page, wav("Alpha.wav"), wav("Beta.wav", 2, 330));
   await allReady(page, 2);
-  await page.getByRole("button", { name: "Save all" }).click();
+  await page.getByRole("button", { name: "Publish all" }).click();
   await expect(page).toHaveURL(new RegExp(`/${username}$`), { timeout: 20_000 });
   expect(await db.track.count({ where: { creator: { username }, title: { in: ["Alpha", "Beta"] } } })).toBe(2);
   expect(await db.collection.count({ where: { owner: { username } } })).toBe(0);
@@ -161,7 +161,7 @@ test("J7: a private track opens through its secret link only; resetting the link
   await choose(page, wav("Secret Demo.wav"));
   await allReady(page, 1);
   await page.getByRole("radio", { name: "Private" }).click();
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: /^(Publish|Publish release|Save release \(private\))$/ }).click();
   await expect(page).toHaveURL(/\?new=private$/);
   await expect(page.getByTestId("published-banner")).toContainText("private");
 
@@ -205,7 +205,7 @@ test("J8: a Pro creator schedules a track; it is invisible until its time, then 
   const when = new Date(Date.now() + 2 * 86_400_000);
   const local = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, "0")}-${String(when.getDate()).padStart(2, "0")}T10:30`;
   await page.getByLabel("Publish at (your time zone)").fill(local);
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: /^(Publish|Publish release|Save release \(private\))$/ }).click();
   await expect(page).toHaveURL(/\?new=scheduled/);
   await expect(page.getByTestId("published-banner")).toContainText("Scheduled for");
 
@@ -235,7 +235,7 @@ test("UP-8: Free upload time is enforced when a file would exceed it", async ({ 
   await choose(page, wav("Two Minutes.wav", 130));
   await allReady(page, 1);
   await expect(page.getByRole("alert").filter({ hasText: "upload time left" })).toBeVisible();
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: /^(Publish|Publish release|Save release \(private\))$/ }).click();
   await expect(page.getByText(/upload time left/).first()).toBeVisible();
   expect(await db.track.count({ where: { creatorId: user.id } })).toBe(1);
   void username;
@@ -247,7 +247,7 @@ test("editing: change title and permalink (old URL redirects), then delete with 
   await page.goto("/upload", { waitUntil: "networkidle" });
   await choose(page, wav("Original Name.wav"));
   await allReady(page, 1);
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/${username}/original-name\\?new=1$`));
   const track = await db.track.findFirstOrThrow({ where: { slug: "original-name", creatorId: user.id } });
   await db.comment.create({ data: { authorId: user.id, trackId: track.id, content: "note to self" } });

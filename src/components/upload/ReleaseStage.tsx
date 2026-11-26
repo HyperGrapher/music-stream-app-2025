@@ -109,6 +109,16 @@ export function ReleaseStage({ username, plan }: { username: string; plan: "FREE
   const targets = (items.some((i) => i.selected) ? items.filter((i) => i.selected) : items);
   const applyBulk = (patch: Partial<TrackFields>) => targets.forEach((i) => updateFields(i.id, patch));
   const valid = title.trim().length > 0 && ready && !needsDate;
+  const waiting = items.filter((i) => i.state !== "ready" && i.state !== "failed").length;
+  const failed = items.filter((i) => i.state === "failed").length;
+  // Say exactly what is missing instead of leaving the button silently disabled.
+  const blockers = [
+    title.trim().length === 0 ? "give the release a title" : null,
+    needsDate ? "add a release date" : null,
+    waiting > 0 ? `wait for ${waiting} ${waiting === 1 ? "file" : "files"} to finish uploading` : null,
+    failed > 0 ? `retry or remove ${failed} failed ${failed === 1 ? "file" : "files"}` : null,
+    items.length === 0 ? "add at least one file" : null,
+  ].filter((b): b is string => b !== null);
 
   const save = async () => {
     try {
@@ -150,7 +160,7 @@ export function ReleaseStage({ username, plan }: { username: string; plan: "FREE
         <label className="flex items-center gap-2 text-sm text-zinc-300">
           <input type="checkbox" checked={useArtwork} onChange={(e) => setUseArtwork(e.target.checked)} className="accent-orange-500" /> Use for tracks without artwork
         </label>
-        <Labelled text="Release title">
+        <Labelled text="Release title (required)" error={title.trim() ? null : "Give the release a title to publish."}>
           <Input value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} className={`${field} h-11 text-lg font-semibold`} />
         </Labelled>
         <Labelled text="Permalink" hint={slug ? undefined : `/${username}/sets/${slugBase(title || "untitled")}`}>
@@ -238,9 +248,9 @@ export function ReleaseStage({ username, plan }: { username: string; plan: "FREE
 
         <div className="flex items-center gap-3 border-t border-zinc-800 pt-4">
           <Button type="button" disabled={!valid || create.isPending} onClick={() => void save()} className="bg-orange-500 text-white hover:bg-orange-600">
-            {create.isPending ? "Saving..." : "Save"}
+            {create.isPending ? "Publishing..." : privacy === "private" ? "Save release (private)" : "Publish release"}
           </Button>
-          {!ready && <span className="text-xs text-zinc-500">Save unlocks when every file is ready (failed ones must be retried or removed).</span>}
+          {blockers.length > 0 && <span className="text-xs text-amber-300" data-testid="publish-blockers">To publish: {blockers.join(", ")}.</span>}
         </div>
       </section>
     </div>

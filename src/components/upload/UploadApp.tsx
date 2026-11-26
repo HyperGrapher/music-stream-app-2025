@@ -127,7 +127,7 @@ export function UploadApp({ username }: { username: string }) {
             }}
             className="bg-orange-500 text-white hover:bg-orange-600"
           >
-            Save all
+            Publish all
           </Button>
         </div>
       )}
