@@ -147,6 +147,18 @@
     scrollbar-gutter: stable;
   }
 
+  /*
+   * The page never pans sideways on a phone: anything that pokes out is clipped (not scrollable, unlike
+   * `hidden`, so sticky/fixed children keep working) and the browser's sideways rubber-band/back-swipe
+   * is off. Horizontal carousels still scroll inside themselves.
+   */
+  html,
+  body {
+    overflow-x: clip;
+    overscroll-behavior-x: none;
+    max-width: 100%;
+  }
+
   /* One scrollbar look everywhere: thin, dark, rounded by the browser, no light-grey default. */
   * {
     scrollbar-width: thin;
