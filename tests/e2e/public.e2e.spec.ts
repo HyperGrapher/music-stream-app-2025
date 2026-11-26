@@ -110,7 +110,8 @@ test.describe("media routes", () => {
     expect(await playCount()).toBe(0);
     for (let i = 0; i < 3; i++) {
       const response = await request.post(`/api/tracks/${TRACKS.plays.id}/play`);
-      expect(response.status()).toBe(204);
+      expect(response.status()).toBe(200);
+      expect(((await response.json()) as { eventId: string | null }).eventId).toBeTruthy();
     }
     expect(await playCount()).toBe(1);
   });

@@ -6,6 +6,8 @@ import { notFound, permanentRedirect } from "next/navigation";
 
 import { CommentsSection } from "@/app/_components/CommentsSection";
 import { TrackDetailHero } from "@/app/_components/TrackDetailHero";
+import { RelatedTracks } from "@/app/_components/RelatedTracks";
+import { FollowButton } from "@/components/FollowButton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { genreLabel } from "@/lib/genres";
 import { OwnerVisibilityBanner, PublishedBanner } from "@/components/editor/Banners";
@@ -35,7 +37,34 @@ export async function trackMetadata(params: TrackPageParams): Promise<Metadata> 
     alternates: { canonical: track.permalink.replace(/\/s-[^/]+$/, "") },
     // Hidden content must never be indexed, even when reached through its secret link.
     robots: track.viaSecret || track.visibility !== "PUBLIC" ? { index: false, follow: false } : undefined,
+    openGraph: {
+      type: "music.song",
+      title: track.title,
+      description: `Listen to ${track.title} by ${artist}.`,
+      images: track.artworkUrl ? [track.artworkUrl] : undefined,
+    },
+    twitter: { card: "summary_large_image", title: track.title, description: `Listen to ${track.title} by ${artist}.`, images: track.artworkUrl ? [track.artworkUrl] : undefined },
   };
+}
+
+const LICENSE_LABEL: Record<string, string> = {
+  ALL_RIGHTS_RESERVED: "All rights reserved",
+  CC_BY: "CC BY",
+  CC_BY_SA: "CC BY-SA",
+  CC_BY_NC: "CC BY-NC",
+  CC_BY_NC_SA: "CC BY-NC-SA",
+  CC_BY_ND: "CC BY-ND",
+  CC_BY_NC_ND: "CC BY-NC-ND",
+  CC0: "CC0 (public domain)",
+};
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-2">
+      <dt className="font-semibold">{label}:</dt>
+      <dd className="text-zinc-400">{value}</dd>
+    </div>
+  );
 }
 
 export async function TrackPage(params: TrackPageParams) {
@@ -49,8 +78,24 @@ export async function TrackPage(params: TrackPageParams) {
     .catch(() => undefined);
   const release = track.collections.find((collection) => collection.isRelease) ?? track.collections[0];
 
+  const jsonLd =
+    track.visibility === "PUBLIC" && !track.viaSecret
+      ? {
+          "@context": "https://schema.org",
+          "@type": "MusicRecording",
+          name: track.title,
+          byArtist: { "@type": "MusicGroup", name: track.artistName ?? track.creator.name, url: `/${track.creator.username}` },
+          duration: `PT${Math.floor(track.duration / 60)}M${track.duration % 60}S`,
+          genre: track.genre ?? undefined,
+          image: track.artworkUrl ?? undefined,
+          url: track.permalink,
+          ...(track.isrc ? { isrcCode: track.isrc } : {}),
+        }
+      : null;
+
   return (
     <HydrateClient>
+      {jsonLd ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} /> : null}
       <div className="min-h-screen bg-[#0d0d0d] pb-24 text-white">
         <div className="mx-auto max-w-[1240px] px-4 py-5 sm:px-6">
           {track.isOwner && params.justSaved?.status && (
@@ -103,6 +148,11 @@ export async function TrackPage(params: TrackPageParams) {
                       </dd>
                     </div>
                   )}
+                  {track.bpm ? <Detail label="BPM" value={String(track.bpm)} /> : null}
+                  {track.musicalKey ? <Detail label="Key" value={track.musicalKey} /> : null}
+                  {track.isrc ? <Detail label="ISRC" value={track.isrc} /> : null}
+                  {track.publisher ? <Detail label="Publisher" value={track.publisher} /> : null}
+                  {track.license ? <Detail label="License" value={LICENSE_LABEL[track.license] ?? track.license} /> : null}
                   {track.genre && (
                     <div className="flex gap-2">
                       <dt className="font-semibold">Genre:</dt>
@@ -110,6 +160,22 @@ export async function TrackPage(params: TrackPageParams) {
                     </div>
                   )}
                 </dl>
+                {track.collections.length > 0 && (
+                  <p className="mt-5 text-sm text-zinc-400">
+                    In:{" "}
+                    {track.collections.map((collection, index) => (
+                      <span key={collection.id}>
+                        {index > 0 ? ", " : ""}
+                        <Link href={collection.permalink} className="text-zinc-200 hover:text-orange-400">{collection.title}</Link>
+                      </span>
+                    ))}
+                  </p>
+                )}
+                {track.buyUrl && (
+                  <a href={track.buyUrl} target="_blank" rel="noopener noreferrer nofollow" className="mt-5 inline-flex rounded-full border border-zinc-700 px-4 py-2 text-sm font-semibold hover:border-zinc-500">
+                    {track.buyTitle ?? "Buy"}
+                  </a>
+                )}
                 {track.description && (
                   <p className="mt-5 text-sm leading-7 whitespace-pre-line text-zinc-300">
                     {track.description}
@@ -162,21 +228,12 @@ export async function TrackPage(params: TrackPageParams) {
                     )}
                   </div>
                 </div>
-                <div className="mt-5 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    className="rounded-full bg-white py-2 text-sm font-bold text-black hover:bg-zinc-200"
-                  >
-                    Follow
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full border border-zinc-700 py-2 text-sm font-bold hover:border-zinc-500"
-                  >
-                    Message
-                  </button>
+                <div className="mt-5">
+                  {!track.isOwner && <FollowButton userId={track.creator.id} initialFollowing={track.creator.followedByMe} />}
                 </div>
               </section>
+
+              <RelatedTracks trackId={track.id} />
 
               <section className="grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-2 py-4">

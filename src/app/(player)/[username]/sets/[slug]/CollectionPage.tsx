@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 
+import { CollectionActions } from "@/app/_components/CollectionActions";
 import { WaveformTrackItem } from "@/app/_components/WaveformTrackItem";
 import { ARTWORK_SIZES } from "@/lib/artwork";
 import { genreLabel } from "@/lib/genres";
@@ -94,6 +95,7 @@ export async function CollectionPage(params: CollectionPageParams) {
               {collection.trackCount} {collection.trackCount === 1 ? "track" : "tracks"}
               {collection.durationMs > 0 && ` · ${formatTotal(collection.durationMs)}`}
             </p>
+            <CollectionActions collection={collection} tracks={playable} />
             {collection.isOwner && (
               <p className="mt-3">
                 <Link href={`/studio/sets/${collection.id}/edit?return=${encodeURIComponent(collection.permalink)}`} className="rounded-full border border-zinc-700 px-4 py-1.5 text-sm font-semibold hover:border-zinc-400">Edit</Link>
@@ -109,7 +111,7 @@ export async function CollectionPage(params: CollectionPageParams) {
         <section className="mt-8" aria-label="Tracks">
           {collection.tracks.map((entry) =>
             entry.available ? (
-              <WaveformTrackItem key={entry.id} track={entry} playlist={playable} compact />
+              <WaveformTrackItem key={entry.id} track={entry} playlist={playable} context={{ name: collection.title, source: "COLLECTION", collectionId: collection.id }} compact />
             ) : (
               <div
                 key={entry.id}

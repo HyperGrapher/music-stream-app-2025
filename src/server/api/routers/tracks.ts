@@ -119,6 +119,10 @@ export const tracksRouter = createTRPCRouter({
         access: access === "secret" ? { secret: input.secret } : undefined,
         secretForPermalink: permalinkSecret,
       });
+      const followsCreator =
+        viewerId && viewerId !== track.creatorId
+          ? (await ctx.db.follow.findUnique({ where: { followerId_followingId: { followerId: viewerId, followingId: track.creatorId } }, select: { followerId: true } })) !== null
+          : false;
       const creator = await ctx.db.user.findUniqueOrThrow({
         where: { id: track.creatorId },
         select: {
@@ -171,6 +175,7 @@ export const tracksRouter = createTRPCRouter({
             countryCode: creator.countryCode,
             followersCount: creator.followerCount,
             trackCount: creator.publicTrackCount,
+            followedByMe: followsCreator,
           },
           collections: track.collectionEntries.map((entry) => ({
             id: entry.collection.id,

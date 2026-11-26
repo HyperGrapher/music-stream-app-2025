@@ -33,6 +33,17 @@ interface WaveformTrackItemProps {
   context?: ContextMeta;
 }
 
+/** Animated bars next to the title of the track that is playing. */
+function Equaliser() {
+  return (
+    <span className="mr-2 inline-flex h-3 items-end gap-0.5 align-baseline" aria-label="Playing" role="img">
+      {[0, 150, 300].map((delay) => (
+        <span key={delay} className="w-0.5 animate-pulse bg-orange-500" style={{ height: `${60 + delay / 5}%`, animationDelay: `${delay}ms` }} />
+      ))}
+    </span>
+  );
+}
+
 const actionClass =
   "inline-flex h-8 items-center gap-1.5 rounded border border-zinc-700 bg-zinc-900 px-2.5 text-xs font-semibold text-zinc-300 transition hover:border-zinc-500 hover:text-white";
 
@@ -130,6 +141,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
                 href={track.permalink ?? "#"}
                 className="block truncate text-base font-semibold text-zinc-100 transition hover:text-orange-500"
               >
+                {isPlaying ? <Equaliser /> : null}
                 {track.title}
               </Link>
             </div>
