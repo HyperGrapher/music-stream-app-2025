@@ -65,7 +65,7 @@ export async function ProfileShell({ username, active, children }: { username: s
               <h1 className="inline bg-black/80 decoration-clone px-3 py-1 text-2xl leading-[1.55] font-bold sm:text-4xl">
                 {profile.name}
                 {profile.verified && <span title="Verified" aria-label="Verified" className="ml-2 text-orange-400">✓</span>}
-                {profile.plan === "PRO" && <span className="ml-2 rounded bg-orange-500 px-1.5 py-0.5 align-middle text-xs font-bold text-white">PRO</span>}
+                {profile.plan === "PRO" && <span className="ml-2 rounded bg-orange-700 px-1.5 py-0.5 align-middle text-xs font-bold text-white">PRO</span>}
               </h1>
               <div className="mt-2 flex flex-wrap gap-2 text-sm text-zinc-300">
                 <span className="bg-black/70 px-2 py-1">@{profile.username}</span>
@@ -90,7 +90,7 @@ export async function ProfileShell({ username, active, children }: { username: s
                 key={tab.key}
                 href={`${base}${tab.path}`}
                 aria-current={active === tab.key ? "page" : undefined}
-                className={`flex h-14 items-center border-b-2 px-1 text-sm font-semibold whitespace-nowrap ${active === tab.key ? "border-orange-500 text-white" : "border-transparent text-zinc-500 hover:text-zinc-200"}`}
+                className={`flex h-14 items-center border-b-2 px-1 text-sm font-semibold whitespace-nowrap ${active === tab.key ? "border-orange-500 text-white" : "border-transparent text-zinc-400 hover:text-zinc-200"}`}
               >
                 {tab.label}
               </Link>
@@ -116,15 +116,15 @@ export async function ProfileShell({ username, active, children }: { username: s
           <aside className="space-y-7 border-t border-zinc-800 pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-7">
             <div className="grid grid-cols-3 divide-x divide-zinc-800">
               <Link href={`${base}/followers`} className="hover:text-orange-400">
-                <p className="text-xs text-zinc-500">Followers</p>
+                <p className="text-xs text-zinc-400">Followers</p>
                 <p className="mt-1 text-xl font-bold" data-testid="follower-count">{formatCount(profile.followerCount)}</p>
               </Link>
               <Link href={`${base}/following`} className="pl-4 hover:text-orange-400">
-                <p className="text-xs text-zinc-500">Following</p>
+                <p className="text-xs text-zinc-400">Following</p>
                 <p className="mt-1 text-xl font-bold">{formatCount(profile.followingCount)}</p>
               </Link>
               <Link href={`${base}/tracks`} className="pl-4 hover:text-orange-400">
-                <p className="text-xs text-zinc-500">Tracks</p>
+                <p className="text-xs text-zinc-400">Tracks</p>
                 <p className="mt-1 text-xl font-bold">{formatCount(profile.publicTrackCount)}</p>
               </Link>
             </div>

@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return { title: `#${decodeURIComponent(tag)} | Music Stream` };
 }
 
-const chip = (active: boolean) => `rounded-full border px-3.5 py-1.5 text-sm font-medium ${active ? "border-orange-500 bg-orange-500 text-white" : "border-zinc-700 text-zinc-300 hover:border-zinc-500"}`;
+const chip = (active: boolean) => `rounded-full border px-3.5 py-1.5 text-sm font-medium ${active ? "border-orange-500 bg-orange-700 text-white" : "border-zinc-700 text-zinc-300 hover:border-zinc-500"}`;
 
 /** `/tags/[tag]` (GT-2): public tracks and collections with that tag (or genre), Popular or Latest. */
 export default async function TagPage({ params, searchParams }: { params: Params; searchParams: Promise<{ sort?: string }> }) {
@@ -31,7 +31,7 @@ export default async function TagPage({ params, searchParams }: { params: Params
         <Link href={`/tags/${encodeURIComponent(tag)}?sort=latest`} className={chip(order === "latest")}>Latest</Link>
       </nav>
       {result.tracks.length === 0 && result.collections.length === 0 ? (
-        <p className="mt-10 rounded border border-dashed border-zinc-800 px-6 py-16 text-center text-sm text-zinc-500">Nothing is tagged #{tag} yet.</p>
+        <p className="mt-10 rounded border border-dashed border-zinc-800 px-6 py-16 text-center text-sm text-zinc-400">Nothing is tagged #{tag} yet.</p>
       ) : (
         <>
           {result.collections.length > 0 && <ul className="mt-8 grid grid-cols-2 gap-5 sm:grid-cols-4 lg:grid-cols-6">{result.collections.map((c) => <li key={c.id}><CollectionCard collection={c} /></li>)}</ul>}

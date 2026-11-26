@@ -43,7 +43,7 @@ One Next.js app on **Vercel**, **Neon** Postgres and **Cloudflare R2**.
 - **Play counts** that cannot be inflated by refreshing: one count per listener per track per 30 minutes; the owner's own plays are never counted. Daily statistics are kept for charts and insights.
 - **Platform plumbing:** Postgres-backed rate limiter, email module (Resend, or logged when no key is set), durable R2 deletion queue with a daily cron, simulated Free/Pro entitlements, injectable clock.
 
-**Work in progress:** the product is being built out milestone by milestone against [`docs/PRD.md`](docs/PRD.md) (M0 to M7 done; status in [`docs/REFACTOR.md`](docs/REFACTOR.md)). The data model already contains reposts, blocks, notifications, reports, messages and insights tables, but their UI and procedures arrive in later milestones: direct messages and a final polish pass are still to come.
+**Work in progress:** the product is being built out milestone by milestone against [`docs/PRD.md`](docs/PRD.md) (M0 to M8 done; status in [`docs/REFACTOR.md`](docs/REFACTOR.md)). The data model already contains reposts, blocks, notifications, reports, messages and insights tables, but their UI and procedures arrive in later milestones: direct messages (P2) are undecided.
 
 ## How it works
 

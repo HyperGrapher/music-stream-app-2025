@@ -39,25 +39,25 @@ export function SpotlightEditor() {
       <ol className="space-y-2" aria-label="Spotlight order">
         {items.map((p, i) => (
           <li key={`${p.kind}${p.id}`} className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm" data-testid="spotlight-item">
-            <span className="flex-1 truncate">{p.title} <span className="text-xs text-zinc-500">{p.kind === "track" ? "Track" : "Collection"}</span></span>
+            <span className="flex-1 truncate">{p.title} <span className="text-xs text-zinc-400">{p.kind === "track" ? "Track" : "Collection"}</span></span>
             <button aria-label={`Move ${p.title} up`} disabled={i === 0} onClick={() => move(i, -1)} className="p-1 text-zinc-400 hover:text-white disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
             <button aria-label={`Move ${p.title} down`} disabled={i === items.length - 1} onClick={() => move(i, 1)} className="p-1 text-zinc-400 hover:text-white disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
             <button aria-label={`Remove ${p.title}`} onClick={() => set(items.filter((x) => x !== p))} className="p-1 text-zinc-400 hover:text-white"><X className="h-4 w-4" /></button>
           </li>
         ))}
-        {items.length === 0 && <li className="text-sm text-zinc-500">Nothing pinned yet.</li>}
+        {items.length === 0 && <li className="text-sm text-zinc-400">Nothing pinned yet.</li>}
       </ol>
       <h2 className="mt-6 mb-2 text-sm font-bold tracking-wide text-zinc-400 uppercase">Your public tracks and collections</h2>
       <ul className="max-h-72 space-y-1 overflow-y-auto">
         {all.map((p) => (
           <li key={`${p.kind}${p.id}`} className="flex items-center justify-between gap-2 rounded px-2 py-1.5 hover:bg-zinc-900">
-            <span className="truncate text-sm">{p.title} <span className="text-xs text-zinc-500">{p.kind === "track" ? "Track" : "Collection"}</span></span>
+            <span className="truncate text-sm">{p.title} <span className="text-xs text-zinc-400">{p.kind === "track" ? "Track" : "Collection"}</span></span>
             <Button size="sm" variant="outline" disabled={has(p)} onClick={() => add(p)} aria-label={`Add ${p.title}`}>{has(p) ? "Added" : "Add"}</Button>
           </li>
         ))}
-        {all.length === 0 && <li className="text-sm text-zinc-500">Publish something first.</li>}
+        {all.length === 0 && <li className="text-sm text-zinc-400">Publish something first.</li>}
       </ul>
-      <Button className="mt-5 bg-orange-500 text-white hover:bg-orange-600" disabled={!draft || save.isPending} onClick={() => draft && save.mutate({ items: draft.map(({ kind, id }) => ({ kind, id })) })}>Save spotlight</Button>
+      <Button className="mt-5 bg-orange-700 text-white hover:bg-orange-800" disabled={!draft || save.isPending} onClick={() => draft && save.mutate({ items: draft.map(({ kind, id }) => ({ kind, id })) })}>Save spotlight</Button>
       <UpsellDialog open={upsell} onClose={() => setUpsell(false)} feature="More than one Spotlight item" />
     </div>
   );

@@ -18,7 +18,7 @@ import { PASSWORD_PROBLEM_MESSAGES, passwordProblem } from "@/lib/passwords";
 import { api } from "@/trpc/react";
 
 const field = "border-zinc-700 bg-zinc-900 text-white";
-const primary = "bg-orange-500 text-white hover:bg-orange-600";
+const primary = "bg-orange-700 text-white hover:bg-orange-800";
 const select = "h-9 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-white";
 
 function Section({ title, description, children }: { title: string; description?: string; children?: React.ReactNode }) {
@@ -59,7 +59,7 @@ const COUNTRIES = (() => {
 
 export function ProfileSettings() {
   const { data: me } = useMe();
-  if (!me) return <p className="text-sm text-zinc-500">Loading...</p>;
+  if (!me) return <p className="text-sm text-zinc-400">Loading...</p>;
   return <ProfileForm key={me.id} me={me} />;
 }
 
@@ -119,7 +119,7 @@ function ProfileForm({ me }: { me: Me }) {
             {(banner?.preview ?? me.bannerUrl) && <img src={banner?.preview ?? me.bannerUrl ?? ""} alt="" className="h-full w-full object-cover" />}
           </div>
           <ImageUploader purpose="BANNER" label="Change banner" onUploaded={(id, preview) => setBanner({ id, preview })} />
-          <p className="text-xs text-zinc-500">Banners are cropped to a wide strip (2480x520 works best).</p>
+          <p className="text-xs text-zinc-400">Banners are cropped to a wide strip (2480x520 works best).</p>
         </div>
       </Section>
       <Section title="About you">
@@ -178,7 +178,7 @@ function ProfileForm({ me }: { me: Me }) {
 
 export function AccountSettings() {
   const { data: me } = useMe();
-  if (!me) return <p className="text-sm text-zinc-500">Loading...</p>;
+  if (!me) return <p className="text-sm text-zinc-400">Loading...</p>;
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">Account</h1>
@@ -317,14 +317,14 @@ function SessionsSection() {
   return (
     <Section title="Where you're signed in">
       {sessions === null ? (
-        <p className="text-sm text-zinc-500">Loading...</p>
+        <p className="text-sm text-zinc-400">Loading...</p>
       ) : (
         <ul className="space-y-2">
           {sessions.map((session) => (
             <li key={session.id} className="flex items-center justify-between gap-3 rounded border border-zinc-800 p-3 text-sm">
               <span>
                 {describe(session.userAgent)} {session.token === current && <span className="ml-1 text-xs text-green-400">this device</span>}
-                <span className="block text-xs text-zinc-500">Last active {new Date(session.updatedAt).toLocaleString()}</span>
+                <span className="block text-xs text-zinc-400">Last active {new Date(session.updatedAt).toLocaleString()}</span>
               </span>
               {session.token !== current && (
                 <Button type="button" variant="outline" size="sm" onClick={() => void authClient.revokeSession({ token: session.token }).then(() => load())} className="border-zinc-700 bg-transparent text-white hover:bg-zinc-800">
@@ -385,7 +385,7 @@ function Toggle({ label, hint, checked, onChange }: { label: string; hint?: stri
     <div className="flex items-start justify-between gap-4 rounded border border-zinc-800 p-3">
       <div>
         <p className="text-sm font-medium">{label}</p>
-        {hint && <p className="mt-0.5 text-xs text-zinc-500">{hint}</p>}
+        {hint && <p className="mt-0.5 text-xs text-zinc-400">{hint}</p>}
       </div>
       <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
     </div>
@@ -404,7 +404,7 @@ function useSettingsSaver() {
 export function PrivacySettings() {
   const { data: me } = useMe();
   const save = useSettingsSaver();
-  if (!me) return <p className="text-sm text-zinc-500">Loading...</p>;
+  if (!me) return <p className="text-sm text-zinc-400">Loading...</p>;
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">Privacy</h1>
@@ -424,7 +424,7 @@ const LICENSES = [
 export function ContentSettings() {
   const { data: me } = useMe();
   const save = useSettingsSaver();
-  if (!me) return <p className="text-sm text-zinc-500">Loading...</p>;
+  if (!me) return <p className="text-sm text-zinc-400">Loading...</p>;
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">Content</h1>
@@ -476,7 +476,7 @@ function NotificationTypes() {
 export function NotificationSettings() {
   const { data: me } = useMe();
   const save = useSettingsSaver();
-  if (!me) return <p className="text-sm text-zinc-500">Loading...</p>;
+  if (!me) return <p className="text-sm text-zinc-400">Loading...</p>;
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">Notifications</h1>

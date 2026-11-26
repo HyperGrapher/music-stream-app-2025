@@ -96,7 +96,7 @@ test("embeds render without the app chrome and are frameable; the rest of the ap
   const embed = await request.get(`/embed/track/${track.id}`);
   expect(embed.status()).toBe(200);
   expect(embed.headers()["content-security-policy"]).toContain("frame-ancestors *");
-  expect(await embed.text()).not.toContain("Discover");
+  expect(await embed.text()).not.toContain("Music Stream home"); // the navbar logo link
   const page = await request.get(track.path);
   expect(page.headers()["content-security-policy"]).toContain("frame-ancestors 'self'");
   expect((await request.get(`/embed/track/${TRACKS.private.id}`)).status()).toBe(404);

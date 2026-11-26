@@ -24,7 +24,7 @@ export function UserAdmin({ userId }: { userId: string }) {
   const { user, counts, actions } = query.data;
   return (
     <div>
-      <h1 className="text-2xl font-bold">{user.name} <span className="text-base font-normal text-zinc-500">@{user.username}</span></h1>
+      <h1 className="text-2xl font-bold">{user.name} <span className="text-base font-normal text-zinc-400">@{user.username}</span></h1>
       <p className="mt-1 text-sm text-zinc-400">{user.email} · {user.status} · {user.plan} · joined {new Date(user.createdAt).toLocaleDateString()} · <Link className="text-orange-400 hover:underline" href={`/${user.username}`}>public profile</Link></p>
       <dl className="mt-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
         {Object.entries({ Tracks: counts.tracks, Collections: counts.collections, Comments: counts.comments, "Reports against": counts.reportsAgainst, "Reports filed": counts.reportsBy }).map(([k, v]) => <div key={k} className="rounded border border-zinc-800 bg-zinc-900/60 p-3"><dt className="text-xs text-zinc-400">{k}</dt><dd className="text-xl font-bold tabular-nums">{v}</dd></div>)}
@@ -48,7 +48,7 @@ export function UserAdmin({ userId }: { userId: string }) {
       <h2 className="mt-8 mb-2 text-lg font-bold">Audit log</h2>
       <ul className="space-y-1 text-sm text-zinc-300">
         {actions.map((a) => <li key={a.id}>{new Date(a.createdAt).toLocaleString()} · {a.action} by {a.admin.username}{a.reason ? `: ${a.reason}` : ""}</li>)}
-        {actions.length === 0 && <li className="text-zinc-500">No actions yet.</li>}
+        {actions.length === 0 && <li className="text-zinc-400">No actions yet.</li>}
       </ul>
     </div>
   );

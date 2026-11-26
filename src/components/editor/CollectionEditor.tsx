@@ -28,10 +28,10 @@ function SortableTrack({ entry, onRemove }: { entry: Entry; onRemove: () => void
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: entry.id });
   return (
     <li ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="flex items-center gap-3 rounded border border-zinc-800 bg-zinc-950 p-2.5" data-testid="collection-track">
-      <button type="button" {...attributes} {...listeners} aria-label={`Reorder ${entry.title}. Press space to lift, arrow keys to move.`} className="cursor-grab touch-none text-zinc-500 hover:text-white"><GripVertical className="h-5 w-5" /></button>
+      <button type="button" {...attributes} {...listeners} aria-label={`Reorder ${entry.title}. Press space to lift, arrow keys to move.`} className="cursor-grab touch-none text-zinc-400 hover:text-white"><GripVertical className="h-5 w-5" /></button>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{entry.title}</p>
-        <p className="text-xs text-zinc-500">{entry.user?.name} · {formatDuration(entry.duration)}</p>
+        <p className="text-xs text-zinc-400">{entry.user?.name} · {formatDuration(entry.duration)}</p>
       </div>
       {entry.visibilityRaw !== "PUBLIC" && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300"><Lock className="mr-1 inline h-3 w-3" />Private</span>}
       <Button type="button" variant="ghost" size="icon" aria-label={`Remove ${entry.title} from this collection`} onClick={onRemove} className="text-zinc-400 hover:bg-zinc-800"><X className="h-4 w-4" /></Button>
@@ -51,11 +51,11 @@ function AddTracks({ collectionId, existing, onAdded, all }: { collectionId: str
       <ul className="max-h-60 space-y-1 overflow-y-auto">
         {rows.filter((t) => !existing.has(t.id)).map((t) => (
           <li key={t.id} className="flex items-center justify-between gap-2 text-sm">
-            <span className="truncate">{t.title} <span className="text-xs text-zinc-500">{t.user?.name}</span></span>
+            <span className="truncate">{t.title} <span className="text-xs text-zinc-400">{t.user?.name}</span></span>
             <Button type="button" size="sm" variant="outline" disabled={add.isPending} onClick={() => add.mutate({ id: collectionId, trackIds: [t.id] })} className="border-zinc-700 bg-transparent text-white hover:bg-zinc-800"><Plus className="h-3.5 w-3.5" /> Add</Button>
           </li>
         ))}
-        {rows.filter((t) => !existing.has(t.id)).length === 0 && <li className="text-xs text-zinc-500">{all && q.length < 2 ? "Type at least 2 characters." : "Nothing to add."}</li>}
+        {rows.filter((t) => !existing.has(t.id)).length === 0 && <li className="text-xs text-zinc-400">{all && q.length < 2 ? "Type at least 2 characters." : "Nothing to add."}</li>}
       </ul>
     </div>
   );
@@ -152,7 +152,7 @@ export function CollectionEditor({ initial, returnTo }: { initial: Data; returnT
           <ArtworkField label="Artwork" currentUrl={live.artworkUrl} onUploaded={mark(setArtworkId)} onRemove={() => { setArtworkId(null); setDirty(true); }} />
           <Labelled text="Title"><Input value={title} maxLength={100} onChange={(e) => mark(setTitle)(e.target.value)} className={field} /></Labelled>
           <Labelled text="Permalink" error={slugCheck.data && !slugCheck.data.available ? "That permalink isn't available." : null}>
-            <span className="flex items-center gap-1 text-sm text-zinc-500">/{initial.username}/sets/<Input aria-label="Permalink" value={slug} maxLength={80} onChange={(e) => mark(setSlug)(e.target.value.toLowerCase())} className={field} /></span>
+            <span className="flex items-center gap-1 text-sm text-zinc-400">/{initial.username}/sets/<Input aria-label="Permalink" value={slug} maxLength={80} onChange={(e) => mark(setSlug)(e.target.value.toLowerCase())} className={field} /></span>
           </Labelled>
           <fieldset>
             <legend className="mb-1 text-sm font-medium text-zinc-300">Type</legend>
@@ -161,7 +161,7 @@ export function CollectionEditor({ initial, returnTo }: { initial: Data; returnT
                 <button key={t.value} type="button" role="radio" aria-checked={type === t.value} title={t.hint} onClick={() => mark(setType)(t.value)} className={`rounded-full border px-3 py-1.5 text-sm ${type === t.value ? "border-orange-500 bg-orange-500/15 text-orange-300" : "border-zinc-700 text-zinc-300"}`}>{t.label}</button>
               ))}
             </div>
-            <p className="mt-1 text-xs text-zinc-500">Changing the type moves it between your Albums and Playlists tabs. You can change it back any time.</p>
+            <p className="mt-1 text-xs text-zinc-400">Changing the type moves it between your Albums and Playlists tabs. You can change it back any time.</p>
           </fieldset>
           <Labelled text={isReleaseType(type) ? "Release date (required)" : "Release date (optional)"} error={needsDate ? "Add a release date." : null}>
             <Input type="date" value={releaseDate} onChange={(e) => mark(setReleaseDate)(e.target.value)} className={`${field} max-w-xs`} />
@@ -209,7 +209,7 @@ export function CollectionEditor({ initial, returnTo }: { initial: Data; returnT
       </section>
 
       <div className="sticky bottom-24 flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/95 p-3 backdrop-blur">
-        <Button type="button" disabled={!title.trim() || needsDate || update.isPending} onClick={() => void save()} className="bg-orange-500 text-white hover:bg-orange-600">{update.isPending ? "Saving..." : "Save"}</Button>
+        <Button type="button" disabled={!title.trim() || needsDate || update.isPending} onClick={() => void save()} className="bg-orange-700 text-white hover:bg-orange-800">{update.isPending ? "Saving..." : "Save"}</Button>
         <Button type="button" variant="ghost" onClick={() => { if (!dirty || window.confirm("Discard your changes?")) router.push(returnTo); }} className="text-zinc-300 hover:bg-zinc-800">Cancel</Button>
       </div>
 

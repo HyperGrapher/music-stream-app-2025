@@ -1,4 +1,5 @@
 import "@/styles/globals.css";
+import { env } from "@/env";
 import { type Metadata, type Viewport } from "next";
 import { Geist } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner"
@@ -9,14 +10,15 @@ import { AuthProvider } from "@/components/AuthProvider";
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: 'cover',
   themeColor: '#0A0A0A',
 };
 
 export const metadata: Metadata = {
-  title: "Streaming app",
-  description: "Streaming app",
+  metadataBase: new URL(env.NEXT_PUBLIC_APP_URL ?? env.BETTER_AUTH_URL),
+  title: "Music Stream",
+  description: "Stream and share music from independent creators.",
+  openGraph: { siteName: "Music Stream", type: "website" },
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 

@@ -41,7 +41,7 @@ export function ForgotPasswordForm() {
         <span className="mb-1 block text-zinc-300">Email</span>
         <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" className={field} />
       </label>
-      <Button type="submit" disabled={busy} className="w-full bg-orange-500 text-white hover:bg-orange-600">
+      <Button type="submit" disabled={busy} className="w-full bg-orange-700 text-white hover:bg-orange-800">
         Send reset link
       </Button>
     </form>
@@ -95,7 +95,7 @@ export function ResetPasswordForm({ token, invalid }: { token?: string; invalid:
           {error}
         </p>
       )}
-      <Button type="submit" className="w-full bg-orange-500 text-white hover:bg-orange-600">
+      <Button type="submit" className="w-full bg-orange-700 text-white hover:bg-orange-800">
         Change password
       </Button>
     </form>

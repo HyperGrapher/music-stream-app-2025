@@ -47,7 +47,7 @@ export function FeedPage({ empty }: { empty: ReactNode }) {
       </div>
 
       {newCount > 0 ? (
-        <button type="button" className="sticky top-2 z-10 mx-auto mt-4 block rounded-full bg-orange-500 px-4 py-1.5 text-sm font-semibold text-white shadow-lg" onClick={() => { window.scrollTo({ top: 0, behavior: "smooth" }); void first.refetch(); setPages([]); setCursor(undefined); setLoadedAt(new Date()); void utils.feed.newCount.invalidate(); }}>
+        <button type="button" className="sticky top-2 z-10 mx-auto mt-4 block rounded-full bg-orange-700 px-4 py-1.5 text-sm font-semibold text-white shadow-lg" onClick={() => { window.scrollTo({ top: 0, behavior: "smooth" }); void first.refetch(); setPages([]); setCursor(undefined); setLoadedAt(new Date()); void utils.feed.newCount.invalidate(); }}>
           {newCount} new {newCount === 1 ? "post" : "posts"}
         </button>
       ) : null}

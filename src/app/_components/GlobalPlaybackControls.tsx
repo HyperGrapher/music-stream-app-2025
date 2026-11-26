@@ -76,11 +76,11 @@ function TrackInfo() {
         className="w-10 h-10 object-cover rounded-sm flex-shrink-0"
       />
       <div className="flex-shrink min-w-0">
-        <Link href={currentTrack.permalink ?? '#'} className="block text-sm font-medium truncate max-w-[120px] sm:max-w-[200px] text-gray-200 hover:underline">
+        <Link href={currentTrack.permalink ?? '#'} className="block py-0.5 text-sm font-medium truncate max-w-[120px] sm:max-w-[200px] text-gray-200 hover:underline">
           {currentTrack.title}
         </Link>
         {currentTrack.user?.username ? (
-          <Link href={`/${currentTrack.user.username}`} className="block text-xs text-gray-400 truncate max-w-[120px] sm:max-w-[200px] hover:underline">
+          <Link href={`/${currentTrack.user.username}`} className="block py-1 text-xs text-gray-400 truncate max-w-[120px] sm:max-w-[200px] hover:underline">
             {artist}
           </Link>
         ) : (
@@ -319,7 +319,7 @@ function QueueButton({ className }: { className?: string }) {
   return (
     <Button variant="ghost" size="icon" className={cn('h-8 w-8 relative', open ? 'text-orange-500' : 'text-gray-400 hover:text-white', className)} onClick={() => set(!open)} aria-pressed={open} aria-label="Next up" title="Next up (Q)">
       <ListMusic className="w-4 h-4" />
-      {count > 0 ? <span className="absolute -top-0.5 -right-0.5 rounded-full bg-orange-500 px-1 text-[10px] leading-4 text-white">{count}</span> : null}
+      {count > 0 ? <span className="absolute -top-0.5 -right-0.5 rounded-full bg-orange-700 px-1 text-[10px] leading-4 text-white">{count}</span> : null}
     </Button>
   );
 }
@@ -333,9 +333,10 @@ function MiniPlayer() {
   const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   return (
     <div className="right-scroll-bar-position sm:hidden fixed left-0 right-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-50 bg-[#181818] border-t border-[#282828]">
-      <div className="h-0.5 bg-neutral-700"><div className="h-full bg-orange-500" style={{ width: `${pct}%` }} /></div>
+      <div className="h-0.5 bg-neutral-700"><div className="h-full bg-orange-700" style={{ width: `${pct}%` }} /></div>
       <div className="flex items-center gap-3 px-3 py-2">
-        <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setSheetOpen(true)} aria-label="Open player">
+        <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setSheetOpen(true)}>
+          <span className="sr-only">Open player: </span>
           <img src={currentTrack.artworkUrl ?? '/placeholder-track.jpg'} alt="" className="h-10 w-10 rounded-sm object-cover" />
           <span className="min-w-0">
             <span className="block truncate text-sm text-gray-200">{currentTrack.title}</span>

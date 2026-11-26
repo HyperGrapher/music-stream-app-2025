@@ -25,7 +25,7 @@ export function Labelled({ text, hint, error, children }: { text: string; hint?:
     <label className="block text-sm">
       <span className="mb-1 block font-medium text-zinc-300">{text}</span>
       {children}
-      {hint && !error && <span className="mt-1 block text-xs text-zinc-500">{hint}</span>}
+      {hint && !error && <span className="mt-1 block text-xs text-zinc-400">{hint}</span>}
       {error && <span role="alert" className="mt-1 block text-xs text-red-400">{error}</span>}
     </label>
   );
@@ -34,7 +34,7 @@ export function Labelled({ text, hint, error, children }: { text: string; hint?:
 /** PL-4: gated controls stay visible with a PRO tag; using one opens the upsell instead of failing silently. */
 export function ProTag({ onClick }: { onClick?: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="ml-2 rounded bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold text-white" aria-label="Pro feature">
+    <button type="button" onClick={onClick} className="ml-2 rounded bg-orange-700 px-1.5 py-0.5 text-[10px] font-bold text-white" aria-label="Pro feature">
       PRO
     </button>
   );
@@ -48,7 +48,7 @@ export function UpsellDialog({ open, onClose, feature }: { open: boolean; onClos
           <DialogTitle>{feature} is a Pro feature</DialogTitle>
           <DialogDescription className="text-zinc-400">Switch to Pro in your settings (a demo upgrade, no payment is taken) to use it.</DialogDescription>
         </DialogHeader>
-        <Button asChild className="bg-orange-500 text-white hover:bg-orange-600">
+        <Button asChild className="bg-orange-700 text-white hover:bg-orange-800">
           <Link href="/settings/plan">See plans</Link>
         </Button>
       </DialogContent>
@@ -87,7 +87,7 @@ export function TagInput({ value, onChange }: { value: string[]; onChange: (tags
         placeholder={value.length >= 30 ? "30 tags is the maximum" : "Add a tag and press Enter"}
         disabled={value.length >= 30}
         aria-label="Tags"
-        className="min-w-32 flex-1 bg-transparent px-1 py-0.5 text-sm text-white outline-none placeholder:text-zinc-500"
+        className="min-w-32 flex-1 bg-transparent px-1 py-0.5 text-sm text-white outline-none placeholder:text-zinc-400"
       />
     </div>
   );
@@ -172,7 +172,7 @@ export function PrivacyField({
             className={`rounded-full border px-3 py-1.5 text-sm ${privacy === option.value ? "border-orange-500 bg-orange-500/15 text-orange-300" : "border-zinc-700 text-zinc-300 hover:border-zinc-500"}`}
           >
             {option.label}
-            {option.value === "scheduled" && plan !== "PRO" && <span className="ml-1.5 rounded bg-orange-500 px-1 text-[10px] font-bold text-white">PRO</span>}
+            {option.value === "scheduled" && plan !== "PRO" && <span className="ml-1.5 rounded bg-orange-700 px-1 text-[10px] font-bold text-white">PRO</span>}
           </button>
         ))}
       </div>
@@ -210,7 +210,7 @@ export function ArtworkField({
   return (
     <div className="flex items-start gap-4">
       <div className="h-28 w-28 shrink-0 overflow-hidden rounded-md bg-zinc-900">
-        {shown ? <img src={shown} alt={`${label} preview`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center px-2 text-center text-xs text-zinc-500">No artwork</div>}
+        {shown ? <img src={shown} alt={`${label} preview`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center px-2 text-center text-xs text-zinc-400">No artwork</div>}
       </div>
       <div className="space-y-2">
         <ImageUploader purpose="ARTWORK" label={shown ? `Change ${label.toLowerCase()}` : `Upload ${label.toLowerCase()}`} onUploaded={(id, url) => { setPreview(url); onUploaded(id); }} />
@@ -219,7 +219,7 @@ export function ArtworkField({
             Remove
           </Button>
         )}
-        <p className="text-xs text-zinc-500">{help ?? "JPEG, PNG or WebP up to 10 MB. 800x800 or larger works best; it is cropped to a square."}</p>
+        <p className="text-xs text-zinc-400">{help ?? "JPEG, PNG or WebP up to 10 MB. 800x800 or larger works best; it is cropped to a square."}</p>
       </div>
     </div>
   );
@@ -329,7 +329,7 @@ export function TrackFieldsEditor({ value, onChange, plan, mode, username, durat
           </Labelled>
           {!hidePermalink && (
             <Labelled text="Permalink" hint={slug ? undefined : `Generated from the title: /${username}/${slugBase(value.title || "untitled")}`} error={slugCheck.data && !slugCheck.data.available ? (slugCheck.data.reason === "TAKEN" ? "That permalink is taken." : "That permalink isn't allowed.") : errors.slug}>
-              <span className="flex items-center gap-1 text-sm text-zinc-500">
+              <span className="flex items-center gap-1 text-sm text-zinc-400">
                 /{username}/
                 <Input aria-label="Permalink" value={slug} maxLength={80} onChange={(e) => onChange({ slug: e.target.value.toLowerCase() || undefined })} placeholder={slugBase(value.title || "untitled")} className={field} />
               </span>
@@ -394,14 +394,14 @@ export function TrackFieldsEditor({ value, onChange, plan, mode, username, durat
             { key: "embeddable" as const, label: "Allow embedding", hint: "Lets other sites embed your player.", def: true },
           ].map((row) => (
             <div key={row.key} className="flex items-start justify-between gap-4 rounded border border-zinc-800 p-3">
-              <div><p className="text-sm font-medium">{row.label}</p><p className="text-xs text-zinc-500">{row.hint}</p></div>
+              <div><p className="text-sm font-medium">{row.label}</p><p className="text-xs text-zinc-400">{row.hint}</p></div>
               <Switch checked={value[row.key] ?? row.def} onCheckedChange={(checked) => onChange({ [row.key]: checked })} aria-label={row.label} />
             </div>
           ))}
           <div className="flex items-start justify-between gap-4 rounded border border-zinc-800 p-3">
             <div>
               <p className="text-sm font-medium">Display stats publicly{plan !== "PRO" && <ProTag onClick={() => setUpsell("Quiet Mode")} />}</p>
-              <p className="text-xs text-zinc-500">Turn off (Quiet Mode) to hide play, like, repost and comment counts from everyone but you.</p>
+              <p className="text-xs text-zinc-400">Turn off (Quiet Mode) to hide play, like, repost and comment counts from everyone but you.</p>
             </div>
             <Switch
               checked={value.statsPublic ?? true}
@@ -413,9 +413,9 @@ export function TrackFieldsEditor({ value, onChange, plan, mode, username, durat
 
         <TabsContent value="advanced" className="space-y-4">
           <Labelled text="Audio preview (30 s)" hint="The clip shown when someone hovers the track on Discover.">
-            {durationMs ? <PreviewPicker durationMs={durationMs} startMs={value.previewStartMs ?? 0} onChange={(previewStartMs) => onChange({ previewStartMs })} audioSrc={audioSrc} /> : <span className="text-xs text-zinc-500">Available once the file is analysed.</span>}
+            {durationMs ? <PreviewPicker durationMs={durationMs} startMs={value.previewStartMs ?? 0} onChange={(previewStartMs) => onChange({ previewStartMs })} audioSrc={audioSrc} /> : <span className="text-xs text-zinc-400">Available once the file is analysed.</span>}
           </Labelled>
-          {mode === "create" && <p className="text-xs text-zinc-500">You can change everything here later from the track&apos;s Edit page.</p>}
+          {mode === "create" && <p className="text-xs text-zinc-400">You can change everything here later from the track&apos;s Edit page.</p>}
         </TabsContent>
       </Tabs>
       <UpsellDialog open={upsell !== null} onClose={() => setUpsell(null)} feature={upsell ?? ""} />

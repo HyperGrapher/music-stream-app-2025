@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Music Player',
-    short_name: 'Music',
-    description: 'A music player built with Next.js.',
+    name: 'Music Stream',
+    short_name: 'Music Stream',
+    description: 'Stream and share music from independent creators.',
     start_url: '/',
     display: 'standalone',
     background_color: '#000000',

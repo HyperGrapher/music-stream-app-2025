@@ -100,7 +100,7 @@ export function StudioTracks() {
         <form className="ml-auto" role="search" onSubmit={(e) => { e.preventDefault(); setSearch(q.trim()); reset(); }}>
           <Input aria-label="Search your tracks" placeholder="Search your tracks" value={q} onChange={(e) => setQ(e.target.value)} className="h-9 w-56 border-zinc-700 bg-zinc-900" />
         </form>
-        <Button asChild size="sm" className="bg-orange-500 text-white hover:bg-orange-600"><Link href="/upload">Upload</Link></Button>
+        <Button asChild size="sm" className="bg-orange-700 text-white hover:bg-orange-800"><Link href="/upload">Upload</Link></Button>
       </div>
 
       {selected.size > 0 && (
@@ -161,9 +161,9 @@ export function StudioTracks() {
           </tbody>
         </table>
         {list.isLoading && <p className="p-6 text-sm text-zinc-400">Loading…</p>}
-        {!list.isLoading && rows.length === 0 && <p className="p-8 text-center text-sm text-zinc-500">{search || visibility !== "all" ? "No tracks match." : "You have not uploaded anything yet."}</p>}
+        {!list.isLoading && rows.length === 0 && <p className="p-8 text-center text-sm text-zinc-400">{search || visibility !== "all" ? "No tracks match." : "You have not uploaded anything yet."}</p>}
       </div>
-      <p className="mt-2 text-xs text-zinc-500">{list.data?.total ?? 0} {list.data?.total === 1 ? "track" : "tracks"}</p>
+      <p className="mt-2 text-xs text-zinc-400">{list.data?.total ?? 0} {list.data?.total === 1 ? "track" : "tracks"}</p>
       {next !== null && <div className="mt-4 text-center"><Button variant="outline" className="border-zinc-700 bg-transparent text-white" onClick={async () => { const page = await utils.studio.tracks.fetch({ q: search || undefined, visibility, sort, dir, offset: next }); setMore((m) => [...m, ...page.items]); setOffset(page.nextOffset); }}>Load more</Button></div>}
 
       <BulkEditDialog ids={ids} plan={usage.data?.plan ?? "FREE"} open={dialog === "edit"} onClose={() => setDialog(null)} onDone={() => { setDialog(null); reset(); }} />

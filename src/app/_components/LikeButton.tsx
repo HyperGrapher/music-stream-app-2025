@@ -50,13 +50,13 @@ export function LikeButton({
       type="button"
       onClick={toggle}
       aria-pressed={liked}
-      aria-label={liked ? "Unlike track" : "Like track"}
+      aria-label={variant === "pill" ? undefined : liked ? "Unlike track" : "Like track"}
       disabled={isPrivate && !liked}
       title={isPrivate ? "Private tracks can't be liked or reposted" : undefined}
       className={cn(className, liked && "border-orange-500/60 text-orange-400")}
     >
       <Heart className={heart} />
-      {variant === "pill" && <span>{count}</span>}
+      {variant === "pill" && <><span className="sr-only">{liked ? "Unlike track" : "Like track"}</span><span>{count}</span></>}
     </button>
   );
 

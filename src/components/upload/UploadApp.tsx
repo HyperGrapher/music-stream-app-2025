@@ -59,11 +59,11 @@ export function UploadApp({ username }: { username: string }) {
           onDrop={(e) => { e.preventDefault(); setDragging(false); choose(e.dataTransfer.files); }}
           className={`rounded-xl border-2 border-dashed p-12 text-center transition ${dragging ? "border-orange-500 bg-orange-500/10" : "border-zinc-700 bg-zinc-950"}`}
         >
-          <UploadCloud className="mx-auto h-10 w-10 text-zinc-500" />
+          <UploadCloud className="mx-auto h-10 w-10 text-zinc-400" />
           <p className="mt-4 text-lg font-semibold">Drag and drop your tracks &amp; albums here</p>
-          <p className="mt-1 text-xs text-zinc-500">MP3, WAV, OGG, FLAC, AAC or M4A, up to 100 MB each, up to {MAX_UPLOAD_BATCH} files.</p>
+          <p className="mt-1 text-xs text-zinc-400">MP3, WAV, OGG, FLAC, AAC or M4A, up to 100 MB each, up to {MAX_UPLOAD_BATCH} files.</p>
           <input ref={input} id="files" type="file" multiple accept={ACCEPTED_EXTENSIONS.map((e) => `.${e}`).join(",")} className="sr-only" aria-label="Choose files" onChange={(e) => { if (e.target.files) choose(e.target.files); e.target.value = ""; }} />
-          <Button type="button" onClick={() => input.current?.click()} className="mt-5 bg-orange-500 text-white hover:bg-orange-600">Choose files</Button>
+          <Button type="button" onClick={() => input.current?.click()} className="mt-5 bg-orange-700 text-white hover:bg-orange-800">Choose files</Button>
           <label className="mt-6 flex items-center justify-center gap-2 text-sm text-zinc-300">
             <input type="checkbox" checked={asPlaylist} onChange={(e) => setAsPlaylist(e.target.checked)} className="accent-orange-500" /> Make a playlist when multiple files are selected
           </label>
@@ -75,7 +75,7 @@ export function UploadApp({ username }: { username: string }) {
             ) : (
               <>
                 <p className="mb-1 text-sm text-zinc-400">{minutes(quota.usedMs)} of {minutes(quota.limitMs)} minutes used</p>
-                <Progress value={Math.min(100, (quota.usedMs / quota.limitMs) * 100)} className="h-1.5" />
+                <Progress value={Math.min(100, (quota.usedMs / quota.limitMs) * 100)} aria-label="Upload time used" className="h-1.5" />
                 {quota.remainingMs === 0 && <p role="alert" className="mt-2 text-sm text-amber-300">You&apos;ve used all your upload time. Delete tracks to free some up, or <Link href="/settings/plan" className="underline">upgrade to Pro</Link>.</p>}
               </>
             )}
@@ -93,7 +93,7 @@ export function UploadApp({ username }: { username: string }) {
         <h1 className="text-2xl font-bold">{items.length === 1 ? "Upload a track" : stacked ? "Upload tracks" : "Upload a release"}</h1>
         <div className="w-full max-w-xs text-xs text-zinc-400" aria-live="polite">
           <p data-testid="batch-progress">{readyCount} of {items.length} ready{busy ? "" : ""}</p>
-          <Progress value={(readyCount / items.length) * 100} className="mt-1 h-1" />
+          <Progress value={(readyCount / items.length) * 100} aria-label="Files ready" className="mt-1 h-1" />
         </div>
         <Button type="button" variant="ghost" onClick={() => { if (window.confirm("Discard these uploads?")) reset(); }} className="text-zinc-400 hover:bg-zinc-800">Cancel</Button>
       </div>
@@ -125,7 +125,7 @@ export function UploadApp({ username }: { username: string }) {
                 router.push(`/${username}`);
               })();
             }}
-            className="bg-orange-500 text-white hover:bg-orange-600"
+            className="bg-orange-700 text-white hover:bg-orange-800"
           >
             Publish all
           </Button>

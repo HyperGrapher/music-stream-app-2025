@@ -94,7 +94,7 @@ export function BulkEditDialog({ ids, plan, open, onClose, onDone }: { ids: stri
           </div>
           <div className="flex items-center justify-between gap-3 border-t border-zinc-800 pt-3">
             <span className="text-sm text-zinc-400" data-testid="bulk-preview">{empty ? "Nothing to change yet." : preview.data ? `${preview.data.changes} of ${preview.data.selected} will change.` : "Checking…"}</span>
-            <Button disabled={empty || update.isPending || preview.data?.changes === 0} onClick={() => update.mutate({ ids, patch })} className="bg-orange-500 text-white hover:bg-orange-600">Apply</Button>
+            <Button disabled={empty || update.isPending || preview.data?.changes === 0} onClick={() => update.mutate({ ids, patch })} className="bg-orange-700 text-white hover:bg-orange-800">Apply</Button>
           </div>
         </div>
         <UpsellDialog open={upsell !== null} onClose={() => setUpsell(null)} feature={upsell ?? ""} />

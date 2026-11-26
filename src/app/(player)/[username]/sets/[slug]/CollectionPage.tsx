@@ -101,7 +101,7 @@ export async function CollectionPage(params: CollectionPageParams) {
                 <Link href={`/studio/sets/${collection.id}/edit?return=${encodeURIComponent(collection.permalink)}`} className="rounded-full border border-zinc-700 px-4 py-1.5 text-sm font-semibold hover:border-zinc-400">Edit</Link>
               </p>
             )}
-            {collection.genre && <p className="mt-2 text-xs text-zinc-500"># {genreLabel(collection.genre)}</p>}
+            {collection.genre && <p className="mt-2 text-xs text-zinc-400"># {genreLabel(collection.genre)}</p>}
             {collection.description && (
               <p className="mt-4 max-w-2xl text-sm leading-6 whitespace-pre-line text-zinc-300">{collection.description}</p>
             )}
@@ -115,7 +115,7 @@ export async function CollectionPage(params: CollectionPageParams) {
             ) : (
               <div
                 key={entry.id}
-                className="border-b border-zinc-900 py-5 text-sm text-zinc-600"
+                className="border-b border-zinc-900 py-5 text-sm text-zinc-400"
                 data-testid="unavailable-track"
               >
                 {entry.position + 1}. This track is not available

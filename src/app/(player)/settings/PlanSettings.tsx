@@ -21,7 +21,7 @@ const ROWS: { label: string; free: string | boolean; pro: string | boolean }[] =
 ];
 
 const Cell = ({ value }: { value: string | boolean }) =>
-  typeof value === "string" ? <span>{value}</span> : value ? <Check className="mx-auto h-4 w-4 text-green-400" aria-label="Included" /> : <Minus className="mx-auto h-4 w-4 text-zinc-600" aria-label="Not included" />;
+  typeof value === "string" ? <span>{value}</span> : value ? <Check className="mx-auto h-4 w-4 text-green-400" aria-label="Included" /> : <Minus className="mx-auto h-4 w-4 text-zinc-400" aria-label="Not included" />;
 
 /** PL-1: two-column comparison and the demo upgrade (no payment is taken). */
 export function PlanSettings() {
@@ -35,7 +35,7 @@ export function PlanSettings() {
     },
     onError: (error) => toast.error(friendlyError(error)),
   });
-  if (!data) return <p className="text-sm text-zinc-500">Loading...</p>;
+  if (!data) return <p className="text-sm text-zinc-400">Loading...</p>;
   const pro = data.plan === "PRO";
   return (
     <div>
@@ -67,7 +67,7 @@ export function PlanSettings() {
             Switch back to Free
           </Button>
         ) : (
-          <Button disabled={setPlan.isPending} onClick={() => setPlan.mutate({ plan: "PRO" })} className="bg-orange-500 text-white hover:bg-orange-600">
+          <Button disabled={setPlan.isPending} onClick={() => setPlan.mutate({ plan: "PRO" })} className="bg-orange-700 text-white hover:bg-orange-800">
             Upgrade to Pro (demo, no payment)
           </Button>
         )}

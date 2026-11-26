@@ -41,7 +41,7 @@ export default async function Page({ params }: { params: Params }) {
         </section>
       )}
       <ProfileList username={username} tab="all" initial={initial} empty="Nothing here yet." />
-      <p className="mt-6 text-xs text-zinc-600">
+      <p className="mt-6 text-xs text-zinc-400">
         <Link href={`/${username}/tracks`} className="hover:text-zinc-400">
           See all tracks
         </Link>

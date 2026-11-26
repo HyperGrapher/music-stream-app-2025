@@ -86,6 +86,9 @@ export function TrackDetailHero({ track, editHref }: { track: PlayerTrack & { li
           srcSet={track.artworkSrcSet ?? undefined}
           sizes={ARTWORK_SIZES.backdrop}
           alt=""
+          // Decorative and blurred: must not compete with the hero artwork (the LCP element) for bandwidth.
+          fetchPriority="low"
+          decoding="async"
           className="absolute inset-0 h-full w-full scale-110 object-cover opacity-20 blur-3xl"
         />
       )}
@@ -209,6 +212,7 @@ export function TrackDetailHero({ track, editHref }: { track: PlayerTrack & { li
             srcSet={track.artworkSrcSet ?? undefined}
             sizes={ARTWORK_SIZES.hero}
             alt={`${track.title} artwork`}
+            fetchPriority="high"
             className="h-full w-full object-cover"
           />
         </Link>

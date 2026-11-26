@@ -26,7 +26,7 @@ function PersonCard({ person }: { person: Person }) {
       <Link href={`/${person.username}`}><Avatar className="h-12 w-12"><AvatarImage src={person.image ?? ""} alt="" /><AvatarFallback>{person.name.charAt(0)}</AvatarFallback></Avatar></Link>
       <div className="min-w-0 flex-1">
         <Link href={`/${person.username}`} className="block truncate font-semibold hover:text-orange-400">{person.name}</Link>
-        <p className="text-xs text-zinc-500">{person.followerCount} followers · {person.trackCount} tracks</p>
+        <p className="text-xs text-zinc-400">{person.followerCount} followers · {person.trackCount} tracks</p>
       </div>
       <FollowButton userId={person.id} initialFollowing={person.followedByMe} size="sm" />
     </li>
@@ -65,7 +65,7 @@ function NoResults({ q }: { q: string }) {
   return (
     <div className="rounded border border-dashed border-zinc-800 px-6 py-12 text-center" data-testid="no-results">
       <p className="text-lg font-semibold">No results for “{q}”</p>
-      <p className="mt-1 text-sm text-zinc-500">Check the spelling, try fewer words, or browse what’s trending.</p>
+      <p className="mt-1 text-sm text-zinc-400">Check the spelling, try fewer words, or browse what’s trending.</p>
       {tracks.length > 0 && <ul className="mx-auto mt-6 grid max-w-3xl grid-cols-2 gap-4 text-left sm:grid-cols-3">{tracks.map((t) => <li key={t.id}><TrackCard track={t} playlist={tracks} context={{ name: "Trending", source: "SEARCH" }} /></li>)}</ul>}
     </div>
   );

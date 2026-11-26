@@ -19,7 +19,7 @@ function Tile({ label, value, before }: { label: string; value: number; before: 
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4" data-testid={`tile-${label}`}>
       <p className="text-xs tracking-wide text-zinc-400 uppercase">{label}</p>
       <p className="mt-1 text-2xl font-bold tabular-nums">{value.toLocaleString()}</p>
-      {delta !== null && <p className={cn("text-xs", delta > 0 ? "text-emerald-400" : delta < 0 ? "text-red-400" : "text-zinc-500")}>{delta > 0 ? "+" : ""}{delta.toLocaleString()} vs previous period</p>}
+      {delta !== null && <p className={cn("text-xs", delta > 0 ? "text-emerald-400" : delta < 0 ? "text-red-400" : "text-zinc-400")}>{delta > 0 ? "+" : ""}{delta.toLocaleString()} vs previous period</p>}
     </div>
   );
 }
@@ -49,13 +49,13 @@ function PlaysChart({ series, weekly }: { series: Data["series"]; weekly: boolea
 
 function Bars({ rows, label }: { rows: { key: string; label: string; value: number }[]; label: string }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
-  if (rows.length === 0) return <p className="text-sm text-zinc-500">No plays in this period.</p>;
+  if (rows.length === 0) return <p className="text-sm text-zinc-400">No plays in this period.</p>;
   return (
     <ul aria-label={label} className="space-y-2">
       {rows.map((r) => (
         <li key={r.key} className="text-sm">
           <div className="flex justify-between"><span>{r.label}</span><span className="tabular-nums text-zinc-400">{r.value}</span></div>
-          <div className="mt-1 h-1.5 rounded bg-zinc-800"><div className="h-full rounded bg-orange-500" style={{ width: `${(r.value / max) * 100}%` }} /></div>
+          <div className="mt-1 h-1.5 rounded bg-zinc-800"><div className="h-full rounded bg-orange-700" style={{ width: `${(r.value / max) * 100}%` }} /></div>
         </li>
       ))}
     </ul>
@@ -110,7 +110,7 @@ export function InsightsView() {
 
           <section className="mt-8" aria-labelledby="top-tracks">
             <h2 id="top-tracks" className="mb-2 text-lg font-bold">Top tracks</h2>
-            {d.topTracks.length === 0 ? <p className="text-sm text-zinc-500">No plays in this period yet.</p> : (
+            {d.topTracks.length === 0 ? <p className="text-sm text-zinc-400">No plays in this period yet.</p> : (
               <table className="w-full text-sm"><thead className="text-left text-xs text-zinc-400"><tr><th className="py-2">Track</th><th className="text-right">Plays</th><th className="text-right">Likes</th><th className="text-right">Completion</th></tr></thead>
                 <tbody>{d.topTracks.map((t) => <tr key={t.id} className="border-t border-zinc-800" data-testid="top-track"><td className="py-2"><Link href={t.permalink} className="hover:text-orange-400">{t.title}</Link></td><td className="text-right tabular-nums">{t.plays}</td><td className="text-right tabular-nums">{t.likes}</td><td className="text-right tabular-nums">{t.completionRate === null ? "—" : `${Math.round(t.completionRate * 100)}%`}</td></tr>)}</tbody>
               </table>
@@ -125,10 +125,10 @@ export function InsightsView() {
               {d.breakdowns ? <Bars label="Plays by source" rows={d.breakdowns.sources.map((s) => ({ key: s.source, label: SOURCE_LABEL[s.source] ?? s.source, value: s.plays }))} /> : <Locked feature="Plays by source" onUpsell={() => setUpsell("Plays by source")} />}
             </section>
             <section aria-labelledby="listeners"><h2 id="listeners" className="mb-2 text-lg font-bold">Top listeners</h2>
-              {d.breakdowns ? (d.breakdowns.listeners.length === 0 ? <p className="text-sm text-zinc-500">No signed-in listeners yet.</p> : <ul className="space-y-1.5 text-sm">{d.breakdowns.listeners.map((l) => <li key={l.id} className="flex justify-between"><Link href={`/${l.username}`} className="hover:text-orange-400">{l.name}</Link><span className="tabular-nums text-zinc-400">{l.plays}</span></li>)}</ul>) : <Locked feature="Top listeners" onUpsell={() => setUpsell("Top listeners")} />}
+              {d.breakdowns ? (d.breakdowns.listeners.length === 0 ? <p className="text-sm text-zinc-400">No signed-in listeners yet.</p> : <ul className="space-y-1.5 text-sm">{d.breakdowns.listeners.map((l) => <li key={l.id} className="flex justify-between"><Link href={`/${l.username}`} className="hover:text-orange-400">{l.name}</Link><span className="tabular-nums text-zinc-400">{l.plays}</span></li>)}</ul>) : <Locked feature="Top listeners" onUpsell={() => setUpsell("Top listeners")} />}
             </section>
           </div>
-          {d.breakdowns && range !== "7" && range !== "30" && <p className="mt-3 text-xs text-zinc-500">Countries, sources and listeners cover at most the last 90 days.</p>}
+          {d.breakdowns && range !== "7" && range !== "30" && <p className="mt-3 text-xs text-zinc-400">Countries, sources and listeners cover at most the last 90 days.</p>}
         </>
       )}
       {data.isLoading && <p className="mt-6 text-sm text-zinc-400">Loading…</p>}

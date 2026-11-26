@@ -81,6 +81,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.1",
     "@faker-js/faker": "^10.6.0",
     "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "^4.3.5",
@@ -90,6 +91,7 @@
     "@types/react-dom": "^19.3.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.4.6",
+    "lighthouse": "^13.6.0",
     "postcss": "^8.5.33",
     "prettier": "^3.10.1",
     "prettier-plugin-tailwindcss": "^0.6.14",

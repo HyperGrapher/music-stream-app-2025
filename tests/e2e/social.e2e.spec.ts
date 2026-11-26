@@ -29,7 +29,7 @@ const as = (browser: Browser, baseURL: string, who: keyof typeof users) => brows
 test("J6: a listener reposts a track; their follower sees it in the Feed and the creator is notified; un-reposting removes both", async ({ browser, baseURL }) => {
   const reposter = await (await as(browser, baseURL!, "reposter")).newPage();
   await reposter.goto(jTrack.path, { waitUntil: "networkidle" });
-  await reposter.getByRole("button", { name: "Repost track", exact: true }).first().click();
+  await reposter.getByRole("button", { name: /^Repost track/ }).first().click();
   await expect(reposter.getByRole("button", { name: "Undo repost of track" }).first()).toHaveAttribute("aria-pressed", "true");
   await expect.poll(() => db.track.findUniqueOrThrow({ where: { id: jTrack.id } }).then((t) => t.repostCount)).toBe(1);
   expect(await db.notification.count({ where: { recipientId: CREATOR_ID, type: "TRACK_REPOST", trackId: jTrack.id } })).toBe(1);
@@ -41,7 +41,7 @@ test("J6: a listener reposts a track; their follower sees it in the Feed and the
   await expect(item).toContainText("reposted");
 
   await reposter.getByRole("button", { name: "Undo repost of track" }).first().click();
-  await expect(reposter.getByRole("button", { name: "Repost track", exact: true }).first()).toHaveAttribute("aria-pressed", "false");
+  await expect(reposter.getByRole("button", { name: /^Repost track/ }).first()).toHaveAttribute("aria-pressed", "false");
   await expect.poll(() => db.notification.count({ where: { recipientId: CREATOR_ID, type: "TRACK_REPOST", trackId: jTrack.id } })).toBe(0);
   await feed.reload({ waitUntil: "networkidle" });
   await expect(feed.getByTestId("feed-item").filter({ hasText: jTrack.title })).toHaveCount(0);

@@ -59,7 +59,7 @@ export const TrackCard = memo(function TrackCard({ track, playlist, context }: T
           type="button"
           onClick={handlePlay}
           aria-label={isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
-          className={`absolute right-3 bottom-3 flex h-12 w-12 items-center justify-center rounded-full bg-orange-500 text-white shadow-lg transition hover:scale-105 hover:bg-orange-400 focus-visible:opacity-100 ${
+          className={`absolute right-3 bottom-3 flex h-12 w-12 items-center justify-center rounded-full bg-orange-700 text-white shadow-lg transition hover:scale-105 hover:bg-orange-600 focus-visible:opacity-100 ${
             isCurrentTrack ? "opacity-100" : "opacity-0 group-hover:opacity-100"
           }`}
         >
@@ -80,7 +80,7 @@ export const TrackCard = memo(function TrackCard({ track, playlist, context }: T
       <div className="mt-2.5 min-w-0">
         <Link
           href={track.permalink ?? "#"}
-          className="block truncate text-sm font-semibold text-white hover:text-orange-400"
+          className="block truncate text-sm leading-6 font-semibold text-white hover:text-orange-400"
           title={track.title}
         >
           {track.title}
@@ -88,12 +88,12 @@ export const TrackCard = memo(function TrackCard({ track, playlist, context }: T
         {track.user?.username && (
           <Link
             href={`/${track.user.username}`}
-            className="block truncate text-sm text-zinc-400 hover:text-white"
+            className="block truncate text-sm leading-6 text-zinc-400 hover:text-white"
           >
             {track.user.name}
           </Link>
         )}
-        <div className="mt-1 flex items-center gap-3 text-xs text-zinc-500">
+        <div className="mt-1 flex items-center gap-3 text-xs text-zinc-400">
           <span className="inline-flex items-center gap-1">
             <Headphones className="h-3.5 w-3.5" />
             {formatCount(track.playCount ?? 0)}

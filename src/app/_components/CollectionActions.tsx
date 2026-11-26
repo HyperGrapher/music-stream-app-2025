@@ -33,10 +33,10 @@ function CollectionLike({ id, ownerId, isPrivate, initialLiked, initialCount, se
     });
   };
   return (
-    <Button type="button" variant="outline" aria-pressed={state.liked} aria-label={state.liked ? "Unlike collection" : "Like collection"} disabled={isPrivate && !state.liked}
+    <Button type="button" variant="outline" aria-pressed={state.liked} disabled={isPrivate && !state.liked}
       className={`rounded-full border-zinc-700 bg-transparent hover:bg-zinc-800 ${state.liked ? "border-orange-500/60 text-orange-400" : "text-white"}`}
       onClick={() => (user ? perform(!state.liked) : useAuthPrompt.getState().show("Sign in to like", () => perform(true)))}>
-      <Heart className={`h-4 w-4 ${state.liked ? "fill-current" : ""}`} /> {state.count}
+      <Heart className={`h-4 w-4 ${state.liked ? "fill-current" : ""}`} /> <span className="sr-only">{state.liked ? "Unlike collection" : "Like collection"}</span>{state.count}
     </Button>
   );
 }
@@ -69,7 +69,7 @@ export function CollectionActions({
 
   return (
     <div className="mt-5 flex flex-wrap items-center gap-2">
-      <Button type="button" disabled={tracks.length === 0} onClick={() => (isCurrent ? togglePlay() : tracks[0] && playContext(tracks, tracks[0], meta))} className="rounded-full bg-orange-500 px-5 text-white hover:bg-orange-400">
+      <Button type="button" disabled={tracks.length === 0} onClick={() => (isCurrent ? togglePlay() : tracks[0] && playContext(tracks, tracks[0], meta))} className="rounded-full bg-orange-700 px-5 text-white hover:bg-orange-600">
         {playing ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />} {playing ? "Pause" : "Play"}
       </Button>
       <Button
