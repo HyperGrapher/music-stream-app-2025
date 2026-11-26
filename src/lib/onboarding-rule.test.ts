@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { needsOnboardingRedirect } from "./index";
+import { needsOnboardingRedirect } from "./onboarding-rule";
 
 test("6.2: a not-yet-onboarded user is sent to /onboarding from everywhere except auth, legal and onboarding itself", () => {
   const fresh = { onboardedAt: null };

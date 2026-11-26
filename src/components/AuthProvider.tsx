@@ -11,6 +11,8 @@ type AuthProviderProps = {
     username?: string | null;
     email?: string | null;
     image?: string | null;
+    emailVerified?: boolean;
+    onboardedAt?: Date | string | null;
   } | null;
 };
 
@@ -33,7 +35,8 @@ export function AuthProvider({ initialUser }: AuthProviderProps) {
   useEffect(() => {
     if (!isPending) {
       if (session) {
-        setUser(session.user);
+        // The server-resolved avatar wins over the OAuth image carried by the session.
+        setUser({ ...session.user, image: initialUser?.image ?? session.user.image });
       } else if (!initialUser) {
         // Only set to null if we don't have an initialUser
         // This prevents flashing before session is loaded

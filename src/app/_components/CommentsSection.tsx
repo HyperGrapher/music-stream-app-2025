@@ -11,6 +11,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { usePlayAt } from "@/hooks/usePlayAt";
 import { useUser } from "@/hooks/useUser";
 import { parseAccessQuery } from "@/lib/access-client";
+import { friendlyError } from "@/lib/error-messages";
+import { useAuthPrompt } from "@/store/authPrompt";
 import { formatDuration } from "@/lib/utils";
 import { usePlayerStore } from "@/store/player";
 import { api, type RouterOutputs } from "@/trpc/react";
@@ -65,19 +67,18 @@ function Composer({
       onDone?.();
       await utils.comments.list.invalidate({ trackId: track.id });
     },
-    onError: (error) =>
-      toast.error(
-        error.data?.appCode === "RATE_LIMITED"
-          ? `Slow down, try again in ${error.data.retryAfterSeconds ?? "a few"} s`
-          : error.message || "Could not post your comment",
-      ),
+    onError: (error) => toast.error(friendlyError(error, "Could not post your comment")),
   });
 
   if (!user) {
     return (
-      <p className="rounded border border-dashed border-zinc-700 p-4 text-sm text-zinc-400">
+      <button
+        type="button"
+        onClick={() => useAuthPrompt.getState().show("Sign in to comment")}
+        className="w-full rounded border border-dashed border-zinc-700 p-4 text-left text-sm text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+      >
         Sign in to join the conversation.
-      </p>
+      </button>
     );
   }
 

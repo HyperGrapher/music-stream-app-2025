@@ -1,14 +1,9 @@
 "use client";
+import { hardNavigate } from "@/lib/navigate";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Bell,
-  ChevronDown,
-  Mail,
-  MoreHorizontal,
-  Search,
-} from "lucide-react";
+import { ChevronDown, MoreHorizontal, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,12 +12,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUser } from "@/hooks/useUser";
-import { useState } from "react";
 import { toast } from "sonner";
 
 type User = {
   id: string;
   name?: string | null;
+  username?: string | null;
   email?: string | null;
   image?: string | null;
 };
@@ -32,41 +27,16 @@ interface NavbarProps {
 }
 
 export function Navbar({ initialUser }: NavbarProps) {
-  const { user, signIn, signUp, signOut } = useUser();
-  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const { user, signOut } = useUser();
 
   // Use initial user data for first render, then use store data after hydration
   const displayUser = user || initialUser;
 
-  const handleSignIn = async () => {
-    setIsAuthLoading(true);
-    try {
-      await signIn.google({
-        onError: (error) => {
-          toast.error(error.message);
-        },
-      });
-    } finally {
-      setIsAuthLoading(false);
-    }
-  };
-
-  const handleSignUp = async () => {
-    setIsAuthLoading(true);
-    try {
-      await signUp.google({
-        onError: (error) => {
-          toast.error(error.message);
-        },
-      });
-    } finally {
-      setIsAuthLoading(false);
-    }
-  };
-
   const handleSignOut = async () => {
     await signOut();
     toast.success("Signed out successfully");
+    // Server components (navbar, pages) must see the signed-out state.
+    hardNavigate("/");
   };
 
   return (
@@ -145,10 +115,20 @@ export function Navbar({ initialUser }: NavbarProps) {
                 className="border-gray-800 bg-gray-900 text-white"
               >
                 <DropdownMenuItem asChild className="hover:bg-gray-800">
-                  <Link href="/profile">Profile</Link>
+                  <Link href={displayUser.username ? `/${displayUser.username}` : "/profile"}>Profile</Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-gray-800">
-                  Settings
+                {displayUser.username && (
+                  <>
+                    <DropdownMenuItem asChild className="hover:bg-gray-800">
+                      <Link href={`/${displayUser.username}/likes`}>Likes</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild className="hover:bg-gray-800">
+                      <Link href={`/${displayUser.username}/following`}>Following</Link>
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuItem asChild className="hover:bg-gray-800">
+                  <Link href="/settings/profile">Settings</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="hover:bg-gray-800"
@@ -159,36 +139,14 @@ export function Navbar({ initialUser }: NavbarProps) {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button
-              variant="ghost"
-              className="rounded-full p-2 hover:bg-gray-800"
-            >
-              <Bell className="h-5 w-5" />
-            </Button>
-
-            <Button
-              variant="ghost"
-              className="rounded-full p-2 hover:bg-gray-800"
-            >
-              <Mail className="h-5 w-5" />
-            </Button>
           </>
         ) : (
           <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              className="text-sm hover:text-orange-500"
-              onClick={handleSignIn}
-              disabled={isAuthLoading}
-            >
-              Sign in
+            <Button asChild variant="ghost" className="text-sm hover:text-orange-500">
+              <Link href="/signin">Sign in</Link>
             </Button>
-            <Button
-              className="bg-orange-500 text-sm hover:bg-orange-600"
-              onClick={handleSignUp}
-              disabled={isAuthLoading}
-            >
-              Sign up
+            <Button asChild className="bg-orange-500 text-sm hover:bg-orange-600">
+              <Link href="/signup">Sign up</Link>
             </Button>
           </div>
         )}

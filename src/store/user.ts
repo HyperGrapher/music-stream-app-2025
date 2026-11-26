@@ -7,6 +7,8 @@ type User = {
     username?: string | null;
     email?: string | null;
     image?: string | null;
+    emailVerified?: boolean;
+    onboardedAt?: Date | string | null;
 };
 
 interface UserState {

@@ -3,8 +3,7 @@ import { type Metadata, type Viewport } from "next";
 import { Geist } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner"
 import { TRPCReactProvider } from "@/trpc/react";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { getSessionUser } from "@/server/session-user";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ServerNavbar } from "./_components/ServerNavbar";
 
@@ -30,12 +29,7 @@ const geist = Geist({
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  // Get session server-side
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  const user = session?.user || null;
+  const user = await getSessionUser();
 
   return (
     <html lang="en" className={`${geist.variable}`}>

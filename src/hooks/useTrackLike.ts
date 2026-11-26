@@ -5,6 +5,8 @@ import { toast } from "sonner";
 
 import { useUser } from "@/hooks/useUser";
 import { parseAccessQuery } from "@/lib/access-client";
+import { friendlyError } from "@/lib/error-messages";
+import { useAuthPrompt } from "@/store/authPrompt";
 import { api } from "@/trpc/react";
 
 /**
@@ -25,30 +27,29 @@ export function useTrackLike(trackId: string, initialLiked: boolean, initialCoun
 
   const mutation = api.engagement.setTrackLike.useMutation();
 
-  const toggle = () => {
-    if (!user) {
-      toast("Sign in to like tracks");
-      return;
-    }
+  const perform = (liked: boolean) => {
     if (mutation.isPending) return;
-
     const before = state;
-    const liked = !before.liked;
-    setState({ liked, count: Math.max(0, before.count + (liked ? 1 : -1)) });
+    setState({ liked, count: Math.max(0, before.count + (liked === before.liked ? 0 : liked ? 1 : -1)) });
     mutation.mutate(
       { trackId, liked, access: parseAccessQuery(accessQuery) },
       {
         onSuccess: (result) => setState({ liked: result.liked, count: result.likeCount }),
         onError: (error) => {
           setState(before);
-          toast.error(
-            error.data?.appCode === "RATE_LIMITED"
-              ? `Slow down, try again in ${error.data.retryAfterSeconds ?? "a few"} s`
-              : "Could not update your like",
-          );
+          toast.error(friendlyError(error, "Could not update your like"));
         },
       },
     );
+  };
+
+  const toggle = () => {
+    if (!user) {
+      // The like the visitor clicked is retried once after they sign in (AU-2).
+      useAuthPrompt.getState().show("Sign in to like tracks", () => perform(true));
+      return;
+    }
+    perform(!state.liked);
   };
 
   return { liked: state.liked, count: state.count, toggle, pending: mutation.isPending };

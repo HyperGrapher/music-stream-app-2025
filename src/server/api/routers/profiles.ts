@@ -41,6 +41,7 @@ export const profilesRouter = createTRPCRouter({
         createdAt: true,
         avatarAsset: { select: { id: true, publicUrl: true, imageWidths: true } },
         bannerAsset: { select: { id: true, publicUrl: true, imageWidths: true } },
+        profileLinks: { orderBy: { position: "asc" }, select: { id: true, url: true, title: true } },
       },
     });
     const banner = imageUrls(user.bannerAsset);
@@ -59,6 +60,7 @@ export const profilesRouter = createTRPCRouter({
         followingCount: user.followingCount,
         publicTrackCount: user.publicTrackCount,
         createdAt: user.createdAt,
+        links: user.profileLinks,
         image: userAvatarUrl(user),
         bannerUrl: banner.artworkUrl,
         bannerSrcSet: banner.artworkSrcSet,
