@@ -28,7 +28,7 @@ export function ItemStatus({ item, compact = false }: { item: BatchItem; compact
           {LABEL[item.state]}
           {item.state === "uploading" ? ` ${item.progress}%` : ""}
         </span>
-        {!compact && <span className="truncate text-zinc-500">{item.file.name}</span>}
+        {!compact && <span className="truncate text-zinc-400">{item.file.name}</span>}
         {item.state === "failed" && (
           <>
             <Button type="button" size="sm" variant="outline" onClick={() => retry(item.id)} className="h-6 border-zinc-700 bg-transparent px-2 text-xs text-white hover:bg-zinc-800">
@@ -40,7 +40,7 @@ export function ItemStatus({ item, compact = false }: { item: BatchItem; compact
           </>
         )}
       </div>
-      {item.state === "uploading" && <Progress value={item.progress} className="mt-1.5 h-1" />}
+      {item.state === "uploading" && <Progress value={item.progress} aria-label="Upload progress" className="mt-1.5 h-1" />}
       {item.state === "failed" && item.error && <p role="alert" className="mt-1 text-red-400">{item.error}</p>}
     </div>
   );

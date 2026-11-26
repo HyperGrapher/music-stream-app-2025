@@ -59,7 +59,7 @@ export function ProfileList({ username, tab, initial, empty }: { username: strin
   }, [cursor]);
 
   if (items.length === 0) {
-    return <div className="rounded border border-dashed border-zinc-800 px-6 py-16 text-center text-sm text-zinc-500">{empty}</div>;
+    return <div className="rounded border border-dashed border-zinc-800 px-6 py-16 text-center text-sm text-zinc-400">{empty}</div>;
   }
 
   const queue = items.flatMap((item) => trackOf(item) ?? []);

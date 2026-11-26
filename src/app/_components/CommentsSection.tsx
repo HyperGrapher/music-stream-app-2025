@@ -163,10 +163,10 @@ function Composer({
           rows={parentId ? 2 : 3}
           aria-label={parentId ? "Write a reply" : "Write a comment"}
           placeholder={parentId ? "Write a reply…" : "Write a comment…"}
-          className="w-full resize-y rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-orange-500 focus:outline-none"
+          className="w-full resize-y rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-400 focus:border-orange-500 focus:outline-none"
         />
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-xs text-zinc-500">
+          <div className="text-xs text-zinc-400">
             {parentId ? null : canAttach ? (
               <label className="inline-flex cursor-pointer items-center gap-2 text-zinc-300">
                 <input
@@ -183,7 +183,7 @@ function Composer({
           </div>
           <div className="flex items-center gap-3">
             {text.length > MAX_LENGTH - 200 && (
-              <span className="text-xs text-zinc-500">{MAX_LENGTH - text.length} left</span>
+              <span className="text-xs text-zinc-400">{MAX_LENGTH - text.length} left</span>
             )}
             {onDone && (
               <button type="button" onClick={onDone} className={smallButton}>
@@ -193,7 +193,7 @@ function Composer({
             <button
               type="submit"
               disabled={!text.trim() || create.isPending}
-              className="rounded-full bg-orange-500 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-orange-400 disabled:opacity-40"
+              className="rounded-full bg-orange-700 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:opacity-40"
             >
               {parentId ? "Reply" : "Post"}
             </button>
@@ -242,11 +242,11 @@ function CommentRow({
           )}
           {comment.timestampSeconds !== null && (
             <>
-              <span className="text-zinc-600">at</span>
+              <span className="text-zinc-400">at</span>
               <TimeChip seconds={comment.timestampSeconds} onClick={() => playAt(comment.timestampSeconds!)} />
             </>
           )}
-          <span className="text-xs text-zinc-500">
+          <span className="text-xs text-zinc-400">
             {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
           </span>
         </div>
@@ -368,10 +368,10 @@ export function CommentsSection({ track }: { track: PlayerTrack }) {
 
       {threads.length === 0 ? (
         <div className="mt-6 flex items-center gap-4 rounded border border-dashed border-zinc-700 p-5">
-          <MessageCircle className="h-6 w-6 shrink-0 text-zinc-500" />
+          <MessageCircle className="h-6 w-6 shrink-0 text-zinc-400" />
           <div>
             <p className="font-semibold">Be the first to comment on this track.</p>
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="mt-1 text-sm text-zinc-400">
               Start a conversation at a specific moment in the waveform.
             </p>
           </div>

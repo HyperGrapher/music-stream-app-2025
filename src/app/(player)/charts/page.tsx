@@ -8,7 +8,7 @@ import { ChartList } from "./ChartList";
 
 export const metadata: Metadata = { title: "Charts | Music Stream", description: "The most played and fastest rising tracks right now." };
 
-const chip = (active: boolean) => `rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${active ? "border-orange-500 bg-orange-500 text-white" : "border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white"}`;
+const chip = (active: boolean) => `rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${active ? "border-orange-500 bg-orange-700 text-white" : "border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white"}`;
 
 /** `/charts` (CH-1, CH-2): Top 50 (7-day plays) and New & Hot, per genre, cached for 10 minutes. */
 export default async function ChartsPage({ searchParams }: { searchParams: Promise<{ genre?: string; kind?: string }> }) {

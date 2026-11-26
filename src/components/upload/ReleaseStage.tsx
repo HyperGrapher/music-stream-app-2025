@@ -43,13 +43,13 @@ function Row({ item, index, username, plan, selected, onSelect }: { item: BatchI
     >
       <div className="flex items-center gap-3 p-3">
         <input type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} aria-label={`Select ${item.fields.title}`} className="h-4 w-4 accent-orange-500" />
-        <button type="button" {...attributes} {...listeners} aria-label={`Reorder ${item.fields.title}. Press space to lift, arrow keys to move.`} className="cursor-grab touch-none text-zinc-500 hover:text-white">
+        <button type="button" {...attributes} {...listeners} aria-label={`Reorder ${item.fields.title}. Press space to lift, arrow keys to move.`} className="cursor-grab touch-none text-zinc-400 hover:text-white">
           <GripVertical className="h-5 w-5" />
         </button>
-        <span className="w-6 text-sm text-zinc-500">{index + 1}</span>
+        <span className="w-6 text-sm text-zinc-400">{index + 1}</span>
         <div className="min-w-0 flex-1 space-y-1">
           <Input aria-label={`Title of track ${index + 1}`} value={item.fields.title} maxLength={100} onChange={(e) => updateFields(item.id, { title: e.target.value })} className={`${field} h-8`} />
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
             <ItemStatus item={item} compact />
             {item.durationMs && <span>{formatDuration(item.durationMs / 1000)}</span>}
             {item.fields.artistName && <span>{item.fields.artistName}</span>}
@@ -175,7 +175,7 @@ export function ReleaseStage({ username, plan }: { username: string; plan: "FREE
               </button>
             ))}
           </div>
-          <p className="mt-1 text-xs text-zinc-500">{COLLECTION_TYPES.find((t) => t.value === type)?.hint}. Album is the default for multi-file uploads. You can change this any time.</p>
+          <p className="mt-1 text-xs text-zinc-400">{COLLECTION_TYPES.find((t) => t.value === type)?.hint}. Album is the default for multi-file uploads. You can change this any time.</p>
         </fieldset>
         <Labelled text={isReleaseType(type) ? "Release date (required)" : "Release date (optional)"} error={needsDate ? "Add a release date." : null}>
           <Input type="date" value={releaseDate} onChange={(e) => setReleaseDate(e.target.value)} className={`${field} max-w-xs`} />
@@ -247,7 +247,7 @@ export function ReleaseStage({ username, plan }: { username: string; plan: "FREE
         )}
 
         <div className="flex items-center gap-3 border-t border-zinc-800 pt-4">
-          <Button type="button" disabled={!valid || create.isPending} onClick={() => void save()} className="bg-orange-500 text-white hover:bg-orange-600">
+          <Button type="button" disabled={!valid || create.isPending} onClick={() => void save()} className="bg-orange-700 text-white hover:bg-orange-800">
             {create.isPending ? "Publishing..." : privacy === "private" ? "Save release (private)" : "Publish release"}
           </Button>
           {blockers.length > 0 && <span className="text-xs text-amber-300" data-testid="publish-blockers">To publish: {blockers.join(", ")}.</span>}

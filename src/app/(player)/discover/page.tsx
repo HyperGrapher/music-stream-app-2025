@@ -27,7 +27,7 @@ function href({ sort, genre, q }: Filters) {
 const chip = (active: boolean) =>
   `rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
     active
-      ? "border-orange-500 bg-orange-500 text-white"
+      ? "border-orange-500 bg-orange-700 text-white"
       : "border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white"
   }`;
 
@@ -121,14 +121,14 @@ export default async function DiscoverPage({
               <p className="text-lg font-semibold">
                 {filters.q || filters.genre ? "Nothing matches that" : "No tracks yet"}
               </p>
-              <p className="mt-1 text-sm text-zinc-500">
+              <p className="mt-1 text-sm text-zinc-400">
                 {filters.q || filters.genre
                   ? "Try a different search or genre."
                   : "Upload the first one."}
               </p>
               <Link
                 href={filters.q || filters.genre ? "/discover" : "/upload"}
-                className="mt-5 inline-block rounded-full bg-orange-500 px-5 py-2 text-sm font-semibold hover:bg-orange-400"
+                className="mt-5 inline-block rounded-full bg-orange-700 px-5 py-2 text-sm font-semibold hover:bg-orange-600"
               >
                 {filters.q || filters.genre ? "Browse everything" : "Upload a track"}
               </Link>

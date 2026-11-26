@@ -26,7 +26,7 @@ export async function WhoToFollow({ limit = 6 }: { limit?: number }) {
               <Link href={`/${creator.username}`} className="block truncate text-sm font-semibold hover:text-orange-400">
                 {creator.name}
               </Link>
-              <p className="text-xs text-zinc-500">{creator.followerCount} followers</p>
+              <p className="text-xs text-zinc-400">{creator.followerCount} followers</p>
             </div>
             <FollowButton userId={creator.id} initialFollowing={false} size="sm" />
           </li>

@@ -71,7 +71,7 @@ export function AuthForm({ mode, next = "/", onSuccess, onSwitch }: AuthFormProp
   return (
     <form onSubmit={(event) => void submit(event)} className="space-y-4" aria-label={mode === "signin" ? "Sign in" : "Create account"}>
       <GoogleButton next={mode === "signup" ? "/onboarding" : target} label="Continue with Google" />
-      <div className="flex items-center gap-3 text-xs text-zinc-500">
+      <div className="flex items-center gap-3 text-xs text-zinc-400">
         <span className="h-px flex-1 bg-zinc-800" /> or <span className="h-px flex-1 bg-zinc-800" />
       </div>
       {mode === "signup" && (
@@ -100,7 +100,7 @@ export function AuthForm({ mode, next = "/", onSuccess, onSwitch }: AuthFormProp
             type="button"
             onClick={() => setShow((v) => !v)}
             aria-label={show ? "Hide password" : "Show password"}
-            className="absolute top-1/2 right-2 -translate-y-1/2 text-zinc-400 hover:text-white"
+            className="absolute top-1/2 right-1 -translate-y-1/2 p-2 text-zinc-400 hover:text-white"
           >
             {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
@@ -116,7 +116,7 @@ export function AuthForm({ mode, next = "/", onSuccess, onSwitch }: AuthFormProp
           {error}
         </p>
       )}
-      <Button type="submit" disabled={busy} className="w-full bg-orange-500 text-white hover:bg-orange-600">
+      <Button type="submit" disabled={busy} className="w-full bg-orange-700 text-white hover:bg-orange-800">
         {busy ? "One moment..." : mode === "signin" ? "Sign in" : "Create account"}
       </Button>
       <p className="text-center text-sm text-zinc-400">

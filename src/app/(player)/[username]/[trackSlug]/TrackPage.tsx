@@ -218,12 +218,12 @@ export async function TrackPage(params: TrackPageParams) {
                     >
                       {track.creator.name}
                     </Link>
-                    <p className="mt-1 text-xs text-zinc-500">
+                    <p className="mt-1 text-xs text-zinc-400">
                       {track.creator.followersCount} followers ·{" "}
                       {track.creator.trackCount} tracks
                     </p>
                     {track.creator.city && (
-                      <p className="mt-1 flex items-center gap-1 text-xs text-zinc-500">
+                      <p className="mt-1 flex items-center gap-1 text-xs text-zinc-400">
                         <MapPin className="h-3 w-3" /> {track.creator.city}
                       </p>
                     )}
@@ -239,21 +239,21 @@ export async function TrackPage(params: TrackPageParams) {
               <section className="grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-2 py-4">
                   <p className="text-xl font-bold">{track.playCount ?? 0}</p>
-                  <p className="mt-1 text-[10px] text-zinc-500 uppercase">
+                  <p className="mt-1 text-[10px] text-zinc-400 uppercase">
                     <Play className="mr-1 inline h-3 w-3" />
                     Plays
                   </p>
                 </div>
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-2 py-4">
                   <p className="text-xl font-bold">{track.likeCount ?? 0}</p>
-                  <p className="mt-1 text-[10px] text-zinc-500 uppercase">
+                  <p className="mt-1 text-[10px] text-zinc-400 uppercase">
                     <Heart className="mr-1 inline h-3 w-3" />
                     Likes
                   </p>
                 </div>
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-2 py-4">
                   <p className="text-xl font-bold">{track.repostCount ?? 0}</p>
-                  <p className="mt-1 text-[10px] text-zinc-500 uppercase">
+                  <p className="mt-1 text-[10px] text-zinc-400 uppercase">
                     <Repeat2 className="mr-1 inline h-3 w-3" />
                     Reposts
                   </p>

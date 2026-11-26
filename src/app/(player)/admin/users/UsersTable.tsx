@@ -23,7 +23,7 @@ export function UsersTable() {
           <tbody>
             {(list.data?.items ?? []).map((u) => (
               <tr key={u.id} className="border-t border-zinc-800" data-testid="user-row">
-                <td className="p-3"><Link href={`/admin/users/${u.id}`} className="font-semibold hover:text-orange-400">{u.name}</Link> <span className="text-zinc-500">@{u.username}</span>{u.role === "ADMIN" && <span className="ml-2 rounded bg-orange-500/20 px-1.5 text-[10px] font-bold text-orange-300">ADMIN</span>}</td>
+                <td className="p-3"><Link href={`/admin/users/${u.id}`} className="font-semibold hover:text-orange-400">{u.name}</Link> <span className="text-zinc-400">@{u.username}</span>{u.role === "ADMIN" && <span className="ml-2 rounded bg-orange-500/20 px-1.5 text-[10px] font-bold text-orange-300">ADMIN</span>}</td>
                 <td className="p-3 text-zinc-400">{u.email}</td>
                 <td className="p-3">{u.status}</td>
                 <td className="p-3">{u.plan}</td>

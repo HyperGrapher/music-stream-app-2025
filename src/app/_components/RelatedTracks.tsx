@@ -26,9 +26,9 @@ export function RelatedTracks({ trackId }: { trackId: string }) {
               <span className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100"><Play className="h-5 w-5 fill-white" /></span>
             </button>
             <div className="min-w-0 flex-1">
-              <Link href={track.permalink ?? "#"} className="block truncate text-sm font-semibold hover:text-orange-400">{track.title}</Link>
-              <Link href={track.user?.username ? `/${track.user.username}` : "#"} className="block truncate text-xs text-zinc-400 hover:text-white">{track.user?.name}</Link>
-              <p className="mt-0.5 flex items-center gap-2 text-[11px] text-zinc-500"><Headphones className="h-3 w-3" /> {formatCount(track.playCount ?? 0)} · {formatDuration(track.duration)}</p>
+              <Link href={track.permalink ?? "#"} className="block truncate text-sm leading-6 font-semibold hover:text-orange-400">{track.title}</Link>
+              <Link href={track.user?.username ? `/${track.user.username}` : "#"} className="block truncate py-1 text-xs text-zinc-400 hover:text-white">{track.user?.name}</Link>
+              <p className="mt-0.5 flex items-center gap-2 text-[11px] text-zinc-400"><Headphones className="h-3 w-3" /> {formatCount(track.playCount ?? 0)} · {formatDuration(track.duration)}</p>
             </div>
             <TrackMenu track={track} />
           </li>

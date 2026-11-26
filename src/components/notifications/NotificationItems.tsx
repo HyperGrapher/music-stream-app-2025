@@ -30,9 +30,9 @@ export function NotificationItems({ items, onNavigate }: { items: NotificationEn
               <span className="min-w-0 flex-1 text-sm">
                 <span className="block text-zinc-100">{describeNotification(item)}</span>
                 {item.excerpt ? <span className="block truncate text-xs text-zinc-400">“{item.excerpt}”</span> : null}
-                <time className="text-xs text-zinc-500" dateTime={new Date(item.createdAt).toISOString()}>{formatDistanceToNowStrict(new Date(item.createdAt), { addSuffix: true })}</time>
+                <time className="text-xs text-zinc-400" dateTime={new Date(item.createdAt).toISOString()}>{formatDistanceToNowStrict(new Date(item.createdAt), { addSuffix: true })}</time>
               </span>
-              {item.unread ? <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-orange-500" aria-label="Unread" /> : null}
+              {item.unread ? <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-orange-700" aria-label="Unread" /> : null}
             </Link>
           </li>
         );

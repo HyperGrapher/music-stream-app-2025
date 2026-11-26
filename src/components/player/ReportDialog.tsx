@@ -48,8 +48,8 @@ function Form({ target, close }: { target: ReportTarget; close: () => void }) {
           <Input aria-label="Link to the original work" placeholder="Link to the original work (optional)" value={original} maxLength={300} onChange={(e) => setOriginal(e.target.value)} className="border-zinc-700 bg-zinc-900" />
         </div>
       )}
-      <textarea aria-label="Details" rows={3} maxLength={1000} placeholder="More details (optional)" value={details} onChange={(e) => setDetails(e.target.value)} className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500" />
-      <Button type="submit" disabled={report.isPending} className="bg-orange-500 text-white hover:bg-orange-600">Send report</Button>
+      <textarea aria-label="Details" rows={3} maxLength={1000} placeholder="More details (optional)" value={details} onChange={(e) => setDetails(e.target.value)} className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-400" />
+      <Button type="submit" disabled={report.isPending} className="bg-orange-700 text-white hover:bg-orange-800">Send report</Button>
     </form>
   );
 }

@@ -46,7 +46,7 @@ export function Navbar({ initialUser }: NavbarProps) {
     <nav className="flex items-center justify-between border-b border-zinc-800/90 bg-black p-3 text-white">
       {/* Left section - Logo and navigation */}
       <div className="flex items-center space-x-6">
-        <Link href="/" className="flex items-center">
+        <Link href="/" className="flex items-center" aria-label="Music Stream home">
           <div className="mr-2 h-8 w-8">
             <svg viewBox="0 0 24 24" fill="white">
               <path d="M4.75 18.25a.75.75 0 0 1-.75-.75V7.5a.75.75 0 0 1 1.5 0v10a.75.75 0 0 1-.75.75ZM7.25 17a.75.75 0 0 1-.75-.75V8.75a.75.75 0 0 1 1.5 0v7.5a.75.75 0 0 1-.75.75ZM9.75 17a.75.75 0 0 1-.75-.75v-7.5a.75.75 0 0 1 1.5 0v7.5a.75.75 0 0 1-.75.75ZM12.25 17a.75.75 0 0 1-.75-.75v-7.5a.75.75 0 0 1 1.5 0v7.5a.75.75 0 0 1-.75.75ZM14.75 17a.75.75 0 0 1-.75-.75V8.75a.75.75 0 0 1 1.5 0v7.5a.75.75 0 0 1-.75.75ZM17.25 17a.75.75 0 0 1-.75-.75V8.75a.75.75 0 0 1 1.5 0v7.5a.75.75 0 0 1-.75.75ZM19.75 18.25a.75.75 0 0 1-.75-.75V7.5a.75.75 0 0 1 1.5 0v10a.75.75 0 0 1-.75.75Z" />
@@ -107,7 +107,7 @@ export function Navbar({ initialUser }: NavbarProps) {
             <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="p-1 hover:bg-gray-800">
+                <Button variant="ghost" className="p-1 hover:bg-gray-800" aria-label="Account menu">
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={displayUser.image || ""} />
                     <AvatarFallback>
@@ -159,7 +159,7 @@ export function Navbar({ initialUser }: NavbarProps) {
             <Button asChild variant="ghost" className="text-sm hover:text-orange-500">
               <Link href="/signin">Sign in</Link>
             </Button>
-            <Button asChild className="bg-orange-500 text-sm hover:bg-orange-600">
+            <Button asChild className="bg-orange-700 text-sm text-white hover:bg-orange-800">
               <Link href="/signup">Sign up</Link>
             </Button>
           </div>
@@ -170,6 +170,7 @@ export function Navbar({ initialUser }: NavbarProps) {
             <Button
               variant="ghost"
               className="rounded-full p-2 hover:bg-gray-800"
+              aria-label="More"
             >
               <MoreHorizontal className="h-5 w-5" />
             </Button>

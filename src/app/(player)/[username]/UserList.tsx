@@ -45,7 +45,7 @@ export function UserList({ username, direction, initial }: { username: string; d
         </form>
       )}
       {items.length === 0 ? (
-        <div className="rounded border border-dashed border-zinc-800 px-6 py-16 text-center text-sm text-zinc-500">
+        <div className="rounded border border-dashed border-zinc-800 px-6 py-16 text-center text-sm text-zinc-400">
           {direction === "followers" ? "No followers yet." : "Not following anyone yet."}
         </div>
       ) : (
@@ -62,7 +62,7 @@ export function UserList({ username, direction, initial }: { username: string; d
                 <Link href={`/${user.username}`} className="block truncate text-sm font-semibold hover:text-orange-400">
                   {user.name}
                 </Link>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-zinc-400">
                   {user.followerCount} followers · {user.trackCount} tracks
                 </p>
               </div>

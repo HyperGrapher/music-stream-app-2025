@@ -32,7 +32,7 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 | M5 Discovery | **done** (see "M5 summary") |
 | M6 Creator tools & plans | **done** (see "M6 summary") |
 | M7 Trust & safety | **done** (see "M7 summary"; direct messages deferred) |
-| M8 Polish | **next** (see "Next up") |
+| M8 Polish | **done** (see "M8 summary"; owner decisions open) |
 
 **M0 summary: what exists now** (read these before starting M1)
 
@@ -188,6 +188,25 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 - Spotlight is edited in the Studio, not drag-and-drop on the profile (up/down buttons).
 - `PLAYLIST_ADD` is only created when tracks are added to an already-public playlist (not when a private playlist becomes public later).
 
+**M8 summary: what exists now** (polish)
+
+| Area | Where | Notes |
+|---|---|---|
+| Admin access fix | `server/modules/accounts/admin-role.ts` | `ADMIN_EMAILS` used to apply only at sign-in, so an account that was already signed in when the variable was added stayed USER (hence the 404). `ensureAdminRole` now runs on every `getSessionUser()` and `adminProcedure` call, and only for **verified** emails (an unverified email sign-up can no longer claim an admin address). |
+| Accessibility | `tests/e2e/a11y.e2e.spec.ts` (axe, WCAG 2.2 A/AA) | Every public page, the signed-in pages (settings, studio, insights, library, notifications, feed, upload), the player bar, Next up panel, a menu, the share dialog, and the phone layout (tab bar, mini player, full-screen sheet) have zero violations. Fixed along the way: contrast (`text-zinc-500/600` -> 400; filled orange buttons are `orange-700` so white text passes), unnamed icon buttons and logo link, pinch-zoom was disabled, 24 px target size of small links, like/repost buttons whose accessible name did not contain their visible count (now sr-only text + count), progress bars without names. |
+| SEO and pages | `app/robots.ts`, `app/sitemap.ts`, `app/not-found.tsx`, `app/error.tsx`, `layout.tsx`, `manifest.ts` | Sitemap lists public tracks, collections and creators only (hourly revalidate); robots blocks api, admin, settings, studio, library, search and embeds. One friendly 404 for missing/hidden content, an error page with a retry, site name/metadata base. There is deliberately **no** route-level `loading.tsx`: it makes Next stream the shell first, so `notFound()` would answer 200 instead of 404 (hidden tracks must be real 404s). |
+| Performance | `TrackDetailHero`, `LazyDialogs` | Lighthouse (mobile preset, production build, track page): Performance 85-89, Accessibility 100, Best Practices 100, SEO 100. The hero artwork is `fetchPriority="high"` and the blurred backdrop `low`; the dialogs and Next up panel load lazily (`next/dynamic`), which cut Total Blocking Time from ~470 ms to ~200 ms. LCP is ~3.5 s under Lighthouse's simulated slow 4G (the e2e seed has no real artwork). |
+| Release | `docs/RELEASE.md` | Environment variables, database steps, CI gates, smoke test and post-deploy checks. |
+
+**How to run Lighthouse here** (no Chrome extension needed): build, start with the test DB env of `tests/e2e/server.mjs` on port 3101, then `CHROME_PATH=/opt/pw-browsers/chromium-1243/real/chrome-linux64/chrome pnpm exec lighthouse http://localhost:3101/e2e-creator/e2e-public-track --chrome-flags="--headless --no-sandbox" --only-categories=performance,accessibility,best-practices,seo`. Run it three times: Performance varies by about +-3.
+
+**Open items / owner decisions after M8**:
+
+- **Direct messages** (PRD 13.3, P2): not built. Build them, or drop them from the PRD? If kept: `/messages`, "Who can message me" in Privacy, rate limits (MS-4), report message.
+- P2 items still not built (each listed in its milestone's deviations): comment `@` autocomplete, repost with caption, hover quick preview, "Your mixes", chart rank change, Insights CSV export, drag-and-drop Spotlight, embed waveform, suspension page, appeals.
+- Bulk edit is not one transaction (see M6 deviations).
+- `RESEND_API_KEY` is still unset: all emails are logged only.
+
 **Deviations from M7** (owner milestone in brackets):
 
 - Direct messages (PRD 13.3, P2) are not built; the tables (`Conversation`, `Message`) exist and the track page's old "Message" button was removed in M3. Decide with the owner whether to build them [M8 or later].
@@ -196,14 +215,6 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 - Blocked people are filtered after ranking in search (a page can come back a little shorter), not inside the SQL.
 - The admin UI cannot promote admins (by design, `ADMIN_EMAILS` only) and has no "Appeals" flow.
 - No notification is sent when a suspended user is unsuspended.
-
-**Next up: M8 Polish** (PRD §18, §19; exit: the PRD §1.4 definition of complete)
-
-1. Accessibility pass (WCAG 2.2 AA: focus order, labels, contrast, keyboard for waveform/drag-and-drop, reduced motion) with automated axe checks on key pages.
-2. Performance and SEO: Lighthouse on a production build for the track page (targets in PRD 1.4: Performance >= 85, Accessibility >= 95, Best Practices >= 95, SEO >= 95), image sizes, sitemap/robots, JSON-LD checks.
-3. The deferred P2 items collected in the "Deviations" lists above (comment `@` autocomplete, repost with caption, quick preview on hover, "Your mixes", chart rank change, Insights CSV, drag-and-drop Spotlight, embed waveform), and decide on direct messages with the owner.
-4. Error and empty states, loading skeletons, 404/500 pages, observability (structured logs), final README/docs, seed refresh (SEED_README), release checklist for Vercel/Neon.
-5. Full regression: unit, integration, e2e, drift guard, Lighthouse.
 
 <details><summary>M4 plan as it was (done)</summary>
 
@@ -533,4 +544,10 @@ Rendering (`buildWaveformBars` in `lib/waveform-utils.ts`): bar count = display 
 - Blocks, reports, admin/moderation, suspension, block effects across comments/search/related; UI for all of it.
 - Learned: the session cookie cache makes `auth.api.getSession` trust a session for minutes, so anything that must stop immediately (suspension) has to be checked in the DB on every protected call; Next layout redirects do not stop pages (admin pages rely on `notFound()` in the layout AND server-side `adminProcedure`).
 - Totals when this entry was written: unit 89, integration 185, e2e 70 + 1 skipped, lint 0 warnings, types clean.
+
+### Session 19 - PRD M8 (polish), branch `dev`
+- First: the owner could not open `/admin` (404) with Google sign-in: `ADMIN_EMAILS` was only applied at sign-in. Fixed (see the M8 summary).
+- Accessibility pass with automated axe checks, SEO files, error/404 pages, a Lighthouse run and the fixes it pointed to, release checklist.
+- Learned: axe's `label-content-name-mismatch` wants the visible text inside the accessible name, so icon+count buttons use visually hidden text instead of `aria-label`; `target-size` (WCAG 2.2) flags 20 px tall text links, `leading-6` / `py-1` fixes them; a `loading.tsx` in the `(player)` group turned every `notFound()` into HTTP 200 (streaming starts before the page can fail), so use `<Suspense>` inside pages instead; Lighthouse's Performance moves with main-thread JS, so lazy-loading rarely used UI (dialogs) paid off more than image tweaks; `next start` after a build in the same checkout reuses `.next`, rebuild before every Lighthouse run.
+- Totals when this entry was written: unit 91, integration 185, e2e 82 + 1 skipped, axe on 22 page states, lint 0 warnings, types clean.
 

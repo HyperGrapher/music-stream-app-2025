@@ -63,7 +63,7 @@ export function CommentMarkers({ track }: { track: PlayerTrack }) {
               <AvatarImage src={first.author.image ?? ""} alt="" />
               <AvatarFallback className="text-[10px]">{first.author.name.charAt(0)}</AvatarFallback>
             </Avatar>
-            {group.length > 1 ? <span className="absolute -top-1 -right-1 rounded-full bg-orange-500 px-1 text-[9px] leading-3 font-bold text-white">{group.length}</span> : null}
+            {group.length > 1 ? <span className="absolute -top-1 -right-1 rounded-full bg-orange-700 px-1 text-[9px] leading-3 font-bold text-white">{group.length}</span> : null}
           </button>
         );
       })}

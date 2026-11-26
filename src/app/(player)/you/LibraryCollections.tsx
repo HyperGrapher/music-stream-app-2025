@@ -35,7 +35,7 @@ export function LibraryCollections({ kind }: { kind: "playlists" | "albums" }) {
           <button key={value} aria-pressed={filter === value} onClick={() => { setFilter(value); setOffset(0); }} className={cn("rounded-full border px-3 py-1 text-sm", filter === value ? "border-orange-500 bg-orange-500/15 text-orange-300" : "border-zinc-700 text-zinc-300")}>{label}</button>
         ))}
         {kind === "playlists" && (
-          <Button size="sm" className="ml-auto bg-orange-500 text-white hover:bg-orange-600" onClick={() => setCreating((v) => !v)}><Plus className="h-4 w-4" /> Create playlist</Button>
+          <Button size="sm" className="ml-auto bg-orange-700 text-white hover:bg-orange-800" onClick={() => setCreating((v) => !v)}><Plus className="h-4 w-4" /> Create playlist</Button>
         )}
       </div>
       {creating && (
@@ -49,7 +49,7 @@ export function LibraryCollections({ kind }: { kind: "playlists" | "albums" }) {
           <li key={item.id}><CollectionCard collection={item} badge={item.origin === "liked" ? "Liked" : undefined} /></li>
         ))}
       </ul>
-      {query.data?.items.length === 0 && <p className="mt-10 text-center text-sm text-zinc-500">{kind === "playlists" ? "No playlists yet." : "No albums yet."}</p>}
+      {query.data?.items.length === 0 && <p className="mt-10 text-center text-sm text-zinc-400">{kind === "playlists" ? "No playlists yet." : "No albums yet."}</p>}
       {nextOffset !== null && <div className="mt-6 text-center"><Button variant="outline" className="border-zinc-700 bg-transparent text-white" onClick={() => setOffset(nextOffset)}>Next page</Button></div>}
     </div>
   );

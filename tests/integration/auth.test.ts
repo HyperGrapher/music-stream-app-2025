@@ -1,3 +1,4 @@
+import { ensureAdminRole } from "@/server/modules/accounts/admin-role";
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 
@@ -97,6 +98,11 @@ describe("usernames (IA-1) and roles (2.2)", () => {
     const existing = await db.user.findUnique({ where: { email: "it-admin@example.test" } });
     if (existing) await db.user.delete({ where: { id: existing.id } });
     const admin = await signUp("The Admin", "it-admin@example.test");
-    assert.equal(admin.role, "ADMIN");
+    // An unverified address cannot claim an admin email just by registering it...
+    assert.equal(admin.role, "USER");
+    // ...the role arrives once the address is verified (Google accounts are verified at creation).
+    await db.user.update({ where: { id: admin.id }, data: { emailVerified: true } });
+    assert.equal(await ensureAdminRole(db, admin.id), "ADMIN");
+    assert.equal((await db.user.findUniqueOrThrow({ where: { id: admin.id } })).role, "ADMIN");
   });
 });

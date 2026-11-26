@@ -83,7 +83,7 @@ export function SingleTrackStage({
           />
           {showSave && (
             <div className="mt-6 flex items-center gap-3 border-t border-zinc-800 pt-4">
-              <Button type="button" disabled={!ready || !fields.title.trim() || create.isPending} onClick={() => void save()} className="bg-orange-500 text-white hover:bg-orange-600">
+              <Button type="button" disabled={!ready || !fields.title.trim() || create.isPending} onClick={() => void save()} className="bg-orange-700 text-white hover:bg-orange-800">
                 {create.isPending ? "Publishing..." : "Publish"}
               </Button>
               {!ready && item.state !== "failed" && <span className="text-xs text-amber-300">To publish: wait for the file to finish uploading.</span>}

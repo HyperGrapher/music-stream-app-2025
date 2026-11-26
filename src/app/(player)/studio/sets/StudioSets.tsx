@@ -33,7 +33,7 @@ export function StudioSets() {
       <UsageBar />
       <div className="flex items-center gap-2">
         <form role="search" onSubmit={(e) => { e.preventDefault(); setSearch(q.trim()); }}><Input aria-label="Search your albums and playlists" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} className="h-9 w-56 border-zinc-700 bg-zinc-900" /></form>
-        <Button asChild size="sm" className="ml-auto bg-orange-500 text-white hover:bg-orange-600"><Link href="/upload">Upload</Link></Button>
+        <Button asChild size="sm" className="ml-auto bg-orange-700 text-white hover:bg-orange-800"><Link href="/upload">Upload</Link></Button>
       </div>
       <div className="mt-4 overflow-x-auto rounded-lg border border-zinc-800">
         <table className="w-full min-w-[760px] text-sm">
@@ -58,7 +58,7 @@ export function StudioSets() {
             ))}
           </tbody>
         </table>
-        {!list.isLoading && (list.data?.items.length ?? 0) === 0 && <p className="p-8 text-center text-sm text-zinc-500">Nothing here yet.</p>}
+        {!list.isLoading && (list.data?.items.length ?? 0) === 0 && <p className="p-8 text-center text-sm text-zinc-400">Nothing here yet.</p>}
       </div>
       <Dialog open={!!removing} onOpenChange={(v) => !v && setRemoving(null)}>
         <DialogContent className="border-zinc-800 bg-zinc-950 text-white sm:max-w-md">

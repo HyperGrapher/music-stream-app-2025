@@ -17,7 +17,7 @@ export function UsageBar() {
         <span>{limitMs ? <>{minutes(usedMs)} of {minutes(limitMs)} min of upload time used</> : <>{minutes(usedMs)} min uploaded · unlimited on Pro</>}</span>
         <Link href="/settings/plan" className="text-orange-400 hover:underline">{plan === "PRO" ? "Manage plan" : "Upgrade to Pro"}</Link>
       </div>
-      {limitMs ? <div className="mt-2 h-2 overflow-hidden rounded bg-zinc-800"><div className={`h-full ${pct > 90 ? "bg-red-500" : "bg-orange-500"}`} style={{ width: `${pct}%` }} /></div> : null}
+      {limitMs ? <div className="mt-2 h-2 overflow-hidden rounded bg-zinc-800"><div className={`h-full ${pct > 90 ? "bg-red-500" : "bg-orange-700"}`} style={{ width: `${pct}%` }} /></div> : null}
     </div>
   );
 }

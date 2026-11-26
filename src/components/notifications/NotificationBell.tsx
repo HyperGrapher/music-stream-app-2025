@@ -35,7 +35,7 @@ export function NotificationBell() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="relative rounded-full hover:bg-gray-800" aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}>
           <Bell className="h-5 w-5" />
-          {unread > 0 ? <span className="absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-orange-500 px-1 text-[10px] leading-4 font-bold text-white" data-testid="unread-badge">{unread > 99 ? "99+" : unread}</span> : null}
+          {unread > 0 ? <span className="absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-orange-700 px-1 text-[10px] leading-4 font-bold text-white" data-testid="unread-badge">{unread > 99 ? "99+" : unread}</span> : null}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-96 max-w-[calc(100vw-1rem)] border-zinc-800 bg-zinc-900 p-0 text-white">

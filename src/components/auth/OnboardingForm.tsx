@@ -73,7 +73,7 @@ export function OnboardingForm({ initialUsername, initialName, initialImage }: {
     <div className="mx-auto max-w-2xl px-4 py-10 text-white">
       <ol className="mb-8 flex gap-2 text-sm" aria-label="Progress">
         {STEPS.map((label, index) => (
-          <li key={label} aria-current={index === step ? "step" : undefined} className={cn("flex-1 border-b-2 pb-2", index <= step ? "border-orange-500 text-white" : "border-zinc-800 text-zinc-500")}>
+          <li key={label} aria-current={index === step ? "step" : undefined} className={cn("flex-1 border-b-2 pb-2", index <= step ? "border-orange-500 text-white" : "border-zinc-800 text-zinc-400")}>
             {index + 1}. {label}
           </li>
         ))}
@@ -98,7 +98,7 @@ export function OnboardingForm({ initialUsername, initialName, initialImage }: {
             <Input value={username} onChange={(e) => setUsername(e.target.value)} maxLength={25} autoComplete="off" aria-describedby="username-status" className={field} />
             <span id="username-status" className="mt-1 block min-h-5 text-xs" aria-live="polite">
               {stale || availability.isFetching ? (
-                <span className="text-zinc-500">Checking...</span>
+                <span className="text-zinc-400">Checking...</span>
               ) : availability.data?.available ? (
                 <span className="text-green-400">music-stream.app/{availability.data.username} is yours</span>
               ) : availability.data ? (
@@ -113,7 +113,7 @@ export function OnboardingForm({ initialUsername, initialName, initialImage }: {
               ) : null}
             </span>
           </label>
-          <Button disabled={!usernameOk || name.trim().length === 0} onClick={() => setStep(1)} className="bg-orange-500 text-white hover:bg-orange-600">
+          <Button disabled={!usernameOk || name.trim().length === 0} onClick={() => setStep(1)} className="bg-orange-700 text-white hover:bg-orange-800">
             Continue
           </Button>
         </section>
@@ -140,7 +140,7 @@ export function OnboardingForm({ initialUsername, initialName, initialImage }: {
             <Button variant="ghost" onClick={() => setStep(0)} className="text-zinc-300 hover:bg-zinc-800">
               Back
             </Button>
-            <Button disabled={genres.length < 3} onClick={() => setStep(2)} className="bg-orange-500 text-white hover:bg-orange-600">
+            <Button disabled={genres.length < 3} onClick={() => setStep(2)} className="bg-orange-700 text-white hover:bg-orange-800">
               Continue ({genres.length}/3)
             </Button>
           </div>
@@ -152,9 +152,9 @@ export function OnboardingForm({ initialUsername, initialName, initialImage }: {
           <h1 className="text-2xl font-bold">Follow some creators</h1>
           <p className="text-sm text-zinc-400">Their new tracks will show up in your feed. You can skip this.</p>
           {suggestions.isLoading ? (
-            <p className="text-sm text-zinc-500">Finding creators...</p>
+            <p className="text-sm text-zinc-400">Finding creators...</p>
           ) : (suggestions.data ?? []).length === 0 ? (
-            <p className="text-sm text-zinc-500">No suggestions yet. You can find creators on Discover.</p>
+            <p className="text-sm text-zinc-400">No suggestions yet. You can find creators on Discover.</p>
           ) : (
             <ul className="grid gap-3 sm:grid-cols-2">
               {suggestions.data?.map((creator) => {
@@ -167,7 +167,7 @@ export function OnboardingForm({ initialUsername, initialName, initialImage }: {
                     </Avatar>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">{creator.name}</p>
-                      <p className="text-xs text-zinc-500">{creator.followerCount} followers</p>
+                      <p className="text-xs text-zinc-400">{creator.followerCount} followers</p>
                     </div>
                     {creator.topTrack && (
                       <button
@@ -199,7 +199,7 @@ export function OnboardingForm({ initialUsername, initialName, initialImage }: {
             <Button variant="ghost" onClick={() => setStep(1)} className="text-zinc-300 hover:bg-zinc-800">
               Back
             </Button>
-            <Button disabled={saving} onClick={() => void finish()} className="bg-orange-500 text-white hover:bg-orange-600">
+            <Button disabled={saving} onClick={() => void finish()} className="bg-orange-700 text-white hover:bg-orange-800">
               {saving ? "Saving..." : follow.size > 0 ? "Finish" : "Skip and finish"}
             </Button>
           </div>

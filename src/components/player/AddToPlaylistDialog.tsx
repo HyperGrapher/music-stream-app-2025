@@ -39,8 +39,8 @@ function Body({ track, close }: { track: PlayerTrack; close: () => void }) {
           {!playlists.isLoading && shown.length === 0 ? <li className="text-sm text-zinc-400">No playlists yet. Create one in the other tab.</li> : null}
           {shown.map((playlist) => (
             <li key={playlist.id} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-zinc-800">
-              <span className="min-w-0 flex-1 truncate text-sm">{playlist.title}{playlist.visibility === "PRIVATE" ? <Lock className="ml-1 inline h-3 w-3 text-zinc-500" aria-label="Private" /> : null}</span>
-              <span className="text-xs text-zinc-500">{playlist.trackCount}</span>
+              <span className="min-w-0 flex-1 truncate text-sm">{playlist.title}{playlist.visibility === "PRIVATE" ? <Lock className="ml-1 inline h-3 w-3 text-zinc-400" aria-label="Private" /> : null}</span>
+              <span className="text-xs text-zinc-400">{playlist.trackCount}</span>
               <Button
                 size="sm"
                 variant={playlist.hasTrack ? "secondary" : "outline"}

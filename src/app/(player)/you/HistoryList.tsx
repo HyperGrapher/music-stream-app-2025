@@ -28,11 +28,11 @@ export function HistoryList() {
         ))}
       </div>
       {history.isLoading && <p className="mt-6 text-sm text-zinc-400">Loading…</p>}
-      {history.data?.length === 0 && <p className="mt-10 text-center text-sm text-zinc-500">Tracks you listen to will show up here.</p>}
+      {history.data?.length === 0 && <p className="mt-10 text-center text-sm text-zinc-400">Tracks you listen to will show up here.</p>}
       <div className="mt-4">
         {(history.data ?? []).map((entry) => (
           <div key={entry.track.id}>
-            <p className="pt-3 text-xs text-zinc-500">Played {formatDistanceToNowStrict(new Date(entry.playedAt), { addSuffix: true })}</p>
+            <p className="pt-3 text-xs text-zinc-400">Played {formatDistanceToNowStrict(new Date(entry.playedAt), { addSuffix: true })}</p>
             <WaveformTrackItem track={entry.track} playlist={tracks} context={{ name: "Listening history", source: "HISTORY" }} compact />
           </div>
         ))}

@@ -3,7 +3,7 @@ import { OnboardingGuard, VerifyEmailBanner } from "@/components/auth/AppShellGu
 import { PlaybackControls } from "../_components/GlobalPlaybackControls";
 import { PlayerControllerWrapper } from "@/components/PlayerControllerWrapper";
 import { ServerNavbar } from "../_components/ServerNavbar";
-import { GlobalDialogs } from "@/components/player/GlobalDialogs";
+import { LazyDialogs } from "@/components/player/LazyDialogs";
 import { MobileTabBar } from "@/components/player/MobileTabBar";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
@@ -28,7 +28,7 @@ export default async function Layout({
                 {children}
             </main>
             <PlaybackControls />
-            <GlobalDialogs />
+            <LazyDialogs />
             <MobileTabBar />
             <PlayerControllerWrapper initialUserId={userId} />
         </>

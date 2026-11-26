@@ -13,14 +13,15 @@ const UPCOMING_LIMIT = 100;
 function Row({ track, children, onPlay }: { track: PlayerTrack; children?: React.ReactNode; onPlay: () => void }) {
   return (
     <li className="group flex items-center gap-2 rounded px-2 py-1.5 hover:bg-zinc-800">
-      <button type="button" onClick={onPlay} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-label={`Play ${track.title}`}>
+      <button type="button" onClick={onPlay} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+        <span className="sr-only">Play </span>
         <img src={track.artworkUrl ?? "/placeholder-track.jpg"} alt="" className="h-9 w-9 shrink-0 rounded-sm object-cover" />
         <span className="min-w-0">
           <span className="block truncate text-sm text-white">{track.title}</span>
           <span className="block truncate text-xs text-zinc-400">{track.artistName ?? track.user?.name}</span>
         </span>
       </button>
-      <span className="text-xs tabular-nums text-zinc-500">{formatDuration(track.duration)}</span>
+      <span className="text-xs tabular-nums text-zinc-400">{formatDuration(track.duration)}</span>
       {children}
     </li>
   );
@@ -68,16 +69,16 @@ export function NextUpPanel() {
       <div className="overflow-y-auto p-2">
         {s.currentTrack ? (
           <section>
-            <h3 className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">Now playing</h3>
+            <h3 className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">Now playing</h3>
             <ul><Row track={s.currentTrack} onPlay={() => undefined} /></ul>
           </section>
         ) : null}
         <section className="mt-2">
           <div className="flex items-center justify-between px-2 pb-1">
-            <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-500">Next up</h3>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-400">Next up</h3>
             {s.userQueue.length > 0 ? <button type="button" onClick={s.clearQueue} className="text-xs text-zinc-400 hover:text-white">Clear</button> : null}
           </div>
-          {s.userQueue.length === 0 ? <p className="px-2 pb-1 text-xs text-zinc-500">Nothing queued. Use “Play next” or “Add to Next up” on any track.</p> : null}
+          {s.userQueue.length === 0 ? <p className="px-2 pb-1 text-xs text-zinc-400">Nothing queued. Use “Play next” or “Add to Next up” on any track.</p> : null}
           <ul>
             {s.userQueue.map((track, index) => (
               <Row key={track.id} track={track} onPlay={() => s.playFromQueue(track.id)}>
@@ -92,13 +93,13 @@ export function NextUpPanel() {
         </section>
         {upcoming.length > 0 ? (
           <section className="mt-2">
-            <h3 className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">Next from: {s.contextName ?? "this list"}</h3>
+            <h3 className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">Next from: {s.contextName ?? "this list"}</h3>
             <ul>{upcoming.map((track) => <Row key={track.id} track={track} onPlay={() => s.playTrack(track)} />)}</ul>
           </section>
         ) : null}
         {s.history.length > 0 ? (
           <section className="mt-2">
-            <h3 className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">History</h3>
+            <h3 className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">History</h3>
             <ul>{[...s.history].reverse().slice(0, 20).map((track) => <Row key={track.id} track={track} onPlay={() => s.playTrack(track)} />)}</ul>
           </section>
         ) : null}

@@ -95,7 +95,7 @@ export function SearchBox() {
         <ul id={listId} role="listbox" className="absolute top-full right-0 left-0 z-50 mt-1 max-h-96 overflow-y-auto rounded-md border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
           {options.map((option, index) => (
             <li key={option.key} role="presentation">
-              {(index === 0 || options[index - 1]!.group !== option.group) && option.group ? <p className="px-3 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-zinc-500 uppercase">{option.group}</p> : null}
+              {(index === 0 || options[index - 1]!.group !== option.group) && option.group ? <p className="px-3 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-zinc-400 uppercase">{option.group}</p> : null}
               <button type="button" role="option" aria-selected={index === active} onMouseEnter={() => setActive(index)} onClick={() => go(option)} className={`flex w-full items-center gap-3 px-3 py-1.5 text-left text-sm ${index === active ? "bg-zinc-800" : ""}`}>
                 {option.image ? <img src={option.image} alt="" className="h-8 w-8 rounded object-cover" /> : <span className="h-8 w-8 rounded bg-zinc-800" />}
                 <span className="min-w-0"><span className="block truncate text-white">{option.label}</span>{option.hint ? <span className="block truncate text-xs text-zinc-400">{option.hint}</span> : null}</span>

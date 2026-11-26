@@ -32,7 +32,7 @@ function ReplaceAudio({ trackId, plan, onDone }: { trackId: string; plan: "FREE"
   const item = items[0];
   useEffect(() => () => useUploadBatch.getState().reset(), []);
   if (plan !== "PRO") {
-    return <p className="text-sm text-zinc-400">Replacing the audio file keeps your comments, likes, plays and URL. <span className="rounded bg-orange-500 px-1 text-[10px] font-bold text-white">PRO</span> <Link className="underline" href="/settings/plan">See plans</Link></p>;
+    return <p className="text-sm text-zinc-400">Replacing the audio file keeps your comments, likes, plays and URL. <span className="rounded bg-orange-700 px-1 text-[10px] font-bold text-white">PRO</span> <Link className="underline" href="/settings/plan">See plans</Link></p>;
   }
   return (
     <div className="space-y-2">
@@ -52,7 +52,7 @@ function ReplaceAudio({ trackId, plan, onDone }: { trackId: string; plan: "FREE"
                   onError: (error) => toast.error(friendlyError(error)),
                 });
               }}
-              className="bg-orange-500 text-white hover:bg-orange-600"
+              className="bg-orange-700 text-white hover:bg-orange-800"
             >
               Replace audio
             </Button>
@@ -116,7 +116,7 @@ export function TrackEditor({ initial, returnTo }: { initial: Data; returnTo: st
         <p className="text-xs tracking-wide text-orange-400 uppercase">Edit track</p>
         <h1 className="text-2xl font-bold">{data.title}</h1>
         {data.moderationState === "REMOVED" && <p role="alert" className="mt-2 rounded border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">This track was removed by moderators and is hidden from everyone but you.</p>}
-        {data.collections.length > 0 && <p className="mt-1 text-xs text-zinc-500">In: {data.collections.map((c) => c.title).join(", ")}</p>}
+        {data.collections.length > 0 && <p className="mt-1 text-xs text-zinc-400">In: {data.collections.map((c) => c.title).join(", ")}</p>}
       </header>
 
       <TrackFieldsEditor value={fields} onChange={change} plan={data.plan} mode="edit" username={data.username} trackId={data.id} durationMs={data.durationMs} audioSrc={`/api/tracks/${data.id}/stream`} currentArtworkUrl={data.artworkUrl} />
@@ -141,9 +141,9 @@ export function TrackEditor({ initial, returnTo }: { initial: Data; returnTo: st
       </section>
 
       <div className="sticky bottom-24 flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/95 p-3 backdrop-blur">
-        <Button type="button" disabled={!fields.title.trim() || update.isPending} onClick={() => void save()} className="bg-orange-500 text-white hover:bg-orange-600">{update.isPending ? "Saving..." : "Save"}</Button>
+        <Button type="button" disabled={!fields.title.trim() || update.isPending} onClick={() => void save()} className="bg-orange-700 text-white hover:bg-orange-800">{update.isPending ? "Saving..." : "Save"}</Button>
         <Button type="button" variant="ghost" onClick={() => { if (!dirty || window.confirm("Discard your changes?")) router.push(returnTo); }} className="text-zinc-300 hover:bg-zinc-800">Cancel</Button>
-        {dirty && <span className="text-xs text-zinc-500">Unsaved changes</span>}
+        {dirty && <span className="text-xs text-zinc-400">Unsaved changes</span>}
       </div>
 
       <ConfirmDialog

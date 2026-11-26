@@ -61,15 +61,15 @@ export function EmbedPlayer({ tracks, title, href, collectionId }: { tracks: Pla
           {tracks.map((track, index) => (
             <li key={track.id}>
               <button type="button" onClick={() => toggle(track)} className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-zinc-900 ${currentTrack?.id === track.id ? "text-cyan-400" : ""}`}>
-                <span className="w-5 text-right text-xs text-zinc-500">{index + 1}</span>
+                <span className="w-5 text-right text-xs text-zinc-400">{index + 1}</span>
                 <span className="flex-1 truncate">{track.title}</span>
-                <span className="text-xs text-zinc-500">{formatDuration(track.duration)}</span>
+                <span className="text-xs text-zinc-400">{formatDuration(track.duration)}</span>
               </button>
             </li>
           ))}
         </ol>
       ) : null}
-      <a href={href} target="_blank" rel="noopener noreferrer" className="text-xs text-zinc-500 hover:text-zinc-300">Listen on the app</a>
+      <a href={href} target="_blank" rel="noopener noreferrer" className="text-xs text-zinc-400 hover:text-zinc-300">Listen on the app</a>
     </div>
   );
 }

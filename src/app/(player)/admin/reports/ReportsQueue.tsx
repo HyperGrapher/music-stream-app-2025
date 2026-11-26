@@ -44,9 +44,9 @@ function Detail({ target, onClose }: { target: Target; onClose: () => void }) {
             {d.preview?.removed && <p className="mt-2 text-sm text-red-300">Currently removed{d.preview.reason ? `: ${d.preview.reason}` : ""}</p>}
           </section>
           <section aria-label="Reports"><h3 className="mb-2 text-sm font-bold uppercase text-zinc-400">Reports ({d.reports.length})</h3>
-            <ul className="space-y-2 text-sm">{d.reports.map((r) => <li key={r.id} className="rounded border border-zinc-800 p-2"><span className="font-semibold">{label(r.reason)}</span> · {r.reporter.name} · <span className="text-zinc-500">{label(r.status)}, {formatDistanceToNowStrict(new Date(r.createdAt), { addSuffix: true })}</span>{r.details && <p className="mt-1 text-zinc-300">{r.details}</p>}</li>)}</ul>
+            <ul className="space-y-2 text-sm">{d.reports.map((r) => <li key={r.id} className="rounded border border-zinc-800 p-2"><span className="font-semibold">{label(r.reason)}</span> · {r.reporter.name} · <span className="text-zinc-400">{label(r.status)}, {formatDistanceToNowStrict(new Date(r.createdAt), { addSuffix: true })}</span>{r.details && <p className="mt-1 text-zinc-300">{r.details}</p>}</li>)}</ul>
           </section>
-          {d.actions.length > 0 && <section aria-label="Audit log"><h3 className="mb-2 text-sm font-bold uppercase text-zinc-400">Audit log</h3><ul className="space-y-1 text-sm text-zinc-300">{d.actions.map((a) => <li key={a.id}>{a.action} by {a.admin.username}{a.reason ? `: ${a.reason}` : ""} <span className="text-zinc-500">{formatDistanceToNowStrict(new Date(a.createdAt), { addSuffix: true })}</span></li>)}</ul></section>}
+          {d.actions.length > 0 && <section aria-label="Audit log"><h3 className="mb-2 text-sm font-bold uppercase text-zinc-400">Audit log</h3><ul className="space-y-1 text-sm text-zinc-300">{d.actions.map((a) => <li key={a.id}>{a.action} by {a.admin.username}{a.reason ? `: ${a.reason}` : ""} <span className="text-zinc-400">{formatDistanceToNowStrict(new Date(a.createdAt), { addSuffix: true })}</span></li>)}</ul></section>}
           <section aria-label="Actions" className="space-y-3 border-t border-zinc-800 pt-4">
             <Input aria-label="Reason" placeholder="Reason (required to remove or suspend)" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} className="border-zinc-700 bg-zinc-900" />
             <div className="flex flex-wrap gap-2">
@@ -73,7 +73,7 @@ export function ReportsQueue() {
       <h1 className="text-2xl font-bold">Reports</h1>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {STATUSES.map((s) => <button key={s} aria-pressed={status === s} onClick={() => setStatus(s)} className={cn("rounded-full border px-3 py-1 text-sm", status === s ? "border-orange-500 bg-orange-500/15 text-orange-300" : "border-zinc-700 text-zinc-300")}>{label(s)}</button>)}
-        <span className="mx-2 text-zinc-600">|</span>
+        <span className="mx-2 text-zinc-400">|</span>
         <button aria-pressed={!type} onClick={() => setType(undefined)} className={cn("rounded-full border px-3 py-1 text-sm", !type ? "border-orange-500 bg-orange-500/15 text-orange-300" : "border-zinc-700 text-zinc-300")}>All types</button>
         {TYPES.map((t) => <button key={t} aria-pressed={type === t} onClick={() => setType(t)} className={cn("rounded-full border px-3 py-1 text-sm", type === t ? "border-orange-500 bg-orange-500/15 text-orange-300" : "border-zinc-700 text-zinc-300")}>{label(t)}</button>)}
       </div>
@@ -83,7 +83,7 @@ export function ReportsQueue() {
           <tbody>
             {(list.data?.items ?? []).map((item) => (
               <tr key={`${item.targetType}${item.targetId}`} className="cursor-pointer border-t border-zinc-800 hover:bg-zinc-900/50" onClick={() => setOpen({ targetType: item.targetType as Type, targetId: item.targetId })} data-testid="report-row">
-                <td className="p-3"><button className="text-left font-semibold hover:text-orange-400" onClick={() => setOpen({ targetType: item.targetType as Type, targetId: item.targetId })}>{item.preview?.title ?? "No longer exists"}</button>{item.preview?.text && <p className="max-w-md truncate text-xs text-zinc-500">{item.preview.text}</p>}</td>
+                <td className="p-3"><button className="text-left font-semibold hover:text-orange-400" onClick={() => setOpen({ targetType: item.targetType as Type, targetId: item.targetId })}>{item.preview?.title ?? "No longer exists"}</button>{item.preview?.text && <p className="max-w-md truncate text-xs text-zinc-400">{item.preview.text}</p>}</td>
                 <td className="p-3">{label(item.targetType)}</td>
                 <td className="p-3 text-right tabular-nums">{item.reporters}</td>
                 <td className="p-3 text-zinc-400">{item.reasons.map(label).join(", ")}</td>
@@ -92,7 +92,7 @@ export function ReportsQueue() {
             ))}
           </tbody>
         </table>
-        {list.data?.items.length === 0 && <p className="p-8 text-center text-sm text-zinc-500">Nothing here.</p>}
+        {list.data?.items.length === 0 && <p className="p-8 text-center text-sm text-zinc-400">Nothing here.</p>}
       </div>
       <Dialog open={!!open} onOpenChange={(v) => !v && setOpen(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-white sm:max-w-2xl">

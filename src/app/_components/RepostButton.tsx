@@ -57,13 +57,13 @@ export function RepostButton({ kind, id, ownerId, isPrivate = false, initialRepo
       type="button"
       onClick={toggle}
       aria-pressed={state.reposted}
-      aria-label={state.reposted ? `Undo repost of ${kind}` : `Repost ${kind}`}
+      aria-label={variant === "pill" ? undefined : state.reposted ? `Undo repost of ${kind}` : `Repost ${kind}`}
       disabled={isPrivate && !state.reposted}
       title={isPrivate ? "Private content can't be liked or reposted" : undefined}
       className={cn(className, state.reposted && "border-orange-500/60 text-orange-400")}
     >
       <Repeat2 className={variant === "pill" ? "h-3.5 w-3.5" : "h-4 w-4"} />
-      {variant === "pill" ? <span>{state.count}</span> : null}
+      {variant === "pill" ? <><span className="sr-only">{state.reposted ? `Undo repost of ${kind}` : `Repost ${kind}`}</span><span>{state.count}</span></> : null}
     </button>
   );
 }

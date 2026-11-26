@@ -11,7 +11,7 @@ function Section({ title, href, children, empty }: { title: string; href: string
   return (
     <section className="mb-10">
       <div className="mb-3 flex items-baseline justify-between"><h2 className="text-lg font-bold">{title}</h2><Link href={href} className="text-sm text-orange-400 hover:underline">View all</Link></div>
-      {empty ? <p className="text-sm text-zinc-500">Nothing here yet.</p> : children}
+      {empty ? <p className="text-sm text-zinc-400">Nothing here yet.</p> : children}
     </section>
   );
 }

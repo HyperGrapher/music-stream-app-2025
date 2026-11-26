@@ -14,7 +14,7 @@ export function LikesActions({ tracks }: { tracks: PlayerTrack[] }) {
   const meta = { name: "Your likes", source: "LIBRARY" as const };
   return (
     <div className="mb-4 flex gap-2">
-      <Button className="rounded-full bg-orange-500 text-white hover:bg-orange-600" onClick={() => playContext(tracks, tracks[0]!, meta)}><Play className="h-4 w-4 fill-current" /> Play all</Button>
+      <Button className="rounded-full bg-orange-700 text-white hover:bg-orange-800" onClick={() => playContext(tracks, tracks[0]!, meta)}><Play className="h-4 w-4 fill-current" /> Play all</Button>
       <Button variant="outline" className="rounded-full border-zinc-700 bg-transparent text-white hover:bg-zinc-800" onClick={() => { playContext(tracks, tracks[Math.floor(Math.random() * tracks.length)]!, meta); if (!usePlayerStore.getState().shuffle) toggleShuffle(); }}><Shuffle className="h-4 w-4" /> Shuffle</Button>
     </div>
   );

@@ -16,7 +16,7 @@ export function SecretLinkBox({ path, token, onReset, resetting }: { path: strin
   return (
     <div className="space-y-2 rounded border border-zinc-800 p-3">
       <p className="text-sm font-medium">Secret link</p>
-      <p className="text-xs text-zinc-500">Anyone with this link can listen, even while the item is private.</p>
+      <p className="text-xs text-zinc-400">Anyone with this link can listen, even while the item is private.</p>
       <input readOnly value={link} aria-label="Secret link" onFocus={(e) => e.currentTarget.select()} className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-200" />
       <div className="flex gap-2">
         <Button type="button" size="sm" variant="outline" onClick={() => copyText(link, "Secret link copied")} className="border-zinc-700 bg-transparent text-white hover:bg-zinc-800">

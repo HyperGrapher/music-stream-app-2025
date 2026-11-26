@@ -38,7 +38,7 @@ function Equaliser() {
   return (
     <span className="mr-2 inline-flex h-3 items-end gap-0.5 align-baseline" aria-label="Playing" role="img">
       {[0, 150, 300].map((delay) => (
-        <span key={delay} className="w-0.5 animate-pulse bg-orange-500" style={{ height: `${60 + delay / 5}%`, animationDelay: `${delay}ms` }} />
+        <span key={delay} className="w-0.5 animate-pulse bg-orange-700" style={{ height: `${60 + delay / 5}%`, animationDelay: `${delay}ms` }} />
       ))}
     </span>
   );
@@ -133,7 +133,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
             <div className="min-w-0 flex-1">
               <Link
                 href={track.user?.username ? `/${track.user.username}` : "#"}
-                className="block truncate text-sm font-medium text-zinc-500 transition hover:text-zinc-300"
+                className="block truncate py-0.5 text-sm font-medium text-zinc-400 transition hover:text-zinc-300"
               >
                 {artistName}
               </Link>
@@ -148,7 +148,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
 
             <div className="hidden shrink-0 flex-col items-end gap-2 sm:flex">
               {track.createdAt && (
-                <time className="text-xs text-zinc-500">
+                <time className="text-xs text-zinc-400">
                   {formatDistanceToNow(new Date(track.createdAt), {
                     addSuffix: true,
                   })}
@@ -208,7 +208,7 @@ export const WaveformTrackItem = memo(function WaveformTrackItem({
               <Link2 className="h-3.5 w-3.5" />
             </button>
             <TrackMenu track={track} className="h-8 w-8 rounded border border-zinc-700 bg-zinc-900" />
-            <div className="ml-auto hidden items-center gap-3 text-xs text-zinc-500 md:flex">
+            <div className="ml-auto hidden items-center gap-3 text-xs text-zinc-400 md:flex">
               <span className="inline-flex items-center gap-1">
                 <Play className="h-3 w-3 fill-current" /> {track.playCount ?? 0}
               </span>

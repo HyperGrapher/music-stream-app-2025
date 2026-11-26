@@ -20,8 +20,8 @@ export function BlockedList() {
     <div>
       <h1 className="mb-2 text-2xl font-bold">Blocked people</h1>
       <p className="mb-6 text-sm text-zinc-400">Blocked people can&apos;t follow you or comment on your tracks, and you won&apos;t see their comments. Your public pages stay public.</p>
-      {list.isLoading && <p className="text-sm text-zinc-500">Loading...</p>}
-      {list.data?.length === 0 && <p className="rounded border border-dashed border-zinc-800 p-6 text-center text-sm text-zinc-500">You haven&apos;t blocked anyone.</p>}
+      {list.isLoading && <p className="text-sm text-zinc-400">Loading...</p>}
+      {list.data?.length === 0 && <p className="rounded border border-dashed border-zinc-800 p-6 text-center text-sm text-zinc-400">You haven&apos;t blocked anyone.</p>}
       <ul className="max-w-lg space-y-2">
         {(list.data ?? []).map((person) => (
           <li key={person.id} className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/60 p-3" data-testid="blocked-user">
