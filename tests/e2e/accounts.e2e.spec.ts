@@ -63,7 +63,7 @@ test("J2: sign up, verify the email from the link, onboard (username, genres, fo
   await page.getByRole("button", { name: "Finish" }).click();
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("independent creators");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Home");
   const user = await db.user.findUniqueOrThrow({ where: { email }, include: { following: true } });
   expect([user.username, user.name, user.favoriteGenres.sort(), user.following.length]).toEqual([handle, "Journey Jo", ["jazz-blues", "rock", "techno"], 1]);
   expect(user.onboardedAt).not.toBeNull();

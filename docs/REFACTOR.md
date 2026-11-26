@@ -29,8 +29,8 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 | M2 Upload & editing | **done** (see "M2 summary") |
 | M3 Listening | **done** (see "M3 summary"; Lighthouse run still open, see deviations) |
 | M4 Social loop | **done** (see "M4 summary") |
-| M5 Discovery | **next** (see "Next up") |
-| M6 Creator tools & plans | not started |
+| M5 Discovery | **done** (see "M5 summary") |
+| M6 Creator tools & plans | **next** (see "Next up") |
 | M7 Trust & safety | not started |
 | M8 Polish | not started |
 
@@ -127,6 +127,19 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 - The embed player is minimal (artwork, seek bar, list); no waveform [M8].
 - Chosen play sources are set where the list is known (collection page, track page, related); Home/Discover/Profile lists still report `OTHER` unless their callers pass `context` to `TrackCard` / `WaveformTrackItem` [M4/M5].
 
+**M5 summary: what exists now** (discovery)
+
+| Area | Where | Notes |
+|---|---|---|
+| Search | migration `1_search` (pg_trgm, `ms_track_tsv` / `ms_user_tsv`, GIN indexes), `server/modules/search`, router `search` | Expression indexes, no new columns. `websearch_to_tsquery('simple')` + trigram similarity + prefix bonus, ranked x log(plays+likes+2) / recency decay. Candidates come from SQL, then rows are re-loaded with `publicTrackWhere` / `publicCollectionWhere` (visibility re-checked, never trusted from the prefilter). `suggest` (3 people, 4 tracks, 2 albums, 2 playlists), `tracks` (+ genre, duration, added, license filters), `people`, `collections`. Offset paging (max 400 candidates). Anonymous callers are rate limited per IP. |
+| Search UI | `components/SearchBox.tsx` (navbar combobox: 150 ms debounce, 2+ chars, arrows/Enter/Esc, recent searches in localStorage), `(player)/search` | Tabs Everything/Tracks/People/Albums/Playlists, top result, track filters, "no results" shows trending (SE-5), `#tag` redirects to `/tags/tag`. Needs `pg_trgm` on the database (Neon allows it; the migration runs it). |
+| Recommendations | `server/modules/recommendations/{scoring,index}.ts` (+ unit tests), `discover.forYou` / `discover.trending`, `tracks.related` | Taste profile (likes x3, reposts x3, completed plays 90 d x1, playlist adds x2, onboarding genres x2, followed creators), cached 10 min per user in memory (per server instance). `recommendForUser`: candidates by top genres/tags + co-likes, excludes own/liked/reposted/played-in-7-days/blocked, max 2 per creator, cold start = trending in favourite genres. `related` now orders genre/tag matches by genre + Jaccard. "Start station" in the track menu queues the seed + 49 related (source STATION). |
+| Charts | `server/modules/charts`, router `charts`, `(player)/charts` | Top 50 from `TrackDailyStat` (7 days), New & Hot (30 days, plays/day with recency boost), per genre, cached 10 min (empty results are not cached). Rank change vs yesterday is not built (P2). |
+| Tags | `server/modules/tracks/tags.ts`, `discover.byTag`, `/tags/[tag]` | Tracks + collections with the tag or genre slug, Popular/Latest; tags on the track page link here. |
+| Home | `(player)/page.tsx`, `Carousel`, `TrackCarousel` | Signed out: hero, Trending now, New releases (collections), Fresh tracks, genre tiles, popular creators. Signed in: Recently played, More of what you like, New from people you follow, Trending in each of up to 3 favourite genres, then the same public modules, Who to follow. Each module hides when empty. Lists now report their play source (HOME / DISCOVER / SEARCH / CHARTS / HISTORY / LIBRARY). |
+| Discover | `(player)/discover` | "Made for you" and "Fresh from your genres" for signed-in users on the unfiltered view, infinite scroll (`DiscoverGrid`, keyed by the filters so a filter change resets it). The old `?q=` still works. |
+| Tests | integration `search.test.ts` (5), `recommendations.test.ts` (5), unit `scoring.test.ts` (6), e2e `discovery.e2e.spec.ts` (search, autocomplete, charts, tags, signed-in Home/Discover) | |
+
 **Deviations from M4** (owner milestone in brackets):
 
 - `@` autocomplete in the comment composer is not built (mentions work when typed in full) [M8].
@@ -136,12 +149,22 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 - "Liked by people you follow" avatars (LK-5, P2) are not built.
 - The player bar Follow button still does not know the relationship; Home/Discover lists still report play source `OTHER` [M5].
 
-**Next up: M5 Discovery** (PRD §10; exit: search/recommendation integration tests; Home populated for a fresh onboarded user)
+**Deviations from M5** (owner milestone in brackets):
 
-1. Search: Postgres full-text + trigram over tracks, creators, collections, with navbar autocomplete (`/discover?q=` exists as a LIKE search today).
-2. Home modules (trending, new releases, genre rows, "Because you liked", who to follow), Discover filters/sorts, `/charts`, genre and tag pages (`/tags/[tag]`).
-3. Recommendations: replace the `related` heuristic with ranked signals (co-likes, same-genre trending, not already played via `historyClearedAt` rules) and use them for autoplay; pass `context` (play source) from Home/Discover lists.
-4. Tests: search ranking and visibility integration tests, Home for a fresh user.
+- No quick-preview on hover (DI-4, P2) and no "Your mixes" Home module (P2); `previewStartMs` is stored but unused [M8].
+- No people filter by city/country in search (P2); search pagination is offset-based over at most 400 ranked candidates.
+- Chart rank change vs yesterday (P2) and `unstable_cache` are not used: the cache is an in-memory Map per server instance (so on Vercel each lambda warms its own).
+- The taste-profile cache is also per instance.
+- Search results do not exclude blocked creators for the viewer [M7].
+- "Popular creators" on the landing page reuses `profiles.suggestions`.
+
+**Next up: M6 Creator tools & plans** (PRD §15 and §2.3; exit: J10 passes; entitlement tests for every gated feature)
+
+1. Studio (`/studio/tracks`, `/studio/sets`): tables with sort/filter, bulk edit (privacy, genre, tags, delete), replace-audio entry, the entry points to the existing editors.
+2. Insights (`/studio/insights`) from `TrackDailyStat` / `UserDailyStat`: plays, likes, reposts, comments, followers over time, top tracks, countries (`PlayEvent.countryCode`), traffic sources (`PlayEvent.source`); Pro gates (longer ranges, per-track detail).
+3. Plan gating everywhere via `getEntitlements` (scheduling, Quiet Mode, replace audio, spotlight count, upload time), Spotlight editing on the profile, Quiet Mode (`statsPublic`) toggles.
+4. Create the `PLAYLIST_ADD` notification when someone adds your track to a public playlist, and `NEW_RELEASE` (opt-in) for followers.
+5. Tests: J10, an entitlement test per gated feature.
 
 <details><summary>M4 plan as it was (done)</summary>
 
@@ -450,3 +473,10 @@ Rendering (`buildWaveformBars` in `lib/waveform-utils.ts`): bar count = display 
 - UI: bell + page, feed, `/you/*` library, repost buttons, collection like/repost, comment upgrades.
 - Learned: Next renders a page in parallel with its layout, so a layout `redirect` does not stop the page from running (guard in both); never put two `OR` keys in one Prisma `where` (the second replaces the first, so use `AND: [{ OR }, { OR }]`); `createTrack` in the integration helpers writes no `Activity`, so feed tests must create one.
 - Totals when this entry was written: unit 80, integration 154, e2e 56 + 1 skipped, lint 0 warnings, types clean.
+
+### Session 16 - PRD M5 (discovery), branch `dev`
+- First: Vercel build failed with P1002 on `prisma migrate deploy` (the pooled Neon host does not support the migration lock); `prisma.config.ts` now derives the direct host when `DATABASE_URL_UNPOOLED` is missing (the owner also set it).
+- Search (FTS + trigram migration `1_search`), recommendations, charts, tags, Home modules, Discover upgrades.
+- Bugs found and fixed: `DiscoverGrid` kept the previous filter's tracks after a client navigation (now keyed by filters); an empty chart cached for 10 minutes would hide the first plays (empty results are not cached).
+- Learned: the second migration is raw SQL (`prisma/migrations/1_search`); to apply it locally run `prisma migrate deploy` against both `streamapp` and `streamapp_test`. Never trust a SQL prefilter for visibility: re-load rows through the Prisma visibility builders.
+- Totals when this entry was written: unit 86, integration 164, e2e 60 + 1 skipped, lint 0 warnings, types clean.

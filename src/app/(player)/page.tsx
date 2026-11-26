@@ -58,6 +58,7 @@ export default async function HomePage() {
       )}
 
       <div className="mx-auto max-w-[1240px] space-y-12 px-5 pt-10 sm:px-7">
+        {user && <h1 className="text-3xl font-bold">Home</h1>}
         {user && personal && (
           <>
             <TrackCarousel id="recent" title="Recently played" href="/you/history" tracks={personal[0].map((h) => h.track)} context={{ name: "Recently played", source: "HISTORY" }} />
