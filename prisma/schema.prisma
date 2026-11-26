@@ -259,6 +259,8 @@ model User {
   moderationActions       ModerationAction[]
 
   @@index([status])
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "user_name_trgm_idx")
+  @@index([username(ops: raw("gin_trgm_ops"))], type: Gin, map: "user_username_trgm_idx")
   @@map("user")
 }
 
@@ -496,6 +498,8 @@ model Track {
   @@index([visibility, publishAt])
   @@index([genre])
   @@index([tags], type: Gin)
+  /// Trigram index for typo-tolerant search (migration 1_search); the full-text expression indexes there cannot be modelled.
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "track_title_trgm_idx")
   @@map("track")
 }
 
@@ -547,6 +551,7 @@ model Collection {
   @@index([visibility, publishedAt])
   @@index([type])
   @@index([tags], type: Gin)
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "collection_title_trgm_idx")
   @@map("collection")
 }
 
