@@ -5,6 +5,7 @@ import { imageObjectKeys } from "@/lib/artwork";
 import { now as clockNow } from "@/server/clock";
 import { purgeDeletedAccounts } from "@/server/modules/accounts/deletion";
 import { sendDailyDigests } from "@/server/modules/notifications/email";
+import { pruneAnalytics } from "@/server/modules/analytics";
 import { pruneEmailBodies } from "@/server/modules/email";
 import { pruneRateLimitBuckets } from "@/server/modules/rate-limit";
 import { drainStorageDeletions, enqueueStorageDeletion } from "@/server/modules/storage/deletion";
@@ -71,6 +72,7 @@ export interface DailyReport {
   playEvents: number;
   usernameRedirects: number;
   accounts: { purged: number; removed: number };
+  analytics: { ipsCleared: number; pageViewsDeleted: number };
 }
 
 /**
@@ -102,5 +104,6 @@ export async function runDailyHousekeeping(
   const usernameRedirects = (
     await db.usernameRedirect.deleteMany({ where: { createdAt: { lt: new Date(at.getTime() - 30 * DAY_MS) } } })
   ).count;
-  return { expiredAssets, storage, rateLimitBuckets, digests, emailBodies, playEvents, usernameRedirects, accounts };
+  const analytics = await pruneAnalytics(db, at);
+  return { expiredAssets, storage, rateLimitBuckets, digests, emailBodies, playEvents, usernameRedirects, accounts, analytics };
 }

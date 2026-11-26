@@ -250,6 +250,15 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 | Embed waveform | `embed/EmbedWaveform` | Clickable bars; seek input stays. |
 | Emails | `RESEND_API_KEY` is set on Vercel | Set `EMAIL_FROM` to a verified-domain sender to reach people other than the Resend account owner. |
 
+**Admin tools** (session 20, migration `3_admin_tools`)
+
+| Area | Where | Notes |
+|---|---|---|
+| Reserved names | `server/modules/reserved`, router `admin.reservedNames/addReservedNames/setReservedBlocked/removeReservedName`, `/admin/reserved` | Table `reserved_name` (name, blocked, note). Checked on top of the code list in `checkUsername` (sign-up, onboarding, rename) and in the auth hook's username generator, via `isReservedName` (30 s cache, cleared on change). Admins upload a `.txt` (one name per line, `#` comments, max 5 000 / 200 KB) or add one; names are lower-cased and must look like usernames. **The code list cannot be changed**: built-in names are rejected on add (never stored), block/unblock and remove refuse them (`FORBIDDEN`), and the UI shows them read-only. Existing accounts keep names reserved later. |
+| Visitor analytics | `server/modules/analytics`, `app/api/analytics`, `components/VisitTracker`, `/admin/analytics` | Table `page_view` (one row per page opened; a 20 s heartbeat keeps `lastSeenAt` current while the tab is visible). "Online now" = seen in the last 2 minutes, one row per visitor, registered vs guests, with country (Vercel `x-vercel-ip-country`), city, IP, current page, time on page and on site. Dashboard for today/7/30/90 days: visitors, page views, sessions, avg time on page (capped 30 min), bounce rate, per-day series, top pages, countries, referrers (host only), devices, browsers, latest sessions. |
+| Privacy of analytics | same | Visitors are told apart by a random id in local storage (no cookie). Do Not Track and Global Privacy Control are respected (not counted). Paths are stored without query/fragment and secret links are masked (`/s-…`); bots and `/admin`, `/api` are skipped. **IPs are cleared after 30 days and rows deleted after 90** (daily cron `pruneAnalytics`). Deleting an account sets `userId` to null on its views. Tell users in the privacy policy before launch; a cookie banner is not needed as nothing is stored in cookies, but check your jurisdiction. |
+| Tests | `tests/integration/admin-tools.test.ts`, `tests/e2e/admin-tools.e2e.spec.ts`, `reserved/parse.test.ts`, `analytics/ua.test.ts` | |
+
 Not built (P2 leftovers): typing indicators, attachments, group chats, message search, email notifications for new messages, edit/unsend by the sender.
 
 **Deviations from M7** (owner milestone in brackets):
