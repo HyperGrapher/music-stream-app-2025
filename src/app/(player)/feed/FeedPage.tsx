@@ -68,6 +68,7 @@ export function FeedPage({ empty }: { empty: ReactNode }) {
               {" · "}
               <time dateTime={new Date(item.at).toISOString()}>{formatDistanceToNowStrict(new Date(item.at))}</time>
             </p>
+            {item.caption ? <p className="mb-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm text-zinc-200" data-testid="repost-caption">&ldquo;{item.caption}&rdquo;</p> : null}
             {item.track ? (
               <WaveformTrackItem track={item.track} playlist={playable} context={{ name: "Your feed", source: "FEED" }} compact />
             ) : item.collection ? (

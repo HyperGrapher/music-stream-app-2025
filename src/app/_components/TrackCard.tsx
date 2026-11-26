@@ -5,6 +5,7 @@ import { Headphones, Pause, Play } from "lucide-react";
 import Link from "next/link";
 import { useShallow } from "zustand/react/shallow";
 
+import { useHoverPreview } from "@/hooks/useHoverPreview";
 import { genreLabel } from "@/lib/genres";
 import { formatCount, formatDuration } from "@/lib/utils";
 import { usePlayerStore, type ContextMeta } from "@/store/player";
@@ -37,9 +38,11 @@ export const TrackCard = memo(function TrackCard({ track, playlist, context }: T
     else playContext(playlist, track, context);
   }, [context, isCurrentTrack, playContext, playlist, togglePlay, track]);
 
+  const preview = useHoverPreview(track);
+
   return (
     <article className="group min-w-0">
-      <div className="relative aspect-square overflow-hidden rounded-md bg-zinc-900">
+      <div className="relative aspect-square overflow-hidden rounded-md bg-zinc-900" {...preview}>
         <Link href={track.permalink ?? "#"} className="block h-full w-full" tabIndex={-1}>
           <img
             src={track.artworkUrl ?? "/placeholder-track.jpg"}

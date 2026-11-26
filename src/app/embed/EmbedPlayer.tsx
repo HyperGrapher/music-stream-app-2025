@@ -3,6 +3,7 @@
 import { Pause, Play } from "lucide-react";
 
 import { useAudioEvents, usePlayerStore } from "@/store/player";
+import { EmbedWaveform } from "./EmbedWaveform";
 import { formatDuration } from "@/lib/utils";
 import type { PlayerTrack } from "@/types/player-track";
 
@@ -56,6 +57,7 @@ export function EmbedPlayer({ tracks, title, href, collectionId }: { tracks: Pla
           </div>
         </div>
       </div>
+      <EmbedWaveform url={current.waveformUrl} progress={total > 0 ? elapsed / total : 0} onSeek={(fraction) => { if (!active) toggle(current); else seek(fraction * total); }} />
       {tracks.length > 1 ? (
         <ol className="min-h-0 flex-1 overflow-y-auto text-sm">
           {tracks.map((track, index) => (

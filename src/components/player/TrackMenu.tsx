@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Flag, Radio, ExternalLink, Link2, ListEnd, ListPlus, ListStart, MoreHorizontal, Pencil, Share2 } from "lucide-react";
+import { Download, Flag, Radio, Repeat2, ExternalLink, Link2, ListEnd, ListPlus, ListStart, MoreHorizontal, Pencil, Share2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -48,6 +48,9 @@ export function TrackMenu({ track, className }: { track: PlayerTrack; className?
         >
           <ListPlus /> Add to playlist
         </DropdownMenuItem>
+        {user && !isOwner && !track.isPrivate ? (
+          <DropdownMenuItem onSelect={() => useDialogs.getState().openRepostCaption({ kind: "track", id: track.id, title: track.title })}><Repeat2 /> Repost with caption</DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem
           onSelect={() => {
             // RC-4: the seed plus 49 related tracks as a queue named "Station: <title>"; plays are counted as STATION.

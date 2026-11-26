@@ -120,3 +120,33 @@ export async function recommendForUser(db: PrismaClient, userId: string, { limit
   const byId = new Map(full.map((t) => [t.id, t]));
   return ranked.flatMap((r) => byId.get(r.id) ?? []).map((row) => toTrackDto(row, { viewerId: userId }));
 }
+
+/**
+ * DI "Your mixes" (P2): one generated queue per top-3 genre of the listener ("Your Electronic mix"). Tracks are public,
+ * from that genre, ranked by the listener's taste profile (liked ones included: a mix is a playlist to listen to, not a
+ * discovery list), at most 3 per creator; own and blocked creators' tracks never appear.
+ */
+export async function yourMixes(db: PrismaClient, userId: string, { size = 25, mixes = 3, now = clockNow() }: { size?: number; mixes?: number; now?: Date } = {}) {
+  const profile = await tasteProfile(db, userId, now);
+  const genres = (hasSignal(profile.taste) ? topKeys(profile.taste.genres, mixes) : profile.favouriteGenres.slice(0, mixes).map((g) => g.toLowerCase())).slice(0, mixes);
+  const result = await Promise.all(
+    genres.map(async (genre) => {
+      const rows = await db.track.findMany({
+        where: { AND: [publicTrackWhere(now), { genre }, { creatorId: { notIn: [...profile.blocked, userId] } }] },
+        orderBy: [{ playCount: "desc" }, { id: "asc" }],
+        take: 150,
+        select: { ...candidateSelect },
+      });
+      const candidates: Candidate[] = rows.map((r) => ({ ...r, publishedAt: r.publishedAt ?? r.createdAt }));
+      // `rank` drops zero scores (brand-new tracks have no popularity yet): keep them at the end instead.
+      const ranked = rank(candidates, profile.taste, now);
+      const rest = candidates.filter((c) => !ranked.some((r) => r.id === c.id));
+      const picked = diversify([...ranked, ...rest], size, 3);
+      if (picked.length < 3) return null;
+      const full = await db.track.findMany({ where: { id: { in: picked.map((p) => p.id) } }, select: { ...trackDtoSelect, ...likedByMeSelect(userId) } });
+      const byId = new Map(full.map((t) => [t.id, t]));
+      return { genre, tracks: picked.flatMap((p) => byId.get(p.id) ?? []).map((row) => toTrackDto(row, { viewerId: userId })) };
+    }),
+  );
+  return result.flatMap((m) => (m ? [m] : []));
+}

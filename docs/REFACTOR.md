@@ -235,6 +235,21 @@ the end of every work session (checklist + "Next up" + gotchas), and add a dated
 | UI | `components/messages/*`, `(player)/messages/*` | `/messages` (list + thread, separate screens on phones), `/messages?to=username` (first message), navbar icon with badge, profile **Message** button, Share dialog **Message** tab (recent conversations or search a person, optional note). |
 | Tests | `tests/integration/messages.test.ts`, `tests/e2e/messages.e2e.spec.ts` (J11), `src/lib/message-links.test.ts` | Include privacy (non-members get 404), policy, blocks, rate limits, cards and secrets, moderation, phone layout and axe. |
 
+**P2 batch** (session 20, after the messages)
+
+| Item | Where | Notes |
+|---|---|---|
+| Chart rank change (CH-2) | `charts/index.ts` `topChart`, `ChartList` | Rank vs the same Top 50 as of yesterday (7 days ending yesterday, from `TrackDailyStat`), no snapshot table. Up/down/same/NEW. New & Hot has none. |
+| Insights CSV (IN-7) | `lib/csv.ts`, `InsightsView` | Client-side export of the current view; formula-looking cells are prefixed with `'`. |
+| Suspension page | `(player)/suspended`, `AuthForm` | Email sign-in of a suspended account redirects there; `suspended` is a reserved username. Google sign-in still shows the generic OAuth error. |
+| `@` autocomplete (CM-4) | `MentionTextarea`, `search.mentions` | Followed people first; blocked never. Arrows/Enter/Tab/Escape. |
+| Repost with caption (RP-1) | `RepostCaptionDialog`, `TrackMenu`, `feed` | Caption shown above the repost in followers' feeds (first reposter's). Not shown on profile Reposts tabs. |
+| Quick preview (DI-4) | `hooks/useHoverPreview`, `TrackCard` | Mouse only, after 600 ms, 30 s from `previewStartMs` at 35% volume, not while the main player plays, never counted. Long-press on touch is not built. |
+| Your mixes | `recommendations.yourMixes`, `discover.mixes`, `MixesCarousel` | One queue per top-3 genre (needs 3+ tracks), taste-ranked, 3 per creator max. |
+| Drag-and-drop Spotlight | `SpotlightEditor` | dnd-kit, arrows kept for keyboards. |
+| Embed waveform | `embed/EmbedWaveform` | Clickable bars; seek input stays. |
+| Emails | `RESEND_API_KEY` is set on Vercel | Set `EMAIL_FROM` to a verified-domain sender to reach people other than the Resend account owner. |
+
 Not built (P2 leftovers): typing indicators, attachments, group chats, message search, email notifications for new messages, edit/unsend by the sender.
 
 **Deviations from M7** (owner milestone in brackets):

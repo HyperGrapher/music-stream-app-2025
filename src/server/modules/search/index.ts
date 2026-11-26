@@ -167,3 +167,17 @@ export async function suggest(db: PrismaClient, rawQuery: string, viewerId: stri
   return { people: people.items, tracks: tracks.items, albums: albums.items, playlists: playlists.items };
 }
 
+
+/**
+ * CM-4 `@` autocomplete: usernames starting with what was typed, people you follow first, then everyone else.
+ * Blocked people (either way) never show.
+ */
+export async function mentionSuggestions(db: PrismaClient, viewerId: string, rawQuery: string, limit = 6) {
+  const q = rawQuery.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 25);
+  const blocked = await blockedEitherWay(db, viewerId);
+  const select = { id: true, name: true, username: true, image: true, avatarAsset: { select: { id: true, publicUrl: true, imageWidths: true } } } as const;
+  const where = { status: "ACTIVE" as const, id: { notIn: [viewerId, ...blocked] }, ...(q ? { username: { startsWith: q } } : {}) };
+  const following = await db.user.findMany({ where: { ...where, followers: { some: { followerId: viewerId } } }, orderBy: { username: "asc" }, take: limit, select });
+  const others = following.length >= limit ? [] : await db.user.findMany({ where: { ...where, id: { notIn: [viewerId, ...blocked, ...following.map((u) => u.id)] } }, orderBy: [{ followerCount: "desc" }, { username: "asc" }], take: limit - following.length, select });
+  return [...following, ...others].map((u) => ({ id: u.id, name: u.name, username: u.username, image: userAvatarUrl(u), following: following.some((f) => f.id === u.id) }));
+}

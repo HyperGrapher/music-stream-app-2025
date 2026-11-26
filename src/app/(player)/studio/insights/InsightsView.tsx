@@ -1,5 +1,7 @@
 "use client";
 
+import { Download } from "lucide-react";
+import { insightsToCsv } from "@/lib/csv";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { useState } from "react";
@@ -67,7 +69,16 @@ function Locked({ feature, onUpsell }: { feature: string; onUpsell: () => void }
   return <button type="button" onClick={onUpsell} className="w-full rounded border border-dashed border-zinc-700 p-6 text-sm text-zinc-400 hover:border-zinc-500">{feature} <span className="ml-1 rounded bg-orange-500/20 px-1.5 text-[10px] font-bold text-orange-300">PRO</span></button>;
 }
 
-/** `/studio/insights` (IN-1..IN-6). */
+function downloadCsv(filename: string, csv: string) {
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+/** `/studio/insights` (IN-1..IN-7). */
 export function InsightsView() {
   const [range, setRange] = useState<Range>("7");
   const [trackId, setTrackId] = useState("");
@@ -91,7 +102,8 @@ export function InsightsView() {
             </button>
           );
         })}
-        <select aria-label="Track" value={trackId} onChange={(e) => (pro || !e.target.value ? setTrackId(e.target.value) : setUpsell("Per-track insights"))} className="ml-auto rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm">
+        <button type="button" disabled={!d} onClick={() => d && downloadCsv(`insights-${range}${trackId ? "-track" : ""}.csv`, insightsToCsv(d))} className="ml-auto inline-flex items-center gap-1.5 rounded border border-zinc-700 px-2.5 py-1.5 text-sm hover:bg-zinc-800 disabled:opacity-50"><Download className="h-4 w-4" /> Download CSV</button>
+        <select aria-label="Track" value={trackId} onChange={(e) => (pro || !e.target.value ? setTrackId(e.target.value) : setUpsell("Per-track insights"))} className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm">
           <option value="">All tracks</option>
           {(tracks.data ?? []).map((t) => <option key={t.id} value={t.id}>{t.title}{pro ? "" : " (Pro)"}</option>)}
         </select>

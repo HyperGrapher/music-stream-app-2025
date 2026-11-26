@@ -10,7 +10,7 @@ export const RESERVED_USERNAMES: ReadonlySet<string> = new Set([
   "feed", "forgot-password", "help", "login", "logout", "manifest.webmanifest", "me", "messages",
   "new", "notifications", "null", "oembed", "onboarding", "pages", "privacy", "profile",
   "reset-password", "robots.txt", "search", "settings", "sets", "signin", "signup", "sitemap.xml",
-  "static", "stations", "studio", "tags", "terms", "track", "u", "undefined", "upload",
+  "static", "stations", "studio", "suspended", "tags", "terms", "track", "u", "undefined", "upload",
   "verify-email", "you", "_next",
 ]);
 

@@ -97,7 +97,8 @@ test("the admin area does not exist for anyone but admins, and suspended account
   await fresh.getByLabel("Email").fill(email);
   await fresh.getByLabel("Password", { exact: true }).fill("e2e-password-123");
   await fresh.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(fresh.getByText(/suspended/i)).toBeVisible();
+  await expect(fresh).toHaveURL(/\/suspended/);
+  await expect(fresh.getByRole("heading", { name: "This account is suspended" })).toBeVisible();
   await anon.close();
   await fresh.close();
   await user.context.close();

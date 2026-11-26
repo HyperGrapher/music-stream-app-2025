@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Carousel } from "@/app/_components/Carousel";
 import { CollectionCard } from "@/app/_components/CollectionCard";
+import { MixesCarousel } from "@/app/_components/MixesCarousel";
 import { TrackCarousel } from "@/app/_components/TrackCarousel";
 import { TrackGrid } from "@/app/_components/TrackGrid";
 import { WhoToFollow } from "@/app/_components/WhoToFollow";
@@ -35,6 +36,7 @@ export default async function HomePage() {
         api.discover.forYou({ limit: 12 }).catch(() => []),
         api.discover.following({ limit: 12 }).catch(() => []),
         firstGenres(),
+        api.discover.mixes().catch(() => []),
       ])
     : null;
   const genreRows = personal ? await Promise.all(personal[3].map(async (genre) => ({ genre, tracks: await api.discover.trending({ genre, limit: 12 }).catch(() => []) }))) : [];
@@ -63,6 +65,7 @@ export default async function HomePage() {
           <>
             <TrackCarousel id="recent" title="Recently played" href="/you/history" tracks={personal[0].map((h) => h.track)} context={{ name: "Recently played", source: "HISTORY" }} />
             <TrackCarousel id="for-you" title="More of what you like" tracks={personal[1]} context={{ name: "More of what you like", source: "HOME" }} />
+            <MixesCarousel mixes={personal[4]} />
             <TrackCarousel id="following" title="New from people you follow" href="/feed" tracks={personal[2]} context={{ name: "New from people you follow", source: "HOME" }} />
             {genreRows.map((row) => (
               <TrackCarousel key={row.genre} id={`trending-${row.genre}`} title={`Trending in ${genreLabel(row.genre)}`} href={`/charts?genre=${row.genre}`} tracks={row.tracks} context={{ name: `Trending in ${genreLabel(row.genre)}`, source: "HOME" }} />

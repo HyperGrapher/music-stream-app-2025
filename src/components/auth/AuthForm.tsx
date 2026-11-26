@@ -59,6 +59,7 @@ export function AuthForm({ mode, next = "/", onSuccess, onSwitch }: AuthFormProp
         : await authClient.signIn.email({ email, password });
     setBusy(false);
     if (result.error) {
+      if (/suspended/i.test(result.error.message ?? "")) return hardNavigate("/suspended");
       setError(result.error.message ?? "Something went wrong. Try again.");
       return;
     }
