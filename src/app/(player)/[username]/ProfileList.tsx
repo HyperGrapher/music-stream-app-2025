@@ -94,7 +94,7 @@ export function ProfileList({ username, tab, initial, empty }: { username: strin
               <Repeat2 className="h-3.5 w-3.5" /> {username} reposted
             </p>
           )}
-          <WaveformTrackItem track={track} playlist={queue} />
+          <WaveformTrackItem track={track} playlist={queue} context={{ name: username, source: tab === "likes" ? "LIBRARY" : "PROFILE" }} />
         </div>,
       );
     } else {
