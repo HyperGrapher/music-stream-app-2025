@@ -5,6 +5,7 @@ import { Geist } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner"
 import { TRPCReactProvider } from "@/trpc/react";
 import { getSessionUser } from "@/server/session-user";
+import { VisitTracker } from "@/components/VisitTracker";
 import { AuthProvider } from "@/components/AuthProvider";
 
 export const viewport: Viewport = {
@@ -37,6 +38,7 @@ export default async function RootLayout({
       <body className="dark">
         <TRPCReactProvider>
           <AuthProvider initialUser={user} />
+          <VisitTracker />
           {children}
         </TRPCReactProvider>
         <Toaster

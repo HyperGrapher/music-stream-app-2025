@@ -8,6 +8,7 @@ import { PASSWORD_PROBLEM_MESSAGES, passwordProblem } from "@/lib/passwords";
 import { ensureAdminRole, isAdminEmail } from "@/server/modules/accounts/admin-role";
 import { sendEmail } from "@/server/modules/email";
 import { passwordResetEmail, verificationEmail } from "@/server/modules/email/templates";
+import { isReservedName } from "@/server/modules/reserved";
 import { consumeRateLimit, RATE_LIMITS } from "@/server/modules/rate-limit";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -17,6 +18,7 @@ async function freeUsername(seed: string) {
   return firstFree(
     usernameBase(seed),
     async (candidate) =>
+      (await isReservedName(db, candidate)) ||
       (await db.user.findUnique({ where: { username: candidate }, select: { id: true } })) !== null ||
       (await db.usernameRedirect.findFirst({
         where: { oldUsername: candidate, createdAt: { gt: new Date(Date.now() - THIRTY_DAYS_MS) } },

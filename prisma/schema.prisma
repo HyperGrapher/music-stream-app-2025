@@ -257,6 +257,7 @@ model User {
   reportsFiled            Report[]                 @relation("reporter")
   reportsResolved         Report[]                 @relation("reportResolver")
   moderationActions       ModerationAction[]
+  pageViews               PageView[]
 
   @@index([status])
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "user_name_trgm_idx")
@@ -926,4 +927,43 @@ model RateLimitBucket {
   @@id([key, windowStart])
   @@index([windowStart])
   @@map("rate_limit_bucket")
+}
+
+/// Usernames admins reserve on top of the code list (`RESERVED_USERNAMES` in src/lib/names.ts, which cannot be changed here).
+/// `blocked = false` keeps the entry but lets people register the name.
+model ReservedName {
+  name        String   @id
+  blocked     Boolean  @default(true)
+  note        String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("reserved_name")
+}
+
+/// One visit to one page (admin analytics). `lastSeenAt - startedAt` is the time spent; a heartbeat keeps it current.
+/// Raw `ip` is cleared after 30 days and rows are deleted after 90 (daily cron).
+model PageView {
+  id          String   @id @default(uuid())
+  visitorId   String
+  sessionId   String
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ip          String?
+  countryCode String?
+  city        String?
+  path        String
+  referrer    String?
+  userAgent   String?
+  device      String   @default("desktop")
+  browser     String?
+  startedAt   DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  @@index([startedAt])
+  @@index([lastSeenAt])
+  @@index([visitorId, startedAt])
+  @@index([sessionId, startedAt])
+  @@map("page_view")
 }

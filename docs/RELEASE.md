@@ -34,3 +34,8 @@ Run this before merging `dev` into `master` and after the first production deplo
 - [ ] Vercel cron `/api/cron/daily` shows a 200 in the function logs (storage drain, digests, pruning)
 - [ ] Sign in with Google works on the production domain; the admin account sees "Admin" in the account menu
 - [ ] Upload from the browser works (R2 CORS), a played track registers a play after ~5 s
+
+## Analytics and privacy
+
+- `/admin/analytics` stores IP addresses (30 days) and page views (90 days). Mention this in the privacy policy. Country and city come from Vercel's geo headers, so they are empty locally.
+- Run `pnpm db:migrate` with the direct Neon URL for `3_admin_tools` (adds `reserved_name` and `page_view`) before the code that reads them is live (the Vercel build does this for production).

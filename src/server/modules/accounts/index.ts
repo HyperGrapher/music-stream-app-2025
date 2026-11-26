@@ -1,7 +1,8 @@
 import { TRPCError } from "@trpc/server";
 
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
-import { isReservedUsername, normalizeUsername, USERNAME_PATTERN, usernameBase } from "@/lib/names";
+import { normalizeUsername, USERNAME_PATTERN, usernameBase } from "@/lib/names";
+import { isReservedName } from "@/server/modules/reserved";
 import { enqueueStorageDeletion } from "@/server/modules/storage/deletion";
 import { imageObjectKeys } from "@/lib/artwork";
 import { now as clockNow } from "@/server/clock";
@@ -24,7 +25,7 @@ async function isTaken(db: Pick<PrismaClient, "user" | "usernameRedirect">, name
 
 /** Live availability check for onboarding / settings (PRD 6.2): shape, reserved words, uniqueness, suggestions. */
 export async function checkUsername(
-  db: Pick<PrismaClient, "user" | "usernameRedirect">,
+  db: Pick<PrismaClient, "user" | "usernameRedirect" | "reservedName">,
   candidate: string,
   selfId: string | null = null,
   now: Date = clockNow(),
@@ -34,13 +35,13 @@ export async function checkUsername(
     const out: string[] = [];
     const base = usernameBase(username || "user");
     for (const option of [`${base}_music`.slice(0, 25), `${base}1`, `${base}_`, `the_${base}`.slice(0, 25), `${base}_official`.slice(0, 25)]) {
-      if (USERNAME_PATTERN.test(option) && !isReservedUsername(option) && !(await isTaken(db, option, selfId, now))) out.push(option);
+      if (USERNAME_PATTERN.test(option) && !(await isReservedName(db, option)) && !(await isTaken(db, option, selfId, now))) out.push(option);
       if (out.length === 3) break;
     }
     return out;
   };
   if (!USERNAME_PATTERN.test(username)) return { available: false, username, reason: "INVALID", suggestions: [] };
-  if (isReservedUsername(username)) return { available: false, username, reason: "RESERVED", suggestions: await suggest() };
+  if (await isReservedName(db, username)) return { available: false, username, reason: "RESERVED", suggestions: await suggest() };
   if (await isTaken(db, username, selfId, now)) return { available: false, username, reason: "TAKEN", suggestions: await suggest() };
   return { available: true, username };
 }
